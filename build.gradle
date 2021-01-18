@@ -1,0 +1,19 @@
+apply plugin: 'java'
+
+repositories {
+	mavenLocal()
+	mavenCentral()
+	maven {
+		url 'https://oss.sonatype.org/content/repositories/snapshots/'
+	}
+}
+
+sourceCompatibility = '1.8'
+targetCompatibility = '1.8'
+
+dependencies {
+	compile 'se.llbit:chunky-core:2.3.0-SNAPSHOT'
+	compile 'org.jocl:jocl:2.0.2'
+}
+
+defaultTasks 'jar'
