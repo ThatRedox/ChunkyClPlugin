@@ -1,12 +1,14 @@
 package chunkycl;
 
 import se.llbit.math.Ray;
+import se.llbit.math.Vector4;
 
 public class RayCl {
     enum TYPE {
         ROOT,
         DIFFUSE,
-        SPECULAR
+        SPECULAR,
+        TRANSMITTED
     }
 
     private boolean status = false;
@@ -18,10 +20,17 @@ public class RayCl {
 
     private final TYPE type;
 
-    RayCl(Ray ray, RayCl parent, TYPE type) {
+    private int addEmitted;
+
+    private float emittance = 0;
+
+    private Vector4 indirectEmitterColor = null;
+
+    RayCl(Ray ray, RayCl parent, TYPE type, int addEmitted) {
         this.ray = ray;
         this.parent = parent;
         this.type = type;
+        this.addEmitted = addEmitted;
     }
 
     public void setStatus(boolean status) {
@@ -50,5 +59,29 @@ public class RayCl {
 
     public TYPE getType() {
         return type;
+    }
+
+    public int getAddEmitted() {
+        return addEmitted;
+    }
+
+    public void setAddEmitted(int addEmitted) {
+        this.addEmitted = addEmitted;
+    }
+
+    public void setIndirectEmitterColor(Vector4 indirectEmitterColor) {
+        this.indirectEmitterColor = indirectEmitterColor;
+    }
+
+    public Vector4 getIndirectEmitterColor() {
+        return indirectEmitterColor;
+    }
+
+    public float getEmittance() {
+        return emittance;
+    }
+
+    public void setEmittance(float emittance) {
+        this.emittance = emittance;
     }
 }
