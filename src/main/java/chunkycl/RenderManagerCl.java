@@ -10,6 +10,7 @@ import se.llbit.util.TaskTracker;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.List;
 import java.util.concurrent.PriorityBlockingQueue;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -45,9 +46,14 @@ public class RenderManagerCl extends Thread implements Renderer {
 
 
     private PriorityBlockingQueue<RayCl> rtQueue;
+    private PriorityBlockingQueue<RayCl> rtCheckQueue;
     private PriorityBlockingQueue<RayCl> rtCompleteQueue;
 
+    private List<RayCl> rootRays = null;
+
     private final JobMonitor jobMonitor = new JobMonitor();
+
+    public static final OctreeIntersectCl intersectCl = new OctreeIntersectCl();;
 
     public RenderManagerCl(RenderContext context, boolean headless) {
         super("Render Manager");
@@ -61,13 +67,16 @@ public class RenderManagerCl extends Thread implements Renderer {
         bufferedScene = context.getChunky().getSceneFactory().newScene();
 
         rtQueue = new PriorityBlockingQueue<RayCl>(11, Comparator.comparingInt(o -> o.getRay().depth));
+        rtCheckQueue = new PriorityBlockingQueue<RayCl>(11, Comparator.comparingInt(o -> o.getRay().depth));
         rtCompleteQueue = new PriorityBlockingQueue<RayCl>(11, Comparator.comparingInt(o -> o.getRay().depth));
-
-        // Setup cl stuff
     }
 
     public PriorityBlockingQueue<RayCl> getRtQueue() {
         return rtQueue;
+    }
+
+    public PriorityBlockingQueue<RayCl> getRtCheckQueue() {
+        return  rtCheckQueue;
     }
 
     public PriorityBlockingQueue<RayCl> getRtCompleteQueue() {
@@ -76,6 +85,14 @@ public class RenderManagerCl extends Thread implements Renderer {
 
     public JobMonitor getJobMonitor() {
         return jobMonitor;
+    }
+
+    public List<RayCl> getRootRays() {
+        return rootRays;
+    }
+
+    public synchronized void setRootRays(List<RayCl> rootRays) {
+        this.rootRays = rootRays;
     }
 
     @Override public void setSceneProvider(SceneProvider sceneProvider) {
@@ -184,29 +201,35 @@ public class RenderManagerCl extends Thread implements Renderer {
                 }
 
                 synchronized (jobMonitor) {
-                    jobMonitor.rendering = true;
+                    jobMonitor.setRendering(true);
                     jobMonitor.notifyAll();
                 }
 
-                if (mode == RenderMode.PREVIEW) {
-                    System.out.println("Previewing");
+                System.out.println("Previewing");
 
-                    synchronized (jobMonitor) {
-                        while (jobMonitor.rendering) {
-                            jobMonitor.wait();
-                        }
+                // Manage OpenCl stuff
+                intersectCl.load(bufferedScene);
+
+                while (jobMonitor.getRendering()) {
+                    if (rtQueue.peek() != null) {
+                        ArrayList<RayCl> renderingList = new ArrayList<RayCl>((int) intersectCl.workgroupSize);
+
+                        while (renderingList.size() < intersectCl.workgroupSize && rtQueue.peek() != null)
+                            renderingList.add(rtQueue.poll());
+
+                        intersectCl.intersect(renderingList);
+
+                        rtCheckQueue.addAll(renderingList);
                     }
-
-                    renderTask.update("Preview", 1, 1, "");
-
-                    synchronized (bufferedScene) {
-                        bufferedScene.swapBuffers();
-                    }
-
-                    canvas.repaint();
-                } else {
-                    System.out.println("Rendering");
                 }
+
+                renderTask.update("Preview", 1, 1, "");
+
+                synchronized (bufferedScene) {
+                    bufferedScene.swapBuffers();
+                }
+
+                canvas.repaint();
 
                 if (headless) {
                     break;
@@ -220,6 +243,14 @@ public class RenderManagerCl extends Thread implements Renderer {
     }
 
     public class JobMonitor extends Object {
-        public boolean rendering = false;
+        private boolean rendering = false;
+
+        public synchronized void setRendering(boolean status) {
+            rendering = status;
+        }
+
+        public synchronized boolean getRendering() {
+            return rendering;
+        }
     }
 }

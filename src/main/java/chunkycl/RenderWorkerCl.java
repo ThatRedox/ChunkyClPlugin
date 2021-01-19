@@ -1,5 +1,6 @@
 package chunkycl;
 
+import org.apache.commons.math3.exception.OutOfRangeException;
 import se.llbit.chunky.block.MinecraftBlock;
 import se.llbit.chunky.renderer.*;
 import se.llbit.chunky.renderer.scene.Camera;
@@ -10,10 +11,7 @@ import se.llbit.chunky.world.Material;
 import se.llbit.log.Log;
 import se.llbit.math.*;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-import java.util.Random;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 public class RenderWorkerCl extends Thread {
@@ -27,8 +25,6 @@ public class RenderWorkerCl extends Thread {
 
     private RenderManagerCl.JobMonitor jobMonitor;
 
-    private List<RayCl> rootRays = null;
-
     public RenderWorkerCl(RenderManagerCl manager, int id, long seed) {
         super("3D Render Worker " + id);
 
@@ -37,8 +33,6 @@ public class RenderWorkerCl extends Thread {
 
         state = new WorkerState();
         state.random = new Random(seed);
-
-        mode = id % 2 == 0;
 
         jobMonitor = manager.getJobMonitor();
     }
@@ -49,7 +43,7 @@ public class RenderWorkerCl extends Thread {
         try {
             while (!isInterrupted()) {
                 synchronized (jobMonitor) {
-                    while (!jobMonitor.rendering) {
+                    while (!jobMonitor.getRendering()) {
                         jobMonitor.wait();
                     }
                 }
@@ -78,80 +72,49 @@ public class RenderWorkerCl extends Thread {
     }
 
     private void work() throws InterruptedException {
-        if (id == 0) {
-            if (rootRays == null) {
-                rootRays = new ArrayList<>();
+        if (id == 0 && manager.getRootRays() == null) {
+            manager.setRootRays(new LinkedList<>());
 
-                Scene scene = manager.getBufferedScene();
-                Random random = state.random;
+            Scene scene = manager.getBufferedScene();
+            Random random = state.random;
 
-                int width = scene.canvasWidth();
-                int height = scene.canvasHeight();
+            int width = scene.canvasWidth();
+            int height = scene.canvasHeight();
 
-                double halfWidth = width / (2.0 * height);
-                double invHeight = 1.0 / height;
+            double halfWidth = width / (2.0 * height);
+            double invHeight = 1.0 / height;
 
-                final Camera cam = scene.camera();
+            final Camera cam = scene.camera();
 
-                for (int i = 0; i < width; i++) {
-                    for (int j = 0; j < width; j++) {
-                        Ray ray = new Ray();
-                        cam.calcViewRay(ray, random, (-halfWidth + (double) i * invHeight),
-                                (-.5 + (double) j * invHeight));
+            for (int i = 0; i < width; i++) {
+                for (int j = 0; j < height; j++) {
+                    Ray ray = new Ray();
+                    cam.calcViewRay(ray, random, (-halfWidth + (double) i * invHeight),
+                            (-.5 + (double) j * invHeight));
 
-                        ray.o.x -= scene.getOrigin().x;
-                        ray.o.y -= scene.getOrigin().y;
-                        ray.o.z -= scene.getOrigin().z;
+                    RayCl wrapper = new RayCl(ray, null, RayCl.TYPE.ROOT, 1);
+                    wrapper.setImageCoords(new Vector2(i, j));
 
-                        RayCl wrapper = new RayCl(ray, null, RayCl.TYPE.ROOT, 1);
-                        wrapper.setImageCoords(new Vector2(i, j));
-
-                        rootRays.add(wrapper);
-                        manager.getRtQueue().add(wrapper);
+                    synchronized (manager.getRootRays()) {
+                        manager.getRootRays().add(wrapper);
                     }
-                }
-            } else {
-                Scene scene = manager.getBufferedScene();
-                double[] samples = scene.getSampleBuffer();
-
-                int i = 0;
-                while (i < rootRays.size()) {
-                    RayCl wrapper = rootRays.get(i);
-
-                    if (wrapper.getStatus()) {
-                        Vector2 coords = wrapper.getImageCoords();
-                        int width = scene.canvasWidth();
-
-                        samples[(int) ((coords.y * width + coords.x) * 3 + 0)] = wrapper.getRay().color.x;
-                        samples[(int) ((coords.y * width + coords.x) * 3 + 1)] = wrapper.getRay().color.y;
-                        samples[(int) ((coords.y * width + coords.x) * 3 + 2)] = wrapper.getRay().color.z;
-
-                        scene.finalizePixel((int) coords.x, (int) coords.y);
-
-                        rootRays.remove(i);
-                    } else {
-                        i++;
-                    }
-                }
-
-                if (rootRays.size() == 0) {
-                    synchronized (jobMonitor) {
-                        jobMonitor.rendering = false;
-                        jobMonitor.notifyAll();
-                    }
-                    rootRays = null;
+                    manager.getRtQueue().add(wrapper);
                 }
             }
-        } else if (mode) {
-            RayCl ray = manager.getRtQueue().poll(1, TimeUnit.MILLISECONDS);
+        } else if (id % 2 == 0 && manager.getRtCheckQueue().size() > 0) {
+            RayCl ray = manager.getRtCheckQueue().poll(1, TimeUnit.MILLISECONDS);
 
             // Check if ray was successfully pulled
             if (ray == null) return;
 
+            ray.getRay().o.x -= manager.getBufferedScene().getOrigin().x;
+            ray.getRay().o.y -= manager.getBufferedScene().getOrigin().y;
+            ray.getRay().o.z -= manager.getBufferedScene().getOrigin().z;
+
             ray.setIntersect(PreviewRayTracer.nextIntersection(manager.getBufferedScene(), ray.getRay()));
 
             manager.getRtCompleteQueue().add(ray);
-        } else {
+        } else if (id % 2 == 1 && manager.getRtCompleteQueue().size() > 0) {
             RayCl wrapper = manager.getRtCompleteQueue().poll(1, TimeUnit.MILLISECONDS);
 
             // Check if ray was successfully pulled
@@ -173,6 +136,38 @@ public class RenderWorkerCl extends Thread {
             }
 
             wrapper.setStatus(true);
+        } else if (id == 0 || (manager.getRootRays() != null && manager.getRootRays().size() > 1024) ) {
+            Scene scene = manager.getBufferedScene();
+            double[] samples = scene.getSampleBuffer();
+
+            RayCl wrapper;
+            synchronized (manager.getRootRays()) {
+                wrapper = manager.getRootRays().remove(0);
+            }
+
+            if (wrapper.getStatus()) {
+                Vector2 coords = wrapper.getImageCoords();
+                int width = scene.canvasWidth();
+
+                try {
+                    samples[(int) ((coords.y * width + coords.x) * 3 + 0)] = wrapper.getRay().color.x;
+                    samples[(int) ((coords.y * width + coords.x) * 3 + 1)] = wrapper.getRay().color.y;
+                    samples[(int) ((coords.y * width + coords.x) * 3 + 2)] = wrapper.getRay().color.z;
+                } catch (ArrayIndexOutOfBoundsException e) {
+                    throw e;
+                }
+
+                scene.finalizePixel((int) coords.x, (int) coords.y);
+            } else {
+                synchronized (manager.getRootRays()) {
+                    manager.getRootRays().add(wrapper);
+                }
+            }
+
+            if (id == 0 && manager.getRootRays().size() == 0) {
+                jobMonitor.setRendering(false);
+                manager.setRootRays(null);
+            }
         }
     }
 
