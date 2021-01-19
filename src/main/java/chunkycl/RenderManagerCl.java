@@ -45,6 +45,9 @@ public class RenderManagerCl extends Thread implements Renderer {
 
 
     private PriorityBlockingQueue<RayCl> rtQueue;
+    private PriorityBlockingQueue<RayCl> rtCompleteQueue;
+
+    private final JobMonitor jobMonitor = new JobMonitor();
 
     public RenderManagerCl(RenderContext context, boolean headless) {
         super("Render Manager");
@@ -58,8 +61,21 @@ public class RenderManagerCl extends Thread implements Renderer {
         bufferedScene = context.getChunky().getSceneFactory().newScene();
 
         rtQueue = new PriorityBlockingQueue<RayCl>(11, Comparator.comparingInt(o -> o.getRay().depth));
+        rtCompleteQueue = new PriorityBlockingQueue<RayCl>(11, Comparator.comparingInt(o -> o.getRay().depth));
 
         // Setup cl stuff
+    }
+
+    public PriorityBlockingQueue<RayCl> getRtQueue() {
+        return rtQueue;
+    }
+
+    public PriorityBlockingQueue<RayCl> getRtCompleteQueue() {
+        return rtCompleteQueue;
+    }
+
+    public JobMonitor getJobMonitor() {
+        return jobMonitor;
     }
 
     @Override public void setSceneProvider(SceneProvider sceneProvider) {
@@ -167,8 +183,27 @@ public class RenderManagerCl extends Thread implements Renderer {
                     });
                 }
 
+                synchronized (jobMonitor) {
+                    jobMonitor.rendering = true;
+                    jobMonitor.notifyAll();
+                }
+
                 if (mode == RenderMode.PREVIEW) {
                     System.out.println("Previewing");
+
+                    synchronized (jobMonitor) {
+                        while (jobMonitor.rendering) {
+                            jobMonitor.wait();
+                        }
+                    }
+
+                    renderTask.update("Preview", 1, 1, "");
+
+                    synchronized (bufferedScene) {
+                        bufferedScene.swapBuffers();
+                    }
+
+                    canvas.repaint();
                 } else {
                     System.out.println("Rendering");
                 }
@@ -182,5 +217,9 @@ public class RenderManagerCl extends Thread implements Renderer {
         } catch (Throwable e) {
             Log.error("Unchecked exception in render manager", e);
         }
+    }
+
+    public class JobMonitor extends Object {
+        public boolean rendering = false;
     }
 }

@@ -1,6 +1,7 @@
 package chunkycl;
 
 import se.llbit.math.Ray;
+import se.llbit.math.Vector2;
 import se.llbit.math.Vector4;
 
 public class RayCl {
@@ -25,6 +26,8 @@ public class RayCl {
     private float emittance = 0;
 
     private Vector4 indirectEmitterColor = null;
+
+    private Vector2 imageCoords = null;
 
     RayCl(Ray ray, RayCl parent, TYPE type, int addEmitted) {
         this.ray = ray;
@@ -83,5 +86,13 @@ public class RayCl {
 
     public void setEmittance(float emittance) {
         this.emittance = emittance;
+    }
+
+    public void setImageCoords(Vector2 coords) {
+        imageCoords = coords;
+    }
+
+    public Vector2 getImageCoords() {
+        return imageCoords;
     }
 }
