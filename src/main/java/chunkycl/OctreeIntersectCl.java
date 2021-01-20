@@ -84,8 +84,16 @@ public class OctreeIntersectCl {
 
         // Create a command-queue for the selected device
         cl_queue_properties properties = new cl_queue_properties();
-        commandQueue = clCreateCommandQueueWithProperties(
-                context, device, properties, null);
+
+        // Check if opencl is 2.0 or greater
+        String versionString = getString(device, CL_DRIVER_VERSION);
+        if (Integer.parseInt(versionString.substring(0, 1)) >= 2) {
+            commandQueue = clCreateCommandQueueWithProperties(
+                    context, device, properties, null);
+        } else {
+            commandQueue = clCreateCommandQueue(
+                    context, device, 0, null);
+        }
 
         // Create the program
         program = clCreateProgramWithSource(context, 1, new String[] {programSource},

@@ -25,6 +25,8 @@ public class RenderWorkerCl extends Thread {
 
     private RenderManagerCl.JobMonitor jobMonitor;
 
+    private double[] samples = null;
+
     public RenderWorkerCl(RenderManagerCl manager, int id, long seed) {
         super("3D Render Worker " + id);
 
@@ -152,7 +154,10 @@ public class RenderWorkerCl extends Thread {
             wrapper.setStatus(true);
         } else if (id == 0 || (manager.getRootRays() != null && manager.getRootRays().size() > 1024) ) {
             Scene scene = manager.getBufferedScene();
-            double[] samples = scene.getSampleBuffer();
+
+            if (samples == null) {
+                samples = scene.getSampleBuffer();
+            }
 
             RayCl wrapper;
             synchronized (manager.getRootRays()) {
@@ -181,6 +186,7 @@ public class RenderWorkerCl extends Thread {
             if (id == 0 && manager.getRootRays().size() == 0) {
                 jobMonitor.setRendering(false);
                 manager.setRootRays(null);
+                samples = null;
             }
         }
     }

@@ -187,6 +187,7 @@ public class RenderManagerCl extends Thread implements Renderer {
                     sceneProvider.withSceneProtected(scene -> {
                         if (reason.overwriteState()) {
                             bufferedScene.copyState(scene);
+                            intersectCl.load(bufferedScene);
                         }
                         if (reason == ResetReason.MATERIALS_CHANGED || reason == ResetReason.SCENE_LOADED) {
                             scene.importMaterials();
@@ -211,15 +212,12 @@ public class RenderManagerCl extends Thread implements Renderer {
 
                 System.out.println("Previewing");
 
-                // Manage OpenCl stuff
-                intersectCl.load(bufferedScene);
-
                 while (jobMonitor.getRendering()) {
                     if (rtQueue.peek() != null) {
 
                         ArrayList<RayCl> renderingList = new ArrayList<RayCl>((int) intersectCl.workgroupSize);
 
-                        while (renderingList.size() < intersectCl.workgroupSize*4 && rtQueue.peek() != null)
+                        while (renderingList.size() < intersectCl.workgroupSize*64 && rtQueue.peek() != null)
                             renderingList.add(rtQueue.poll());
 
                         intersectCl.intersect(renderingList);
