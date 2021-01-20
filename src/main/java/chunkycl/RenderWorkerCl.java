@@ -72,9 +72,7 @@ public class RenderWorkerCl extends Thread {
     }
 
     private void work() throws InterruptedException {
-        if (id == 0 && manager.getRootRays() == null) {
-            manager.setRootRays(new LinkedList<>());
-
+        if (jobMonitor.getRenderingState() == 0) {
             Scene scene = manager.getBufferedScene();
             Random random = state.random;
 
@@ -88,17 +86,29 @@ public class RenderWorkerCl extends Thread {
 
             for (int i = 0; i < width; i++) {
                 for (int j = 0; j < height; j++) {
-                    Ray ray = new Ray();
-                    cam.calcViewRay(ray, random, (-halfWidth + (double) i * invHeight),
-                            (-.5 + (double) j * invHeight));
+                    if ((i + j) % manager.getNumThreads() == id) {
+                        Ray ray = new Ray();
+                        cam.calcViewRay(ray, random, (-halfWidth + (double) i * invHeight),
+                                (-.5 + (double) j * invHeight));
 
-                    RayCl wrapper = new RayCl(ray, null, RayCl.TYPE.ROOT, 1);
-                    wrapper.setImageCoords(new Vector2(i, j));
+                        RayCl wrapper = new RayCl(ray, null, RayCl.TYPE.ROOT, 1);
+                        wrapper.setImageCoords(new Vector2(i, j));
 
-                    synchronized (manager.getRootRays()) {
-                        manager.getRootRays().add(wrapper);
+                        ray.o.x -= manager.getBufferedScene().getOrigin().x;
+                        ray.o.y -= manager.getBufferedScene().getOrigin().y;
+                        ray.o.z -= manager.getBufferedScene().getOrigin().z;
+
+                        synchronized (manager.getRootRays()) {
+                            manager.getRootRays().add(wrapper);
+                        }
+                        manager.getRtQueue().add(wrapper);
                     }
-                    manager.getRtQueue().add(wrapper);
+                }
+            }
+
+            synchronized (jobMonitor) {
+                if (jobMonitor.getRenderingState() == 0) {
+                    jobMonitor.setRenderingState(1);
                 }
             }
         } else if (id % 2 == 0 && manager.getRtCheckQueue().size() > 0) {
@@ -107,9 +117,9 @@ public class RenderWorkerCl extends Thread {
             // Check if ray was successfully pulled
             if (ray == null) return;
 
-            ray.getRay().o.x -= manager.getBufferedScene().getOrigin().x;
-            ray.getRay().o.y -= manager.getBufferedScene().getOrigin().y;
-            ray.getRay().o.z -= manager.getBufferedScene().getOrigin().z;
+//            ray.getRay().o.x -= manager.getBufferedScene().getOrigin().x;
+//            ray.getRay().o.y -= manager.getBufferedScene().getOrigin().y;
+//            ray.getRay().o.z -= manager.getBufferedScene().getOrigin().z;
 
             ray.setIntersect(PreviewRayTracer.nextIntersection(manager.getBufferedScene(), ray.getRay()));
 
@@ -134,6 +144,10 @@ public class RenderWorkerCl extends Thread {
                 mapIntersection(scene, ray);
                 scene.sun().flatShading(ray);
             }
+
+//            wrapper.getRay().color.x = wrapper.getRay().distance / 256.0;
+//            wrapper.getRay().color.y = wrapper.getRay().distance / 256.0;
+//            wrapper.getRay().color.z = wrapper.getRay().distance / 256.0;
 
             wrapper.setStatus(true);
         } else if (id == 0 || (manager.getRootRays() != null && manager.getRootRays().size() > 1024) ) {

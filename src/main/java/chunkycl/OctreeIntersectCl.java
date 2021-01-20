@@ -8,6 +8,7 @@ import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Scanner;
 
@@ -19,6 +20,7 @@ import se.llbit.math.Ray;
 
 public class OctreeIntersectCl {
     private cl_mem voxelArray = null;
+    private cl_mem voxelNum = null;
     private cl_mem voxelBounds = null;
 
     private cl_program program;
@@ -131,21 +133,33 @@ public class OctreeIntersectCl {
         }
 
         int size = (int) Math.pow(2, octree.getDepth());
-        byte[] voxelArray = new byte[size*size*size];
+        List<Integer> voxelList = new LinkedList<>();
 
         for (int i = 0; i < size; i++) {
             for (int j = 0; j < size; j++) {
                 for (int k = 0; k < size; k++) {
-                    voxelArray[i * size * size + j * size + k] =
-                            (byte) isAir(scene, octree, i-size/2, j, k/2);
+                    if (isAir(scene, octree, i, j, k) == 0) {
+                        voxelList.add(i);
+                        voxelList.add(j);
+                        voxelList.add(k);
+                    }
                 }
             }
+        }
+        int[] voxelArray = new int[voxelList.size()];
+        int i = 0;
+        while (voxelList.size() > 0) {
+            voxelArray[i++] = voxelList.remove(0);
         }
 
         Pointer srcVoxel = Pointer.to(voxelArray);
         this.voxelArray = clCreateBuffer(context,
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-                Sizeof.cl_char * voxelArray.length, srcVoxel, null);
+                Sizeof.cl_int * voxelArray.length, srcVoxel, null);
+
+        this.voxelNum = clCreateBuffer(context,
+                CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+                (long) Sizeof.cl_int, Pointer.to(new int[] {voxelArray.length}), null);
 
         this.voxelBounds = clCreateBuffer(context,
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
@@ -187,8 +201,9 @@ public class OctreeIntersectCl {
         clSetKernelArg(kernel, 0, Sizeof.cl_mem, Pointer.to(clRayPos));
         clSetKernelArg(kernel, 1, Sizeof.cl_mem, Pointer.to(clRayDir));
         clSetKernelArg(kernel, 2, Sizeof.cl_mem, Pointer.to(voxelArray));
-        clSetKernelArg(kernel, 3, Sizeof.cl_mem, Pointer.to(voxelBounds));
-        clSetKernelArg(kernel, 4, Sizeof.cl_mem, Pointer.to(clRayRes));
+        clSetKernelArg(kernel, 3, Sizeof.cl_mem, Pointer.to(voxelNum));
+        clSetKernelArg(kernel, 4, Sizeof.cl_mem, Pointer.to(voxelBounds));
+        clSetKernelArg(kernel, 5, Sizeof.cl_mem, Pointer.to(clRayRes));
 
         long[] global_work_size = new long[]{rayRes.length};
 
@@ -212,7 +227,8 @@ public class OctreeIntersectCl {
         // Set all the intersect results
         for (int i = 0; i < rayRes.length; i++) {
             RayCl ray = rays.get(i);
-            ray.getRay().o.scaleAdd(rayRes[i], ray.getRay().d);
+            ray.getRay().o.scaleAdd(rayRes[i]*0.99, ray.getRay().d);
+            ray.getRay().distance = rayRes[i]*0.99;
         }
     }
 

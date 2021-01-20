@@ -7,10 +7,7 @@ import se.llbit.chunky.resources.BitmapImage;
 import se.llbit.log.Log;
 import se.llbit.util.TaskTracker;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Comparator;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.PriorityBlockingQueue;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -53,7 +50,7 @@ public class RenderManagerCl extends Thread implements Renderer {
 
     private final JobMonitor jobMonitor = new JobMonitor();
 
-    public static final OctreeIntersectCl intersectCl = new OctreeIntersectCl();;
+    public static final OctreeIntersectCl intersectCl = new OctreeIntersectCl();
 
     public RenderManagerCl(RenderContext context, boolean headless) {
         super("Render Manager");
@@ -89,6 +86,10 @@ public class RenderManagerCl extends Thread implements Renderer {
 
     public List<RayCl> getRootRays() {
         return rootRays;
+    }
+
+    public int getNumThreads() {
+        return numThreads;
     }
 
     public synchronized void setRootRays(List<RayCl> rootRays) {
@@ -200,7 +201,10 @@ public class RenderManagerCl extends Thread implements Renderer {
                     });
                 }
 
+                this.setRootRays(new LinkedList<>());
+
                 synchronized (jobMonitor) {
+                    jobMonitor.setRenderingState(0);
                     jobMonitor.setRendering(true);
                     jobMonitor.notifyAll();
                 }
@@ -212,9 +216,10 @@ public class RenderManagerCl extends Thread implements Renderer {
 
                 while (jobMonitor.getRendering()) {
                     if (rtQueue.peek() != null) {
+
                         ArrayList<RayCl> renderingList = new ArrayList<RayCl>((int) intersectCl.workgroupSize);
 
-                        while (renderingList.size() < intersectCl.workgroupSize && rtQueue.peek() != null)
+                        while (renderingList.size() < intersectCl.workgroupSize*4 && rtQueue.peek() != null)
                             renderingList.add(rtQueue.poll());
 
                         intersectCl.intersect(renderingList);
@@ -244,6 +249,7 @@ public class RenderManagerCl extends Thread implements Renderer {
 
     public class JobMonitor extends Object {
         private boolean rendering = false;
+        private int renderingState = 0;
 
         public synchronized void setRendering(boolean status) {
             rendering = status;
@@ -251,6 +257,14 @@ public class RenderManagerCl extends Thread implements Renderer {
 
         public synchronized boolean getRendering() {
             return rendering;
+        }
+
+        public synchronized int getRenderingState() {
+            return renderingState;
+        }
+
+        public synchronized void setRenderingState(int newState) {
+            this.renderingState = newState;
         }
     }
 }

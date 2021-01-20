@@ -5,12 +5,14 @@ void exitBlock(float o[3], float d[3], float *distance);
 
 __kernel void octreeIntersect(__global const float *rayPos,
                               __global const float *rayDir,
-                              __global const char *voxel,
+                              __global const int *voxel,
+                              __global const int *voxelNum,
                               __global const int *bounds,
                               __global float *res)
 {
     int gid = get_global_id(0);
     int size = *bounds * 2;
+    int vnum = *voxelNum;
     float distance = 0;
 
     float o[3];
@@ -19,16 +21,21 @@ __kernel void octreeIntersect(__global const float *rayPos,
     o[2] = rayPos[gid*3 + 2];
 
     float d[3];
-    d[0] = rayPos[gid*3 + 0];
-    d[1] = rayPos[gid*3 + 1];
-    d[2] = rayPos[gid*3 + 2];
+    d[0] = rayDir[gid*3 + 0];
+    d[1] = rayDir[gid*3 + 1];
+    d[2] = rayDir[gid*3 + 2];
 
-    while (inbounds(o, *bounds)) {
-        if (!voxel[(int) ((o[0] + size/2) * size * size
-                        + o[1] * size
-                        + (o[2] + size/2))])
+    for (int i = 0; i < 64; i++) {
+        int flag = 0;
+
+        for (int j = 0; j < *voxelNum; j++) {
+            flag |= voxel[j*3+0] == (int)o[0] && voxel[j*3+1] == (int)o[1] && voxel[j*3+2] == (int)o[2];
+        }
+
+        if (flag == 0)
+            exitBlock(o, d, &distance);
+        else
             break;
-        exitBlock(o, d, &distance);
     }
 
     res[gid] = distance;
@@ -39,14 +46,14 @@ int inbounds(float o[3], float bounds) {
 }
 
 void exitBlock(float o[3], float d[3], float *distance) {
-    double tNext = 1000000;
+    float tNext = 1000000000;
 
     float b[3];
     b[0] = floor(o[0]);
     b[1] = floor(o[1]);
     b[2] = floor(o[2]);
 
-    double t = (b[0] - o[0]) / d[0];
+    float t = (b[0] - o[0]) / d[0];
     if (t > EPS) {
         tNext = t;
     } else {
