@@ -214,10 +214,9 @@ public class RenderManagerCl extends Thread implements Renderer {
 
                 while (jobMonitor.getRendering()) {
                     if (rtQueue.peek() != null) {
+                        ArrayList<RayCl> renderingList = new ArrayList<>((int) intersectCl.workgroupSize);
 
-                        ArrayList<RayCl> renderingList = new ArrayList<RayCl>((int) intersectCl.workgroupSize);
-
-                        while (renderingList.size() < intersectCl.workgroupSize*64 && rtQueue.peek() != null)
+                        while (renderingList.size() < intersectCl.workgroupSize*256 && rtQueue.peek() != null)
                             renderingList.add(rtQueue.poll());
 
                         intersectCl.intersect(renderingList);

@@ -2,6 +2,7 @@ package chunkycl;
 
 import static org.jocl.CL.*;
 
+import com.sun.glass.ui.Size;
 import org.jocl.*;
 
 import java.io.InputStream;
@@ -13,21 +14,27 @@ import java.util.List;
 import java.util.Scanner;
 
 import se.llbit.chunky.block.Air;
+import se.llbit.chunky.block.Block;
 import se.llbit.chunky.chunk.BlockPalette;
 import se.llbit.chunky.renderer.scene.Scene;
 import se.llbit.math.Octree;
+import se.llbit.math.PackedOctree;
 import se.llbit.math.Ray;
 
 public class OctreeIntersectCl {
-    private cl_mem voxelArray = null;
-    private cl_mem voxelNum = null;
     private cl_mem voxelBounds = null;
+    private cl_mem voxelArray = null;
+    private cl_mem voxelLength = null;
+    private cl_mem transparentArray = null;
+    private cl_mem transparentLength = null;
 
     private cl_program program;
     private cl_kernel kernel;
 
     private cl_context context;
     private cl_command_queue commandQueue;
+
+    private int[] version;
 
     public final long workgroupSize;
 
@@ -85,9 +92,13 @@ public class OctreeIntersectCl {
         // Create a command-queue for the selected device
         cl_queue_properties properties = new cl_queue_properties();
 
-        // Check if opencl is 2.0 or greater
+        // Get OpenCL version
+        this.version = new int[2];
         String versionString = getString(device, CL_DRIVER_VERSION);
-        if (Integer.parseInt(versionString.substring(0, 1)) >= 2) {
+        this.version[0] = Integer.parseInt(versionString.substring(0, 1));
+        this.version[1] = Integer.parseInt(versionString.substring(2, 3));
+
+        if (this.version[0] >= 2) {
             commandQueue = clCreateCommandQueueWithProperties(
                     context, device, properties, null);
         } else {
@@ -125,11 +136,20 @@ public class OctreeIntersectCl {
 
     public void load(Scene scene) {
         Octree octree;
+        int[] treeData;
 
         try {
             Field worldOctree = scene.getClass().getDeclaredField("worldOctree");
             worldOctree.setAccessible(true);
             octree = (Octree) worldOctree.get(scene);
+
+            Field worldOctreeImplementation = octree.getClass().getDeclaredField("implementation");
+            worldOctreeImplementation.setAccessible(true);
+            PackedOctree packedWorldOctree = (PackedOctree) worldOctreeImplementation.get(octree);
+
+            Field worldOctreeTreeData = packedWorldOctree.getClass().getDeclaredField("treeData");
+            worldOctreeTreeData.setAccessible(true);
+            treeData = (int[]) worldOctreeTreeData.get(packedWorldOctree);
         } catch (NoSuchFieldException | IllegalAccessException e) {
             e.printStackTrace();
             return;
@@ -138,40 +158,69 @@ public class OctreeIntersectCl {
         if (this.voxelArray != null) {
             clReleaseMemObject(this.voxelArray);
             clReleaseMemObject(this.voxelBounds);
+            clReleaseMemObject(this.transparentArray);
+            clReleaseMemObject(this.transparentLength);
         }
 
-        int size = (int) Math.pow(2, octree.getDepth());
-        List<Integer> voxelList = new LinkedList<>();
-
-        for (int i = 0; i < size; i++) {
-            for (int j = 0; j < size; j++) {
-                for (int k = 0; k < size; k++) {
-                    if (isAir(scene, octree, i, j, k) == 0) {
-                        voxelList.add(i);
-                        voxelList.add(j);
-                        voxelList.add(k);
-                    }
-                }
-            }
-        }
-        int[] voxelArray = new int[voxelList.size()];
-        int i = 0;
-        while (voxelList.size() > 0) {
-            voxelArray[i++] = voxelList.remove(0);
-        }
-
-        Pointer srcVoxel = Pointer.to(voxelArray);
-        this.voxelArray = clCreateBuffer(context,
-                CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-                Sizeof.cl_int * voxelArray.length, srcVoxel, null);
-
-        this.voxelNum = clCreateBuffer(context,
-                CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-                (long) Sizeof.cl_int, Pointer.to(new int[] {voxelArray.length}), null);
-
+        // Load bounds into memory
         this.voxelBounds = clCreateBuffer(context,
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-                Sizeof.cl_int, Pointer.to(new int[]{size/2}), null);
+                Sizeof.cl_int, Pointer.to(new int[] {octree.getDepth()/2}), null);
+
+        // Load octree into texture memory
+        cl_image_format format = new cl_image_format();
+        format.image_channel_data_type = CL_SNORM_INT8;
+        format.image_channel_order = CL_INTENSITY;
+
+        if (this.version[0] >= 1 && this.version[1] >= 2) {
+            cl_image_desc desc = new cl_image_desc();
+            desc.image_type = CL_MEM_OBJECT_IMAGE1D;
+            desc.image_width = treeData.length;
+
+            this.voxelArray = clCreateImage(context,
+                    CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+                    format, desc, Pointer.to(treeData), null);
+        } else {
+            this.voxelArray = null;
+            this.voxelArray.notify();
+        }
+
+        this.voxelLength = clCreateBuffer(context,
+                CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+                Sizeof.cl_int, Pointer.to(new int[] {treeData.length}), null);
+
+        // Create transparent block table
+        List<Integer> transparentList = new LinkedList<>();
+        List<Block> blockPalette;
+        BlockPalette palette = scene.getPalette();
+
+        try {
+            Field blockPaletteList = palette.getClass().getDeclaredField("palette");
+            blockPaletteList.setAccessible(true);
+            blockPalette = (List<Block>) blockPaletteList.get(palette);
+        } catch (NoSuchFieldException | IllegalAccessException e) {
+            e.printStackTrace();
+            return;
+        }
+
+        for (int i = 0; i < blockPalette.size(); i++) {
+            if (palette.get(i).invisible)
+                transparentList.add(i);
+        }
+
+        int[] transparent = new int[transparentList.size()];
+        for (int i = 0; i < transparent.length; i++) {
+            transparent[i] = transparentList.remove(0);
+        }
+
+        this.transparentArray = clCreateBuffer(context,
+                CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+                Sizeof.cl_int * transparent.length,
+                Pointer.to(transparent), null);
+
+        this.transparentLength = clCreateBuffer(context,
+                CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, Sizeof.cl_int,
+                Pointer.to(new int[] {transparent.length}), null);
     }
 
     public void intersect(List<RayCl> rays) {
@@ -208,10 +257,12 @@ public class OctreeIntersectCl {
         // Set the arguments
         clSetKernelArg(kernel, 0, Sizeof.cl_mem, Pointer.to(clRayPos));
         clSetKernelArg(kernel, 1, Sizeof.cl_mem, Pointer.to(clRayDir));
-        clSetKernelArg(kernel, 2, Sizeof.cl_mem, Pointer.to(voxelArray));
-        clSetKernelArg(kernel, 3, Sizeof.cl_mem, Pointer.to(voxelNum));
-        clSetKernelArg(kernel, 4, Sizeof.cl_mem, Pointer.to(voxelBounds));
-        clSetKernelArg(kernel, 5, Sizeof.cl_mem, Pointer.to(clRayRes));
+        clSetKernelArg(kernel, 2, Sizeof.cl_mem, Pointer.to(voxelBounds));
+        clSetKernelArg(kernel, 3, Sizeof.cl_mem, Pointer.to(voxelArray));
+        clSetKernelArg(kernel, 4, Sizeof.cl_mem, Pointer.to(voxelLength));
+        clSetKernelArg(kernel, 5, Sizeof.cl_mem, Pointer.to(transparentArray));
+        clSetKernelArg(kernel, 6, Sizeof.cl_mem, Pointer.to(transparentLength));
+        clSetKernelArg(kernel, 7, Sizeof.cl_mem, Pointer.to(clRayRes));
 
         long[] global_work_size = new long[]{rayRes.length};
 

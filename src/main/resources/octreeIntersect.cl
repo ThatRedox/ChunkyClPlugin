@@ -1,18 +1,20 @@
 #define EPS 0.0005
 
+int intersect(image3d_t voxel, int size, int x, int y, int z, int transparent[], int transparentLength);
 int inbounds(float o[3], float bounds);
 void exitBlock(float o[3], float d[3], float *distance);
 
 __kernel void octreeIntersect(__global const float *rayPos,
                               __global const float *rayDir,
-                              __global const int *voxel,
-                              __global const int *voxelNum,
                               __global const int *bounds,
+                              image3d_t voxel,
+                              __global const int *voxelLength,
+                              __global const int *transparent,
+                              __global const int *transparentLength,
                               __global float *res)
 {
     int gid = get_global_id(0);
     int size = *bounds * 2;
-    int vnum = *voxelNum;
     float distance = 0;
 
     float o[3];
@@ -26,19 +28,45 @@ __kernel void octreeIntersect(__global const float *rayPos,
     d[2] = rayDir[gid*3 + 2];
 
     for (int i = 0; i < 64; i++) {
-        int flag = 0;
-
-        for (int j = 0; j < *voxelNum; j++) {
-            flag |= voxel[j*3+0] == (int)o[0] && voxel[j*3+1] == (int)o[1] && voxel[j*3+2] == (int)o[2];
-        }
-
-        if (flag == 0)
+        if (!intersect(voxel, size, o[0], o[1], o[2], transparent, *transparentLength))
             exitBlock(o, d, &distance);
         else
             break;
     }
 
     res[gid] = distance;
+}
+
+int octreeGet(int x, int y, int z, int bounds, image3d_t treeData) {
+    sampler_t voxelSampler = CLK_NORMALIZED_COORDS_FALSE |
+                             CLK_ADDRESS_CLAMP_TO_EDGE |
+                             CLK_FILTER_NEAREST;
+
+    int nodeIndex = 0;
+    int level = bounds*2;
+
+    int data = read_imagei(treeData, voxelSampler, (int4) (nodeIndex, 0, 0, 0)).x;
+    while (data > 0) {
+        level -= 1;
+
+        int lx = 1 & (x >> level);
+        int ly = 1 & (y >> level);
+        int lz = 1 & (z >> level);
+
+        nodeIndex = data + ((lx << 2) | (ly << 1) | lz);
+        data = read_imagei(treeData, voxelSampler, (int4) (nodeIndex, 0, 0, 0)).x;
+    }
+
+    return -data;
+}
+
+int intersect(image3d_t voxel, int size, int x, int y, int z, int transparent[], int transparentLength) {
+    int block = octreeGet(x, y, z, size/2, voxel);
+
+    for (int i = 0; i < transparentLength; i++)
+        if (block == transparent[i])
+            return 1;
+    return 0;
 }
 
 int inbounds(float o[3], float bounds) {

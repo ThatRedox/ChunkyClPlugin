@@ -129,27 +129,27 @@ public class RenderWorkerCl extends Thread {
         } else if (id % 2 == 1 && manager.getRtCompleteQueue().size() > 0) {
             RayCl wrapper = manager.getRtCompleteQueue().poll(1, TimeUnit.MILLISECONDS);
 
-            // Check if ray was successfully pulled
-            if (wrapper == null) return;
+//            // Check if ray was successfully pulled
+//            if (wrapper == null) return;
+//
+//            Ray ray = wrapper.getRay();
+//            Scene scene = manager.getBufferedScene();
+//
+//            // Check if ray has exited the scene
+//            if (!wrapper.getIntersect()) {
+//                // Direct sky hit.
+//                if (!scene.transparentSky()) {
+//                    scene.sky().getSkyColorInterpolated(ray);
+//                    scene.addSkyFog(ray);
+//                }
+//            } else {
+//                mapIntersection(scene, ray);
+//                scene.sun().flatShading(ray);
+//            }
 
-            Ray ray = wrapper.getRay();
-            Scene scene = manager.getBufferedScene();
-
-            // Check if ray has exited the scene
-            if (!wrapper.getIntersect()) {
-                // Direct sky hit.
-                if (!scene.transparentSky()) {
-                    scene.sky().getSkyColorInterpolated(ray);
-                    scene.addSkyFog(ray);
-                }
-            } else {
-                mapIntersection(scene, ray);
-                scene.sun().flatShading(ray);
-            }
-
-//            wrapper.getRay().color.x = wrapper.getRay().distance / 256.0;
-//            wrapper.getRay().color.y = wrapper.getRay().distance / 256.0;
-//            wrapper.getRay().color.z = wrapper.getRay().distance / 256.0;
+            wrapper.getRay().color.x = wrapper.getRay().distance / 256.0;
+            wrapper.getRay().color.y = wrapper.getRay().distance / 256.0;
+            wrapper.getRay().color.z = wrapper.getRay().distance / 256.0;
 
             wrapper.setStatus(true);
         } else if (id == 0 || (manager.getRootRays() != null && manager.getRootRays().size() > 1024) ) {
@@ -173,7 +173,7 @@ public class RenderWorkerCl extends Thread {
                     samples[(int) ((coords.y * width + coords.x) * 3 + 1)] = wrapper.getRay().color.y;
                     samples[(int) ((coords.y * width + coords.x) * 3 + 2)] = wrapper.getRay().color.z;
                 } catch (ArrayIndexOutOfBoundsException e) {
-                    throw e;
+                    samples = scene.getSampleBuffer();
                 }
 
                 scene.finalizePixel((int) coords.x, (int) coords.y);
