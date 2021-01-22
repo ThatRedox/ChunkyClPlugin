@@ -2,11 +2,15 @@ package chunkycl;
 
 import se.llbit.chunky.PersistentSettings;
 import se.llbit.chunky.renderer.*;
+import se.llbit.chunky.renderer.scene.Camera;
 import se.llbit.chunky.renderer.scene.Scene;
 import se.llbit.chunky.resources.BitmapImage;
 import se.llbit.log.Log;
+import se.llbit.math.Matrix3;
+import se.llbit.math.Vector3;
 import se.llbit.util.TaskTracker;
 
+import java.lang.reflect.Field;
 import java.util.*;
 import java.util.concurrent.PriorityBlockingQueue;
 import java.util.function.BiConsumer;
@@ -42,14 +46,6 @@ public class RenderManagerCl extends Thread implements Renderer {
     private TaskTracker.Task renderTask;
 
 
-    private PriorityBlockingQueue<RayCl> rtQueue;
-    private PriorityBlockingQueue<RayCl> rtCheckQueue;
-    private PriorityBlockingQueue<RayCl> rtCompleteQueue;
-
-    private List<RayCl> rootRays = null;
-
-    private final JobMonitor jobMonitor = new JobMonitor();
-
     public static final OctreeIntersectCl intersectCl = new OctreeIntersectCl();
 
     public RenderManagerCl(RenderContext context, boolean headless) {
@@ -62,38 +58,10 @@ public class RenderManagerCl extends Thread implements Renderer {
 
         this.headless = headless;
         bufferedScene = context.getChunky().getSceneFactory().newScene();
-
-        rtQueue = new PriorityBlockingQueue<RayCl>(11, Comparator.comparingInt(o -> o.getRay().depth));
-        rtCheckQueue = new PriorityBlockingQueue<RayCl>(11, Comparator.comparingInt(o -> o.getRay().depth));
-        rtCompleteQueue = new PriorityBlockingQueue<RayCl>(11, Comparator.comparingInt(o -> o.getRay().depth));
-    }
-
-    public PriorityBlockingQueue<RayCl> getRtQueue() {
-        return rtQueue;
-    }
-
-    public PriorityBlockingQueue<RayCl> getRtCheckQueue() {
-        return  rtCheckQueue;
-    }
-
-    public PriorityBlockingQueue<RayCl> getRtCompleteQueue() {
-        return rtCompleteQueue;
-    }
-
-    public JobMonitor getJobMonitor() {
-        return jobMonitor;
-    }
-
-    public List<RayCl> getRootRays() {
-        return rootRays;
     }
 
     public int getNumThreads() {
         return numThreads;
-    }
-
-    public synchronized void setRootRays(List<RayCl> rootRays) {
-        this.rootRays = rootRays;
     }
 
     @Override public void setSceneProvider(SceneProvider sceneProvider) {
@@ -173,13 +141,6 @@ public class RenderManagerCl extends Thread implements Renderer {
 
     @Override public void run() {
         try {
-            long seed = System.currentTimeMillis();
-            workers = new Thread[numThreads];
-            for (int i = 0; i < numThreads; i++) {
-                workers[i] = new RenderWorkerCl(this, i, seed+i);
-                workers[i].start();
-            }
-
             while (!isInterrupted()) {
                 ResetReason reason = sceneProvider.awaitSceneStateChange();
 
@@ -187,10 +148,10 @@ public class RenderManagerCl extends Thread implements Renderer {
                     sceneProvider.withSceneProtected(scene -> {
                         if (reason.overwriteState()) {
                             bufferedScene.copyState(scene);
-                            intersectCl.load(bufferedScene);
                         }
                         if (reason == ResetReason.MATERIALS_CHANGED || reason == ResetReason.SCENE_LOADED) {
                             scene.importMaterials();
+                            intersectCl.load(bufferedScene);
                         }
 
                         bufferedScene.copyTransients(scene);
@@ -202,28 +163,9 @@ public class RenderManagerCl extends Thread implements Renderer {
                     });
                 }
 
-                this.setRootRays(new LinkedList<>());
-
-                synchronized (jobMonitor) {
-                    jobMonitor.setRenderingState(0);
-                    jobMonitor.setRendering(true);
-                    jobMonitor.notifyAll();
-                }
-
                 System.out.println("Previewing");
 
-                while (jobMonitor.getRendering()) {
-                    if (rtQueue.peek() != null) {
-                        ArrayList<RayCl> renderingList = new ArrayList<>((int) intersectCl.workgroupSize);
-
-                        while (renderingList.size() < intersectCl.workgroupSize*256 && rtQueue.peek() != null)
-                            renderingList.add(rtQueue.poll());
-
-                        intersectCl.intersect(renderingList);
-
-                        rtCheckQueue.addAll(renderingList);
-                    }
-                }
+                previewRender();
 
                 renderTask.update("Preview", 1, 1, "");
 
@@ -244,24 +186,66 @@ public class RenderManagerCl extends Thread implements Renderer {
         }
     }
 
-    public class JobMonitor extends Object {
-        private boolean rendering = false;
-        private int renderingState = 0;
+    private void previewRender() {
+        int width = bufferedScene.canvasWidth();
+        int height = bufferedScene.canvasHeight();
 
-        public synchronized void setRendering(boolean status) {
-            rendering = status;
+        float[] normCoords = new float[width * height * 2];
+
+        double halfWidth = width / (2.0 * height);
+        double invHeight = 1.0 / height;
+
+        for (int i = 0; i < width; i++) {
+            for (int j = 0; j < height; j++) {
+                normCoords[(i*height + j)*2 + 0] = (float) (-halfWidth + i*invHeight);
+                normCoords[(i*height + j)*2 + 1] = (float) (-.5 +  j*invHeight);
+            }
         }
 
-        public synchronized boolean getRendering() {
-            return rendering;
+        float fovTan = (float) Camera.clampedFovTan(bufferedScene.camera().getFov());
+
+        Matrix3 cameraTransform = null;
+        Camera cam = bufferedScene.camera();
+
+        try {
+            Field camTransformField = cam.getClass().getDeclaredField("transform");
+            camTransformField.setAccessible(true);
+            cameraTransform = (Matrix3) camTransformField.get(cam);
+        } catch (IllegalAccessException | NoSuchFieldException e) {
+            e.printStackTrace();
         }
 
-        public synchronized int getRenderingState() {
-            return renderingState;
-        }
+        float[][] transform = new float[][]
+                {{(float) cameraTransform.m11, (float) cameraTransform.m12, (float) cameraTransform.m13},
+                 {(float) cameraTransform.m21, (float) cameraTransform.m22, (float) cameraTransform.m23},
+                 {(float) cameraTransform.m31, (float) cameraTransform.m32, (float) cameraTransform.m33}};
 
-        public synchronized void setRenderingState(int newState) {
-            this.renderingState = newState;
+        Vector3 origin = cam.getPosition();
+        cameraTransform.transform(origin);
+        origin.x -= bufferedScene.getOrigin().x;
+        origin.y -= bufferedScene.getOrigin().y;
+        origin.z -= bufferedScene.getOrigin().z;
+
+        long start = System.nanoTime();
+
+        float[] depthmap = intersectCl.intersect(normCoords, origin, fovTan, transform);
+
+        start = System.nanoTime() - start;
+        start += 0;
+
+        double[] samples = bufferedScene.getSampleBuffer();
+        try {
+            for (int i = 0; i < width; i++) {
+                for (int j = 0; j < height; j++) {
+                    samples[(j * width + i) * 3 + 0] = depthmap[i * height + j] / 64.0;
+                    samples[(j * width + i) * 3 + 1] = depthmap[i * height + j] / 64.0;
+                    samples[(j * width + i) * 3 + 2] = depthmap[i * height + j] / 64.0;
+
+                    bufferedScene.finalizePixel(i, j);
+                }
+            }
+        } catch (ArrayIndexOutOfBoundsException e) {
+            // Canvas resize?
         }
     }
 }

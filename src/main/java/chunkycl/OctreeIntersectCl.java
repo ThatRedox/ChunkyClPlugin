@@ -20,6 +20,7 @@ import se.llbit.chunky.renderer.scene.Scene;
 import se.llbit.math.Octree;
 import se.llbit.math.PackedOctree;
 import se.llbit.math.Ray;
+import se.llbit.math.Vector3;
 
 public class OctreeIntersectCl {
     private cl_mem voxelBounds = null;
@@ -169,7 +170,7 @@ public class OctreeIntersectCl {
 
         // Load octree into texture memory
         cl_image_format format = new cl_image_format();
-        format.image_channel_data_type = CL_SNORM_INT8;
+        format.image_channel_data_type = CL_SIGNED_INT32;
         format.image_channel_order = CL_INTENSITY;
 
         if (this.version[0] >= 1 && this.version[1] >= 2) {
@@ -215,7 +216,7 @@ public class OctreeIntersectCl {
 
         this.transparentArray = clCreateBuffer(context,
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-                Sizeof.cl_int * transparent.length,
+                (long) Sizeof.cl_int * transparent.length,
                 Pointer.to(transparent), null);
 
         this.transparentLength = clCreateBuffer(context,
@@ -223,46 +224,47 @@ public class OctreeIntersectCl {
                 Pointer.to(new int[] {transparent.length}), null);
     }
 
-    public void intersect(List<RayCl> rays) {
-        float[] rayPos = new float[rays.size()*3];
-        float[] rayDir = new float[rays.size()*3];
-        float[] rayRes = new float[rays.size()];
+    public float[] intersect(float[] normCoords, Vector3 origin, float fovTan, float[][] transform) {
+        float[] rayRes = new float[normCoords.length/2];
 
-        for (int i = 0; i < rays.size(); i++) {
-            RayCl wrapper = rays.get(i);
+        float[] rayPos = new float[3];
+        rayPos[0] = (float) origin.x;
+        rayPos[1] = (float) origin.y;
+        rayPos[2] = (float) origin.z;
 
-            rayPos[i*3 + 0] = (float) wrapper.getRay().o.x;
-            rayPos[i*3 + 1] = (float) wrapper.getRay().o.y;
-            rayPos[i*3 + 2] = (float) wrapper.getRay().o.z;
-
-            rayDir[i*3 + 0] = (float) wrapper.getRay().d.x;
-            rayDir[i*3 + 1] = (float) wrapper.getRay().d.y;
-            rayDir[i*3 + 2] = (float) wrapper.getRay().d.z;
+        float[] flatTransform = new float[9];
+        for (int i = 0; i < 3; i++) {
+            System.arraycopy(transform[i], 0, flatTransform, i * 3, 3);
         }
 
-        Pointer srcRayPos = Pointer.to(rayPos);
-        Pointer srcRayDir = Pointer.to(rayDir);
         Pointer srcRayRes = Pointer.to(rayRes);
 
         cl_mem clRayPos = clCreateBuffer(context,
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-                (long) Sizeof.cl_float * rayPos.length, srcRayPos, null);
-        cl_mem clRayDir = clCreateBuffer(context,
+                (long) Sizeof.cl_float * rayPos.length, Pointer.to(rayPos), null);
+        cl_mem clNormCoords = clCreateBuffer(context,
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-                (long) Sizeof.cl_float * rayPos.length, srcRayDir, null);
-        cl_mem clRayRes = clCreateBuffer(context,
-                CL_MEM_WRITE_ONLY,
+                (long) Sizeof.cl_float * normCoords.length, Pointer.to(normCoords), null);
+        cl_mem clRayRes = clCreateBuffer(context, CL_MEM_WRITE_ONLY,
                 (long) Sizeof.cl_float * rayRes.length, null, null);
+        cl_mem clFovTan = clCreateBuffer(context,
+                CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+                Sizeof.cl_float, Pointer.to(new float[] {fovTan}), null);
+        cl_mem clTransform = clCreateBuffer(context,
+                CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+                Sizeof.cl_float * flatTransform.length, Pointer.to(flatTransform), null);
 
         // Set the arguments
         clSetKernelArg(kernel, 0, Sizeof.cl_mem, Pointer.to(clRayPos));
-        clSetKernelArg(kernel, 1, Sizeof.cl_mem, Pointer.to(clRayDir));
-        clSetKernelArg(kernel, 2, Sizeof.cl_mem, Pointer.to(voxelBounds));
-        clSetKernelArg(kernel, 3, Sizeof.cl_mem, Pointer.to(voxelArray));
-        clSetKernelArg(kernel, 4, Sizeof.cl_mem, Pointer.to(voxelLength));
-        clSetKernelArg(kernel, 5, Sizeof.cl_mem, Pointer.to(transparentArray));
-        clSetKernelArg(kernel, 6, Sizeof.cl_mem, Pointer.to(transparentLength));
-        clSetKernelArg(kernel, 7, Sizeof.cl_mem, Pointer.to(clRayRes));
+        clSetKernelArg(kernel, 1, Sizeof.cl_mem, Pointer.to(clNormCoords));
+        clSetKernelArg(kernel, 2, Sizeof.cl_mem, Pointer.to(clTransform));
+        clSetKernelArg(kernel, 3, Sizeof.cl_mem, Pointer.to(clFovTan));
+        clSetKernelArg(kernel, 4, Sizeof.cl_mem, Pointer.to(voxelBounds));
+        clSetKernelArg(kernel, 5, Sizeof.cl_mem, Pointer.to(voxelArray));
+        clSetKernelArg(kernel, 6, Sizeof.cl_mem, Pointer.to(voxelLength));
+        clSetKernelArg(kernel, 7, Sizeof.cl_mem, Pointer.to(transparentArray));
+        clSetKernelArg(kernel, 8, Sizeof.cl_mem, Pointer.to(transparentLength));
+        clSetKernelArg(kernel, 9, Sizeof.cl_mem, Pointer.to(clRayRes));
 
         long[] global_work_size = new long[]{rayRes.length};
 
@@ -272,7 +274,7 @@ public class OctreeIntersectCl {
 
         // Get the results
         try {
-            clEnqueueReadBuffer(commandQueue, clRayRes, CL_TRUE, 0, Sizeof.cl_float * rayRes.length,
+            clEnqueueReadBuffer(commandQueue, clRayRes, CL_TRUE, 0, (long) Sizeof.cl_float * rayRes.length,
                     srcRayRes, 0, null, null);
         } catch (CLException e) {
             throw e;
@@ -280,15 +282,11 @@ public class OctreeIntersectCl {
 
         // Clean up
         clReleaseMemObject(clRayPos);
-        clReleaseMemObject(clRayDir);
+        clReleaseMemObject(clNormCoords);
         clReleaseMemObject(clRayRes);
+        clReleaseMemObject(clFovTan);
 
-        // Set all the intersect results
-        for (int i = 0; i < rayRes.length; i++) {
-            RayCl ray = rays.get(i);
-            ray.getRay().o.scaleAdd(rayRes[i]*0.99, ray.getRay().d);
-            ray.getRay().distance = rayRes[i]*0.99;
-        }
+        return rayRes;
     }
 
     public void cleanup() {
