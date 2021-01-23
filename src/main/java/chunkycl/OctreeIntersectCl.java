@@ -2,6 +2,7 @@ package chunkycl;
 
 import static org.jocl.CL.*;
 
+import com.sun.glass.ui.Size;
 import org.jocl.*;
 
 import java.io.InputStream;
@@ -15,6 +16,7 @@ import java.util.Scanner;
 import se.llbit.chunky.block.Block;
 import se.llbit.chunky.chunk.BlockPalette;
 import se.llbit.chunky.renderer.scene.Scene;
+import se.llbit.chunky.resources.Texture;
 import se.llbit.log.Log;
 import se.llbit.math.Octree;
 import se.llbit.math.PackedOctree;
@@ -26,6 +28,7 @@ public class OctreeIntersectCl {
     private cl_mem voxelLength = null;
     private cl_mem transparentArray = null;
     private cl_mem transparentLength = null;
+    private cl_mem blockTextures = null;
 
     private cl_program program;
     private cl_kernel kernel;
@@ -108,6 +111,10 @@ public class OctreeIntersectCl {
                     context, device, 0, null);
         }
 
+        if (this.version[0] <= 1 && this.version[1] < 2) {
+            Log.error("OpenCL 1.2+ required.");
+        }
+
         // Create the program
         program = clCreateProgramWithSource(context, 1, new String[] {programSource},
                 null, null);
@@ -175,17 +182,13 @@ public class OctreeIntersectCl {
         format.image_channel_data_type = CL_SIGNED_INT32;
         format.image_channel_order = CL_INTENSITY;
 
-        if (this.version[0] >= 1 && this.version[1] >= 2) {
-            cl_image_desc desc = new cl_image_desc();
-            desc.image_type = CL_MEM_OBJECT_IMAGE1D;
-            desc.image_width = treeData.length;
+        cl_image_desc desc = new cl_image_desc();
+        desc.image_type = CL_MEM_OBJECT_IMAGE1D;
+        desc.image_width = treeData.length;
 
-            this.octreeData = clCreateImage(context,
-                    CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-                    format, desc, Pointer.to(treeData), null);
-        } else {
-            Log.error("OpenCL 1.2+ required.");
-        }
+        this.octreeData = clCreateImage(context,
+                CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+                format, desc, Pointer.to(treeData), null);
 
         this.voxelLength = clCreateBuffer(context,
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
@@ -223,10 +226,35 @@ public class OctreeIntersectCl {
         this.transparentLength = clCreateBuffer(context,
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, Sizeof.cl_int,
                 Pointer.to(new int[] {transparent.length}), null);
+
+        // Load all block textures into GPU texture memory
+        format.image_channel_data_type = CL_UNSIGNED_INT32;
+        format.image_channel_order = CL_INTENSITY;
+
+        Texture stoneTexture = blockPalette.get(palette.stoneId).getTexture(0);
+        int[] blockTexturesArray = new int[stoneTexture.getData().length * blockPalette.size()];
+        int index = 0;
+        for (int i = 0; i < blockPalette.size(); i++) {
+            Block block = blockPalette.get(i);
+            Texture texture = block.getTexture(0);
+            int[] textureData = texture.getData();
+
+            System.arraycopy(textureData, 0, blockTexturesArray, index, textureData.length);
+            index += textureData.length;
+        }
+
+        desc.image_type = CL_MEM_OBJECT_IMAGE3D;
+        desc.image_width = stoneTexture.getWidth();
+        desc.image_height = stoneTexture.getHeight();
+        desc.image_depth = blockPalette.size();
+
+        blockTextures = clCreateImage(context,
+                CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, format, desc,
+                Pointer.to(blockTexturesArray), null);
     }
 
     public float[] intersect(float[] rayDirs, Vector3 origin) {
-        float[] rayRes = new float[rayDirs.length/3];
+        float[] rayRes = new float[rayDirs.length];
 
         float[] rayPos = new float[3];
         rayPos[0] = (float) origin.x;
@@ -252,9 +280,10 @@ public class OctreeIntersectCl {
         clSetKernelArg(kernel, 4, Sizeof.cl_mem, Pointer.to(voxelLength));
         clSetKernelArg(kernel, 5, Sizeof.cl_mem, Pointer.to(transparentArray));
         clSetKernelArg(kernel, 6, Sizeof.cl_mem, Pointer.to(transparentLength));
-        clSetKernelArg(kernel, 7, Sizeof.cl_mem, Pointer.to(clRayRes));
+        clSetKernelArg(kernel, 7, Sizeof.cl_mem, Pointer.to(blockTextures));
+        clSetKernelArg(kernel, 8, Sizeof.cl_mem, Pointer.to(clRayRes));
 
-        long[] global_work_size = new long[]{rayRes.length};
+        long[] global_work_size = new long[]{rayRes.length/3};
 
         // Execute the program
         clEnqueueNDRangeKernel(commandQueue, kernel, 1, null, global_work_size,

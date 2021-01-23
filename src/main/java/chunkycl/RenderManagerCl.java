@@ -195,7 +195,7 @@ public class RenderManagerCl extends Thread implements Renderer {
         }
     }
 
-    private void previewRender() {
+    private void previewRender() throws InterruptedException {
         int width = bufferedScene.canvasWidth();
         int height = bufferedScene.canvasHeight();
 
@@ -210,9 +210,9 @@ public class RenderManagerCl extends Thread implements Renderer {
         for (int i = 0; i < width; i++) {
             for (int j = 0; j < height; j++) {
                 cam.calcViewRay(ray, -halfWidth + i*invHeight, -.5 +  j*invHeight);
-                rayDirs[(i * height + j)*3 + 0] = (float) ray.d.x;
-                rayDirs[(i * height + j)*3 + 1] = (float) ray.d.y;
-                rayDirs[(i * height + j)*3 + 2] = (float) ray.d.z;
+                rayDirs[(j * width + i)*3 + 0] = (float) ray.d.x;
+                rayDirs[(j * width + i)*3 + 1] = (float) ray.d.y;
+                rayDirs[(j * width + i)*3 + 2] = (float) ray.d.z;
             }
         }
 
@@ -225,12 +225,8 @@ public class RenderManagerCl extends Thread implements Renderer {
 
         double[] samples = bufferedScene.getSampleBuffer();
 
-        for (int i = 0; i < width; i++) {
-            for (int j = 0; j < height; j++) {
-                samples[(j * width + i) * 3 + 0] = 1 - depthmap[i * height + j] / 8.0;
-                samples[(j * width + i) * 3 + 1] = 1 - depthmap[i * height + j] / 8.0;
-                samples[(j * width + i) * 3 + 2] = 1 - depthmap[i * height + j] / 8.0;
-            }
+        for (int i = 0; i < depthmap.length; i++) {
+            samples[i] = depthmap[i];
         }
 
         synchronized (jobManager) {
@@ -239,10 +235,13 @@ public class RenderManagerCl extends Thread implements Renderer {
             jobManager.notifyAll();
         }
 
-        try {
-            while (jobManager.count != numThreads) Thread.sleep(1);
-        } catch (InterruptedException e){
-            // Sleep?
+        synchronized (jobManager) {
+            while (jobManager.count != numThreads) {
+                jobManager.wait();
+            }
+
+            jobManager.finalize = false;
+            jobManager.notifyAll();
         }
     }
 

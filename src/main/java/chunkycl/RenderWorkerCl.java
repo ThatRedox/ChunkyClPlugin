@@ -45,8 +45,12 @@ public class RenderWorkerCl extends Thread {
 
                 synchronized (jobManager) {
                     jobManager.count += 1;
-                    if (jobManager.finalize) {
-                        jobManager.finalize = false;
+                    jobManager.notifyAll();
+                }
+
+                synchronized (jobManager) {
+                    while (jobManager.finalize) {
+                        jobManager.wait();
                     }
                 }
             }
