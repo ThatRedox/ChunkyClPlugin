@@ -1,18 +1,7 @@
 package chunkycl;
 
-import org.apache.commons.math3.exception.OutOfRangeException;
-import se.llbit.chunky.block.MinecraftBlock;
-import se.llbit.chunky.renderer.*;
-import se.llbit.chunky.renderer.scene.Camera;
-import se.llbit.chunky.renderer.scene.PreviewRayTracer;
-import se.llbit.chunky.renderer.scene.RayTracer;
 import se.llbit.chunky.renderer.scene.Scene;
-import se.llbit.chunky.world.Material;
 import se.llbit.log.Log;
-import se.llbit.math.*;
-
-import java.util.*;
-import java.util.concurrent.TimeUnit;
 
 public class RenderWorkerCl extends Thread {
     private final int id;
