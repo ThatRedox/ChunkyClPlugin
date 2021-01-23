@@ -343,4 +343,23 @@ public class OctreeIntersectCl {
         }
         return values;
     }
+
+    public int octreeGet(int x, int y, int z, int bounds, int[] treeData) {
+        int nodeIndex = 0;
+        int level = bounds * 2;
+
+        int data = treeData[nodeIndex];
+        while (data > 0) {
+            level -= 1;
+
+            int lx = 1 & (x >> level);
+            int ly = 1 & (y >> level);
+            int lz = 1 & (z >> level);
+
+            nodeIndex = data + ((lx << 2) | (ly << 1) | lz);
+            data = treeData[nodeIndex];
+        }
+
+        return -data;
+    }
 }

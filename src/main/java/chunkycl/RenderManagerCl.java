@@ -46,6 +46,9 @@ public class RenderManagerCl extends Thread implements Renderer {
     private TaskTracker.Task renderTask;
 
 
+    private float[] normCoords = null;
+
+
     public static final OctreeIntersectCl intersectCl = new OctreeIntersectCl();
 
     public RenderManagerCl(RenderContext context, boolean headless) {
@@ -148,6 +151,7 @@ public class RenderManagerCl extends Thread implements Renderer {
                     sceneProvider.withSceneProtected(scene -> {
                         if (reason.overwriteState()) {
                             bufferedScene.copyState(scene);
+                            genNormCoords();
                         }
                         if (reason == ResetReason.MATERIALS_CHANGED || reason == ResetReason.SCENE_LOADED) {
                             scene.importMaterials();
@@ -186,11 +190,11 @@ public class RenderManagerCl extends Thread implements Renderer {
         }
     }
 
-    private void previewRender() {
+    private void genNormCoords() {
         int width = bufferedScene.canvasWidth();
         int height = bufferedScene.canvasHeight();
 
-        float[] normCoords = new float[width * height * 2];
+        normCoords = new float[width * height * 2];
 
         double halfWidth = width / (2.0 * height);
         double invHeight = 1.0 / height;
@@ -200,6 +204,15 @@ public class RenderManagerCl extends Thread implements Renderer {
                 normCoords[(i*height + j)*2 + 0] = (float) (-halfWidth + i*invHeight);
                 normCoords[(i*height + j)*2 + 1] = (float) (-.5 +  j*invHeight);
             }
+        }
+    }
+
+    private void previewRender() {
+        int width = bufferedScene.canvasWidth();
+        int height = bufferedScene.canvasHeight();
+
+        if (normCoords == null) {
+            genNormCoords();
         }
 
         float fovTan = (float) Camera.clampedFovTan(bufferedScene.camera().getFov());
@@ -226,26 +239,18 @@ public class RenderManagerCl extends Thread implements Renderer {
         origin.y -= bufferedScene.getOrigin().y;
         origin.z -= bufferedScene.getOrigin().z;
 
-        long start = System.nanoTime();
-
         float[] depthmap = intersectCl.intersect(normCoords, origin, fovTan, transform);
 
-        start = System.nanoTime() - start;
-        start += 0;
-
         double[] samples = bufferedScene.getSampleBuffer();
-        try {
-            for (int i = 0; i < width; i++) {
-                for (int j = 0; j < height; j++) {
-                    samples[(j * width + i) * 3 + 0] = depthmap[i * height + j] / 64.0;
-                    samples[(j * width + i) * 3 + 1] = depthmap[i * height + j] / 64.0;
-                    samples[(j * width + i) * 3 + 2] = depthmap[i * height + j] / 64.0;
 
-                    bufferedScene.finalizePixel(i, j);
-                }
+        for (int i = 0; i < width; i++) {
+            for (int j = 0; j < height; j++) {
+                samples[(j * width + i) * 3 + 0] = 1 - depthmap[i * height + j] / 256.0;
+                samples[(j * width + i) * 3 + 1] = 1 - depthmap[i * height + j] / 256.0;
+                samples[(j * width + i) * 3 + 2] = 1 - depthmap[i * height + j] / 256.0;
+
+                bufferedScene.finalizePixel(i, j);
             }
-        } catch (ArrayIndexOutOfBoundsException e) {
-            // Canvas resize?
         }
     }
 }
