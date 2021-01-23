@@ -6,14 +6,11 @@ import se.llbit.chunky.renderer.scene.Camera;
 import se.llbit.chunky.renderer.scene.Scene;
 import se.llbit.chunky.resources.BitmapImage;
 import se.llbit.log.Log;
-import se.llbit.math.Matrix3;
 import se.llbit.math.Ray;
 import se.llbit.math.Vector3;
 import se.llbit.util.TaskTracker;
 
-import java.lang.reflect.Field;
 import java.util.*;
-import java.util.concurrent.PriorityBlockingQueue;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
@@ -25,6 +22,7 @@ public class RenderManagerCl extends Thread implements Renderer {
     private final Scene bufferedScene;
     private final boolean headless;
     private int numThreads;
+    private JobManager jobManager;
 
     private RenderMode mode = RenderMode.PREVIEW;
 
@@ -53,6 +51,7 @@ public class RenderManagerCl extends Thread implements Renderer {
 
         numThreads = context.numRenderThreads();
         cpuLoad = PersistentSettings.getCPULoad();
+        this.jobManager = new JobManager();
 
         this.context = context;
 
@@ -62,6 +61,10 @@ public class RenderManagerCl extends Thread implements Renderer {
 
     public int getNumThreads() {
         return numThreads;
+    }
+
+    public JobManager getJobManager() {
+        return jobManager;
     }
 
     @Override public void setSceneProvider(SceneProvider sceneProvider) {
@@ -141,6 +144,12 @@ public class RenderManagerCl extends Thread implements Renderer {
 
     @Override public void run() {
         try {
+            workers = new Thread[numThreads];
+            for (int i = 0; i < numThreads; i++) {
+                workers[i] = new RenderWorkerCl(this, i);
+                workers[i].start();
+            }
+
             while (!isInterrupted()) {
                 ResetReason reason = sceneProvider.awaitSceneStateChange();
 
@@ -221,9 +230,24 @@ public class RenderManagerCl extends Thread implements Renderer {
                 samples[(j * width + i) * 3 + 0] = 1 - depthmap[i * height + j] / 8.0;
                 samples[(j * width + i) * 3 + 1] = 1 - depthmap[i * height + j] / 8.0;
                 samples[(j * width + i) * 3 + 2] = 1 - depthmap[i * height + j] / 8.0;
-
-                bufferedScene.finalizePixel(i, j);
             }
         }
+
+        synchronized (jobManager) {
+            jobManager.count = 0;
+            jobManager.finalize = true;
+            jobManager.notifyAll();
+        }
+
+        try {
+            while (jobManager.count != numThreads) Thread.sleep(1);
+        } catch (InterruptedException e){
+            // Sleep?
+        }
+    }
+
+    public class JobManager {
+        public boolean finalize = false;
+        public int count = 0;
     }
 }
