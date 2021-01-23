@@ -15,6 +15,7 @@ import java.util.Scanner;
 import se.llbit.chunky.block.Block;
 import se.llbit.chunky.chunk.BlockPalette;
 import se.llbit.chunky.renderer.scene.Scene;
+import se.llbit.log.Log;
 import se.llbit.math.Octree;
 import se.llbit.math.PackedOctree;
 import se.llbit.math.Vector3;
@@ -38,6 +39,7 @@ public class OctreeIntersectCl {
 
     private static String programSource;
 
+    @SuppressWarnings("deprecation")
     OctreeIntersectCl() {
         // The platform, device type and device number
         // that will be used
@@ -100,6 +102,8 @@ public class OctreeIntersectCl {
             commandQueue = clCreateCommandQueueWithProperties(
                     context, device, properties, null);
         } else {
+            Log.warn("OpenCL 2+ recommended.");
+
             commandQueue = clCreateCommandQueue(
                     context, device, 0, null);
         }
@@ -132,6 +136,7 @@ public class OctreeIntersectCl {
         kernel = clCreateKernel(program, "octreeIntersect", null);
     }
 
+    @SuppressWarnings("unchecked")
     public void load(Scene scene) {
         Octree octree;
         int[] treeData;
@@ -179,8 +184,7 @@ public class OctreeIntersectCl {
                     CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
                     format, desc, Pointer.to(treeData), null);
         } else {
-            this.octreeData = null;
-            this.octreeData.notify();
+            Log.error("OpenCL 1.2+ required.");
         }
 
         this.voxelLength = clCreateBuffer(context,
@@ -272,21 +276,6 @@ public class OctreeIntersectCl {
         return rayRes;
     }
 
-    public void cleanup() {
-        clReleaseMemObject(octreeData);
-        clReleaseKernel(kernel);
-        clReleaseProgram(program);
-        clReleaseCommandQueue(commandQueue);
-        clReleaseContext(context);
-    }
-
-    private int isAir(Scene scene, Octree octree, int x, int y, int z) {
-        BlockPalette palette = scene.getPalette();
-        Octree.Node node = octree.get(x, y, z);
-
-        return palette.get(node.type).invisible ? 1 : 0;
-    }
-
     private static String getString(cl_device_id device, int paramName)
     {
         // Obtain the length of the string that will be queried
@@ -325,24 +314,5 @@ public class OctreeIntersectCl {
             }
         }
         return values;
-    }
-
-    public int octreeGet(int x, int y, int z, int bounds, int[] treeData) {
-        int nodeIndex = 0;
-        int level = bounds * 2;
-
-        int data = treeData[nodeIndex];
-        while (data > 0) {
-            level -= 1;
-
-            int lx = 1 & (x >> level);
-            int ly = 1 & (y >> level);
-            int lz = 1 & (z >> level);
-
-            nodeIndex = data + ((lx << 2) | (ly << 1) | lz);
-            data = treeData[nodeIndex];
-        }
-
-        return -data;
     }
 }
