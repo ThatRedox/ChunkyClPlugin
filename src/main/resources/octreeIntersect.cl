@@ -1,24 +1,20 @@
 #define EPS 0.0005
 
-void pinholeProjector(float d[3], float normCoords[2], float transform[9], float fovTan);
-int intersect(image1d_t voxel, int size, int x, int y, int z, int transparent[], int transparentLength);
+int intersect(image1d_t octreeData, int depth, int x, int y, int z, __global const int transparent[], int transparentLength);
 int octreeGet(int x, int y, int z, int bounds, image1d_t treeData);
-int inbounds(float o[3], float bounds);
+int inbounds(float o[3], int bounds);
 void exitBlock(float o[3], float d[3], float *distance);
 
 __kernel void octreeIntersect(__global const float *rayPos,
-                              __global const float *normCoords,
-                              __global const float *transform,
-                              __global const float *fovTan,
-                              __global const int *bounds,
-                              image1d_t voxel,
+                              __global const float *rayDir,
+                              __global const int *depth,
+                              image1d_t octreeData,
                               __global const int *voxelLength,
                               __global const int *transparent,
                               __global const int *transparentLength,
                               __global float *res)
 {
     int gid = get_global_id(0);
-    int size = *bounds * 2;
     float distance = 0;
 
     float o[3];
@@ -27,26 +23,28 @@ __kernel void octreeIntersect(__global const float *rayPos,
     o[2] = rayPos[2];
 
     float d[3];
-    pinholeProjector(d, normCoords+(gid*2), transform, *fovTan);
+    d[0] = rayDir[gid*3 + 0];
+    d[1] = rayDir[gid*3 + 1];
+    d[2] = rayDir[gid*3 + 2];
 
     int i;
     for (i = 0; i < 256; i++) {
-        if (!inbounds(o, size) || !intersect(voxel, size, o[0]+EPS, o[1]+EPS, o[2]+EPS, transparent, *transparentLength))
+        if (!intersect(octreeData, *depth, o[0], o[1], o[2], transparent, *transparentLength))
             exitBlock(o, d, &distance);
         else
             break;
     }
 
-    res[gid] = i;
+    res[gid] = distance;
 }
 
-int octreeGet(int x, int y, int z, int bounds, image1d_t treeData) {
+int octreeGet(int x, int y, int z, int depth, image1d_t treeData) {
     sampler_t voxelSampler = CLK_NORMALIZED_COORDS_FALSE |
                              CLK_ADDRESS_CLAMP_TO_EDGE |
                              CLK_FILTER_NEAREST;
 
     int nodeIndex = 0;
-    int level = bounds*2;
+    int level = depth;
 
     int data = read_imagei(treeData, voxelSampler, nodeIndex).x;
     while (data > 0) {
@@ -63,8 +61,8 @@ int octreeGet(int x, int y, int z, int bounds, image1d_t treeData) {
     return -data;
 }
 
-int intersect(image1d_t voxel, int size, int x, int y, int z, int transparent[], int transparentLength) {
-    int block = octreeGet(x, y, z, size/2, voxel);
+int intersect(image1d_t octreeData, int depth, int x, int y, int z, __global const int transparent[], int transparentLength) {
+    int block = octreeGet(x, y, z, depth, octreeData);
 
     for (int i = 0; i < transparentLength; i++)
         if (block == transparent[i])
@@ -72,24 +70,9 @@ int intersect(image1d_t voxel, int size, int x, int y, int z, int transparent[],
     return 1;
 }
 
-int inbounds(float o[3], float bounds) {
+int inbounds(float o[3], int depth) {
+    float bounds = pow((float) 2, (float) (depth-1));
     return o[0] < bounds && o[1] < 2*bounds && o[2] < bounds && o[0] > -bounds && o[1] > 0 && o[2] > -bounds;
-}
-
-void pinholeProjector(float d[3], float normCoords[2], float transform[9], float fovTan) {
-    d[0] = fovTan * normCoords[0];
-    d[1] = fovTan * normCoords[1];
-    d[2] = 1;
-
-    float s = rsqrt(d[0]*d[0] + d[1]*d[1] + d[2]*d[2]);
-
-    d[0] *= s;
-    d[1] *= s;
-    d[2] *= s;
-
-    d[0] = transform[0] * d[0] + transform[1] * d[1] + transform[2] * d[2];
-    d[1] = transform[3] * d[0] + transform[4] * d[1] + transform[5] * d[2];
-    d[2] = transform[6] * d[0] + transform[7] * d[1] + transform[8] * d[2];
 }
 
 void exitBlock(float o[3], float d[3], float *distance) {

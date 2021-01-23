@@ -7,6 +7,7 @@ import se.llbit.chunky.renderer.scene.Scene;
 import se.llbit.chunky.resources.BitmapImage;
 import se.llbit.log.Log;
 import se.llbit.math.Matrix3;
+import se.llbit.math.Ray;
 import se.llbit.math.Vector3;
 import se.llbit.util.TaskTracker;
 
@@ -44,10 +45,6 @@ public class RenderManagerCl extends Thread implements Renderer {
     private Collection<SceneStatusListener> sceneListeners = new ArrayList<>();
 
     private TaskTracker.Task renderTask;
-
-
-    private float[] normCoords = null;
-
 
     public static final OctreeIntersectCl intersectCl = new OctreeIntersectCl();
 
@@ -151,7 +148,6 @@ public class RenderManagerCl extends Thread implements Renderer {
                     sceneProvider.withSceneProtected(scene -> {
                         if (reason.overwriteState()) {
                             bufferedScene.copyState(scene);
-                            genNormCoords();
                         }
                         if (reason == ResetReason.MATERIALS_CHANGED || reason == ResetReason.SCENE_LOADED) {
                             scene.importMaterials();
@@ -190,64 +186,41 @@ public class RenderManagerCl extends Thread implements Renderer {
         }
     }
 
-    private void genNormCoords() {
-        int width = bufferedScene.canvasWidth();
-        int height = bufferedScene.canvasHeight();
-
-        normCoords = new float[width * height * 2];
-
-        double halfWidth = width / (2.0 * height);
-        double invHeight = 1.0 / height;
-
-        for (int i = 0; i < width; i++) {
-            for (int j = 0; j < height; j++) {
-                normCoords[(i*height + j)*2 + 0] = (float) (-halfWidth + i*invHeight);
-                normCoords[(i*height + j)*2 + 1] = (float) (-.5 +  j*invHeight);
-            }
-        }
-    }
-
     private void previewRender() {
         int width = bufferedScene.canvasWidth();
         int height = bufferedScene.canvasHeight();
 
-        if (normCoords == null) {
-            genNormCoords();
-        }
+        double halfWidth = width / (2.0 * height);
+        double invHeight = 1.0 / height;
 
-        float fovTan = (float) Camera.clampedFovTan(bufferedScene.camera().getFov());
+        float[] rayDirs = new float[width * height * 3];
 
-        Matrix3 cameraTransform = null;
         Camera cam = bufferedScene.camera();
+        Ray ray = new Ray();
 
-        try {
-            Field camTransformField = cam.getClass().getDeclaredField("transform");
-            camTransformField.setAccessible(true);
-            cameraTransform = (Matrix3) camTransformField.get(cam);
-        } catch (IllegalAccessException | NoSuchFieldException e) {
-            e.printStackTrace();
+        for (int i = 0; i < width; i++) {
+            for (int j = 0; j < height; j++) {
+                cam.calcViewRay(ray, -halfWidth + i*invHeight, -.5 +  j*invHeight);
+                rayDirs[(i * height + j)*3 + 0] = (float) ray.d.x;
+                rayDirs[(i * height + j)*3 + 1] = (float) ray.d.y;
+                rayDirs[(i * height + j)*3 + 2] = (float) ray.d.z;
+            }
         }
 
-        float[][] transform = new float[][]
-                {{(float) cameraTransform.m11, (float) cameraTransform.m12, (float) cameraTransform.m13},
-                 {(float) cameraTransform.m21, (float) cameraTransform.m22, (float) cameraTransform.m23},
-                 {(float) cameraTransform.m31, (float) cameraTransform.m32, (float) cameraTransform.m33}};
-
-        Vector3 origin = cam.getPosition();
-        cameraTransform.transform(origin);
+        Vector3 origin = ray.o;
         origin.x -= bufferedScene.getOrigin().x;
         origin.y -= bufferedScene.getOrigin().y;
         origin.z -= bufferedScene.getOrigin().z;
 
-        float[] depthmap = intersectCl.intersect(normCoords, origin, fovTan, transform);
+        float[] depthmap = intersectCl.intersect(rayDirs, origin);
 
         double[] samples = bufferedScene.getSampleBuffer();
 
         for (int i = 0; i < width; i++) {
             for (int j = 0; j < height; j++) {
-                samples[(j * width + i) * 3 + 0] = 1 - depthmap[i * height + j] / 256.0;
-                samples[(j * width + i) * 3 + 1] = 1 - depthmap[i * height + j] / 256.0;
-                samples[(j * width + i) * 3 + 2] = 1 - depthmap[i * height + j] / 256.0;
+                samples[(j * width + i) * 3 + 0] = 1 - depthmap[i * height + j] / 8.0;
+                samples[(j * width + i) * 3 + 1] = 1 - depthmap[i * height + j] / 8.0;
+                samples[(j * width + i) * 3 + 2] = 1 - depthmap[i * height + j] / 8.0;
 
                 bufferedScene.finalizePixel(i, j);
             }

@@ -2,7 +2,6 @@ package chunkycl;
 
 import static org.jocl.CL.*;
 
-import com.sun.glass.ui.Size;
 import org.jocl.*;
 
 import java.io.InputStream;
@@ -13,18 +12,16 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Scanner;
 
-import se.llbit.chunky.block.Air;
 import se.llbit.chunky.block.Block;
 import se.llbit.chunky.chunk.BlockPalette;
 import se.llbit.chunky.renderer.scene.Scene;
 import se.llbit.math.Octree;
 import se.llbit.math.PackedOctree;
-import se.llbit.math.Ray;
 import se.llbit.math.Vector3;
 
 public class OctreeIntersectCl {
-    private cl_mem voxelBounds = null;
-    private cl_mem voxelArray = null;
+    private cl_mem octreeDepth = null;
+    private cl_mem octreeData = null;
     private cl_mem voxelLength = null;
     private cl_mem transparentArray = null;
     private cl_mem transparentLength = null;
@@ -156,17 +153,17 @@ public class OctreeIntersectCl {
             return;
         }
 
-        if (this.voxelArray != null) {
-            clReleaseMemObject(this.voxelArray);
-            clReleaseMemObject(this.voxelBounds);
+        if (this.octreeData != null) {
+            clReleaseMemObject(this.octreeData);
+            clReleaseMemObject(this.octreeDepth);
             clReleaseMemObject(this.transparentArray);
             clReleaseMemObject(this.transparentLength);
         }
 
         // Load bounds into memory
-        this.voxelBounds = clCreateBuffer(context,
+        this.octreeDepth = clCreateBuffer(context,
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-                Sizeof.cl_int, Pointer.to(new int[] {octree.getDepth()/2}), null);
+                Sizeof.cl_int, Pointer.to(new int[] {octree.getDepth()}), null);
 
         // Load octree into texture memory
         cl_image_format format = new cl_image_format();
@@ -178,12 +175,12 @@ public class OctreeIntersectCl {
             desc.image_type = CL_MEM_OBJECT_IMAGE1D;
             desc.image_width = treeData.length;
 
-            this.voxelArray = clCreateImage(context,
+            this.octreeData = clCreateImage(context,
                     CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
                     format, desc, Pointer.to(treeData), null);
         } else {
-            this.voxelArray = null;
-            this.voxelArray.notify();
+            this.octreeData = null;
+            this.octreeData.notify();
         }
 
         this.voxelLength = clCreateBuffer(context,
@@ -224,18 +221,13 @@ public class OctreeIntersectCl {
                 Pointer.to(new int[] {transparent.length}), null);
     }
 
-    public float[] intersect(float[] normCoords, Vector3 origin, float fovTan, float[][] transform) {
-        float[] rayRes = new float[normCoords.length/2];
+    public float[] intersect(float[] rayDirs, Vector3 origin) {
+        float[] rayRes = new float[rayDirs.length/3];
 
         float[] rayPos = new float[3];
         rayPos[0] = (float) origin.x;
         rayPos[1] = (float) origin.y;
         rayPos[2] = (float) origin.z;
-
-        float[] flatTransform = new float[9];
-        for (int i = 0; i < 3; i++) {
-            System.arraycopy(transform[i], 0, flatTransform, i * 3, 3);
-        }
 
         Pointer srcRayRes = Pointer.to(rayRes);
 
@@ -244,27 +236,19 @@ public class OctreeIntersectCl {
                 (long) Sizeof.cl_float * rayPos.length, Pointer.to(rayPos), null);
         cl_mem clNormCoords = clCreateBuffer(context,
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-                (long) Sizeof.cl_float * normCoords.length, Pointer.to(normCoords), null);
+                (long) Sizeof.cl_float * rayDirs.length, Pointer.to(rayDirs), null);
         cl_mem clRayRes = clCreateBuffer(context, CL_MEM_WRITE_ONLY,
                 (long) Sizeof.cl_float * rayRes.length, null, null);
-        cl_mem clFovTan = clCreateBuffer(context,
-                CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-                Sizeof.cl_float, Pointer.to(new float[] {fovTan}), null);
-        cl_mem clTransform = clCreateBuffer(context,
-                CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-                Sizeof.cl_float * flatTransform.length, Pointer.to(flatTransform), null);
 
         // Set the arguments
         clSetKernelArg(kernel, 0, Sizeof.cl_mem, Pointer.to(clRayPos));
         clSetKernelArg(kernel, 1, Sizeof.cl_mem, Pointer.to(clNormCoords));
-        clSetKernelArg(kernel, 2, Sizeof.cl_mem, Pointer.to(clTransform));
-        clSetKernelArg(kernel, 3, Sizeof.cl_mem, Pointer.to(clFovTan));
-        clSetKernelArg(kernel, 4, Sizeof.cl_mem, Pointer.to(voxelBounds));
-        clSetKernelArg(kernel, 5, Sizeof.cl_mem, Pointer.to(voxelArray));
-        clSetKernelArg(kernel, 6, Sizeof.cl_mem, Pointer.to(voxelLength));
-        clSetKernelArg(kernel, 7, Sizeof.cl_mem, Pointer.to(transparentArray));
-        clSetKernelArg(kernel, 8, Sizeof.cl_mem, Pointer.to(transparentLength));
-        clSetKernelArg(kernel, 9, Sizeof.cl_mem, Pointer.to(clRayRes));
+        clSetKernelArg(kernel, 2, Sizeof.cl_mem, Pointer.to(octreeDepth));
+        clSetKernelArg(kernel, 3, Sizeof.cl_mem, Pointer.to(octreeData));
+        clSetKernelArg(kernel, 4, Sizeof.cl_mem, Pointer.to(voxelLength));
+        clSetKernelArg(kernel, 5, Sizeof.cl_mem, Pointer.to(transparentArray));
+        clSetKernelArg(kernel, 6, Sizeof.cl_mem, Pointer.to(transparentLength));
+        clSetKernelArg(kernel, 7, Sizeof.cl_mem, Pointer.to(clRayRes));
 
         long[] global_work_size = new long[]{rayRes.length};
 
@@ -284,13 +268,12 @@ public class OctreeIntersectCl {
         clReleaseMemObject(clRayPos);
         clReleaseMemObject(clNormCoords);
         clReleaseMemObject(clRayRes);
-        clReleaseMemObject(clFovTan);
 
         return rayRes;
     }
 
     public void cleanup() {
-        clReleaseMemObject(voxelArray);
+        clReleaseMemObject(octreeData);
         clReleaseKernel(kernel);
         clReleaseProgram(program);
         clReleaseCommandQueue(commandQueue);
