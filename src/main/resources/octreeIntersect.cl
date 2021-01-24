@@ -1,15 +1,16 @@
 #define EPS 0.0005
 
 void getTexturePixel(float color[3], int block, int x, int y, image3d_t textures);
-int intersect(image1d_t octreeData, int depth, int x, int y, int z, __global const int transparent[], int transparentLength);
-int octreeGet(int x, int y, int z, int bounds, image1d_t treeData);
+int intersect(image2d_t octreeData, int depth, int x, int y, int z, __global const int transparent[], int transparentLength);
+int octreeGet(int x, int y, int z, int bounds, image2d_t treeData);
+int octreeRead(int index, image2d_t treeData);
 int inbounds(float o[3], int bounds);
 void exitBlock(float o[3], float d[3], int n[3], float *distance);
 
 __kernel void octreeIntersect(__global const float *rayPos,
                               __global const float *rayDir,
                               __global const int *depth,
-                              image1d_t octreeData,
+                              image2d_t octreeData,
                               __global const int *voxelLength,
                               __global const int *transparent,
                               __global const int *transparentLength,
@@ -83,15 +84,11 @@ void getTexturePixel(float color[3], int block, int x, int y, image3d_t textures
     color[2] = (0xFF & (argb.x >> 0 )) / 256.0;
 }
 
-int octreeGet(int x, int y, int z, int depth, image1d_t treeData) {
-    sampler_t voxelSampler = CLK_NORMALIZED_COORDS_FALSE |
-                             CLK_ADDRESS_CLAMP_TO_EDGE |
-                             CLK_FILTER_NEAREST;
-
+int octreeGet(int x, int y, int z, int depth, image2d_t treeData) {
     int nodeIndex = 0;
     int level = depth;
 
-    int data = read_imagei(treeData, voxelSampler, nodeIndex).x;
+    int data = octreeRead(nodeIndex, treeData);
     while (data > 0) {
         level -= 1;
 
@@ -100,13 +97,22 @@ int octreeGet(int x, int y, int z, int depth, image1d_t treeData) {
         int lz = 1 & (z >> level);
 
         nodeIndex = data + ((lx << 2) | (ly << 1) | lz);
-        data = read_imagei(treeData, voxelSampler, nodeIndex).x;
+        data = octreeRead(nodeIndex, treeData);
     }
 
     return -data;
 }
 
-int intersect(image1d_t octreeData, int depth, int x, int y, int z, __global const int transparent[], int transparentLength) {
+int octreeRead(int index, image2d_t treeData) {
+    sampler_t voxelSampler = CLK_NORMALIZED_COORDS_FALSE |
+                             CLK_ADDRESS_CLAMP_TO_EDGE |
+                             CLK_FILTER_NEAREST;
+
+    int4 data = read_imagei(treeData, voxelSampler, (int2) (index % 8192, index / 8192));
+    return data.x;
+}
+
+int intersect(image2d_t octreeData, int depth, int x, int y, int z, __global const int transparent[], int transparentLength) {
     int block = octreeGet(x, y, z, depth, octreeData);
 
     for (int i = 0; i < transparentLength; i++)

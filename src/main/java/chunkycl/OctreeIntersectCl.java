@@ -183,8 +183,9 @@ public class OctreeIntersectCl {
         format.image_channel_order = CL_INTENSITY;
 
         cl_image_desc desc = new cl_image_desc();
-        desc.image_type = CL_MEM_OBJECT_IMAGE1D;
-        desc.image_width = treeData.length;
+        desc.image_type = CL_MEM_OBJECT_IMAGE2D;
+        desc.image_width = Math.min(treeData.length, 8192);
+        desc.image_height = treeData.length / 8192 + 1;
 
         this.octreeData = clCreateImage(context,
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
@@ -238,6 +239,10 @@ public class OctreeIntersectCl {
             Block block = blockPalette.get(i);
             Texture texture = block.getTexture(0);
             int[] textureData = texture.getData();
+
+            if (textureData.length != stoneTexture.getData().length) {
+                textureData = stoneTexture.getData();
+            }
 
             System.arraycopy(textureData, 0, blockTexturesArray, index, textureData.length);
             index += textureData.length;
