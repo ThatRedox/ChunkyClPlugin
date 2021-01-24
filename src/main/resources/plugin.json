@@ -1,8 +1,8 @@
 {
-  "name": "AmbientOcclusion",
-  "author": "llbit",
-  "main": "se.llbit.chunky.plugin.AmbientOcclusion",
-  "version": "1.1",
-  "targetVersion": "1.4.3",
-  "description": "Renders ambient occlusion."
+  "name": "ChunkyCl",
+  "author": "alexhliu",
+  "main": "chunkycl.ChunkyCl",
+  "version": "0.1",
+  "targetVersion": "2.3.0",
+  "description": "OpenCL rendering for Chunky."
 }

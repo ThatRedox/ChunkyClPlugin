@@ -1,4 +1,15 @@
 apply plugin: 'java'
+apply plugin: 'idea'
+
+jar {
+	manifest {
+		attributes "Main-Class": "chunkycl.ChunkyCl"
+	}
+
+	from {
+		configurations.compile.collect { it.isDirectory() ? it : zipTree(it) }
+	}
+}
 
 repositories {
 	mavenLocal()
