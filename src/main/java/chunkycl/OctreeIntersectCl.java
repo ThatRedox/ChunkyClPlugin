@@ -258,7 +258,7 @@ public class OctreeIntersectCl {
             System.arraycopy(textureData, 0, blockTexturesArray, index, textureData.length);
             index += textureData.length;
 
-            blockIndexesArray[i*4 + 1] = (int) (block.emittance * 256);
+            blockIndexesArray[i*4 + 1] = (int) (block.emittance * scene.getEmitterIntensity() * 256);
             blockIndexesArray[i*4 + 2] = (int) (block.specular * 256);
 
             // x = index, y/256 = emittance, z/256 = specular

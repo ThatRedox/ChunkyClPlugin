@@ -43,8 +43,8 @@ __kernel void octreeIntersect(__global const float *rayPos,
 
     float n[3] = {0};
 
-    float colorStack[3 * 2];
-    float emittanceStack[3 * 2];
+    float colorStack[3 * 6];
+    float emittanceStack[3 * 6];
 
     for (int bounces = 0; bounces < 6; bounces ++)
     {
@@ -87,17 +87,15 @@ __kernel void octreeIntersect(__global const float *rayPos,
         diffuseReflect(d, o, n, random);
     }
 
-    float color[3] = {1};
-
-    for (int i = 1; i >= 0; i--) {
-        color[0] = colorStack[i*3 + 0] * color[0] + emittanceStack[i*3 + 0];
-        color[1] = colorStack[i*3 + 1] * color[1] + emittanceStack[i*3 + 1];
-        color[2] = colorStack[i*3 + 2] * color[2] + emittanceStack[i*3 + 2];
+    for (int i = 4; i >= 0; i--) {
+        colorStack[i*3 + 0] *= colorStack[i*3 + 3] + emittanceStack[i*3 + 3];
+        colorStack[i*3 + 1] *= colorStack[i*3 + 4] + emittanceStack[i*3 + 4];
+        colorStack[i*3 + 2] *= colorStack[i*3 + 5] + emittanceStack[i*3 + 5];
     }
 
-    res[gid*3 + 0] = color[0];
-    res[gid*3 + 1] = color[1];
-    res[gid*3 + 2] = color[2];
+    res[gid*3 + 0] = colorStack[0];
+    res[gid*3 + 1] = colorStack[1];
+    res[gid*3 + 2] = colorStack[2];
 }
 
 void xorshift(unsigned int *state) {
