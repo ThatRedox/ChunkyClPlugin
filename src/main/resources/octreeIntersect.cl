@@ -1,11 +1,16 @@
 #define EPS 0.0005
 
-void getTextureRay(float color[3], float o[3], float n[3], int block, image2d_t textures, image1d_t indexes);
+void getTextureRay(float color[3], float o[3], float n[3], float e[3], int block, image2d_t textures, image1d_t blockData);
 int intersect(image2d_t octreeData, int depth, int x, int y, int z, __global const int transparent[], int transparentLength);
 int octreeGet(int x, int y, int z, int bounds, image2d_t treeData);
 int octreeRead(int index, image2d_t treeData);
 int inbounds(float o[3], int bounds);
-void exitBlock(float o[3], float d[3], int n[3], float *distance);
+void exitBlock(float o[3], float d[3], float n[3], float *distance);
+
+void diffuseReflect(float d[3], float o[3], float n[3], unsigned int *state);
+
+void xorshift(unsigned int *state);
+float nextFloat(unsigned int *state);
 
 __kernel void octreeIntersect(__global const float *rayPos,
                               __global const float *rayDir,
@@ -15,11 +20,16 @@ __kernel void octreeIntersect(__global const float *rayPos,
                               __global const int *transparent,
                               __global const int *transparentLength,
                               image2d_t textures,
-                              image1d_t textureIndexes,
+                              image1d_t blockData,
+                              __global const int *seed,
                               __global float *res)
 {
     int gid = get_global_id(0);
     float distance = 0;
+
+    unsigned int rngState = *seed * (gid + 1);
+    unsigned int *random = &rngState;
+    xorshift(random);
 
     float o[3];
     o[0] = rayPos[0];
@@ -31,29 +41,58 @@ __kernel void octreeIntersect(__global const float *rayPos,
     d[1] = rayDir[gid*3 + 1];
     d[2] = rayDir[gid*3 + 2];
 
-    int n[3];
+    float n[3] = {0};
 
-    int i;
-    int hit = 0;
-    for (i = 0; i < 256; i++) {
-        if (!intersect(octreeData, *depth, o[0], o[1], o[2], transparent, *transparentLength))
-            exitBlock(o, d, n, &distance);
-        else
-        {
-            hit = 1;
-            break;
+    float colorStack[3 * 2];
+    float emittanceStack[3 * 2];
+
+    for (int bounces = 0; bounces < 6; bounces ++)
+    {
+        float e[3] = {0};
+        int hit = 0;
+
+        for (int i = 0; i < 256; i++) {
+            if (!intersect(octreeData, *depth, o[0], o[1], o[2], transparent, *transparentLength))
+                exitBlock(o, d, n, &distance);
+            else
+            {
+                hit = 1;
+                break;
+            }
         }
+
+        float color[3];
+        if (hit) {
+            getTextureRay(color, o, n, e,
+                          octreeGet(o[0], o[1], o[2], *depth, octreeData),
+                          textures, blockData);
+        } else {
+            color[0] = 135/256.0;
+            color[1] = 206/256.0;
+            color[2] = 235/256.0;
+
+            e[0] = color[0] * color[0];
+            e[1] = color[1] * color[1];
+            e[2] = color[2] * color[2];
+        }
+
+        colorStack[bounces*3 + 0] = color[0];
+        colorStack[bounces*3 + 1] = color[1];
+        colorStack[bounces*3 + 2] = color[2];
+
+        emittanceStack[bounces*3 + 0] = e[0];
+        emittanceStack[bounces*3 + 1] = e[1];
+        emittanceStack[bounces*3 + 2] = e[2];
+
+        diffuseReflect(d, o, n, random);
     }
 
-    float color[3];
-    if (hit) {
-        getTextureRay(color, o, n,
-                      octreeGet(o[0], o[1], o[2], *depth, octreeData),
-                      textures, textureIndexes);
-    } else {
-        color[0] = 135/256.0;
-        color[1] = 206/256.0;
-        color[2] = 235/256.0;
+    float color[3] = {1};
+
+    for (int i = 1; i >= 0; i--) {
+        color[0] = colorStack[i*3 + 0] * color[0] + emittanceStack[i*3 + 0];
+        color[1] = colorStack[i*3 + 1] * color[1] + emittanceStack[i*3 + 1];
+        color[2] = colorStack[i*3 + 2] * color[2] + emittanceStack[i*3 + 2];
     }
 
     res[gid*3 + 0] = color[0];
@@ -61,11 +100,72 @@ __kernel void octreeIntersect(__global const float *rayPos,
     res[gid*3 + 2] = color[2];
 }
 
-void getTextureRay(float color[3], float o[3], float n[3], int block, image2d_t textures, image1d_t indexes) {
+void xorshift(unsigned int *state) {
+    *state ^= *state << 13;
+    *state ^= *state >> 7;
+    *state ^= *state << 17;
+
+    *state *= 0x5DEECE66D;
+}
+float nextFloat(unsigned int *state) {
+    xorshift(state);
+
+    return (*state & ((1<<24) - 1)) / ((float) (1 << 24));
+}
+
+void diffuseReflect(float d[3], float o[3], float n[3], unsigned int *state) {
+    float x1 = nextFloat(state);
+    float x2 = nextFloat(state);
+    float r = sqrt(x1);
+    float theta = 2 * M_PI * x2;
+
+    float tx = r * cos(theta);
+    float ty = r * sin(theta);
+    float tz = sqrt(1 - x1);
+
+    // transform from tangent space to world space
+    float xx, xy, xz;
+    float ux, uy, uz;
+    float vx, vy, vz;
+
+    if (fabs(n[0]) > .1) {
+      xx = 0;
+      xy = 1;
+      xz = 0;
+    } else {
+      xx = 1;
+      xy = 0;
+      xz = 0;
+    }
+
+    ux = xy * n[2] - xz * n[1];
+    uy = xz * n[0] - xx * n[2];
+    uz = xx * n[1] - xy * n[0];
+
+    r = 1 / sqrt(ux * ux + uy * uy + uz * uz);
+
+    ux *= r;
+    uy *= r;
+    uz *= r;
+
+    vx = uy * n[2] - uz * n[1];
+    vy = uz * n[0] - ux * n[2];
+    vz = ux * n[1] - uy * n[0];
+
+    d[0] = ux * tx + vx * ty + n[0] * tz;
+    d[1] = uy * tx + vy * ty + n[1] * tz;
+    d[2] = uz * tx + vz * ty + n[2] * tz;
+
+    o[0] += d[0] * EPS;
+    o[1] += d[1] * EPS;
+    o[2] += d[2] * EPS;
+}
+
+void getTextureRay(float color[3], float o[3], float n[3], float e[3], int block, image2d_t textures, image1d_t blockData) {
     sampler_t imageSampler = CLK_NORMALIZED_COORDS_FALSE |
                              CLK_ADDRESS_CLAMP_TO_EDGE |
                              CLK_FILTER_NEAREST;
-    int index = read_imagei(indexes, imageSampler, block).x;
+    int4 blockD = read_imagei(blockData, imageSampler, block);
 
     float u, v;
     float bx = floor(o[0]);
@@ -91,6 +191,8 @@ void getTextureRay(float color[3], float o[3], float n[3], int block, image2d_t 
     u = u * 16 - EPS;
     v = (1 - v) * 16 - EPS;
 
+    int index = blockD.x;
+
     index += 16 * (int) v + (int) u;
 
     uint4 argb = read_imageui(textures, imageSampler, (int2) (index % 8192, index / 8192));
@@ -98,6 +200,10 @@ void getTextureRay(float color[3], float o[3], float n[3], int block, image2d_t 
     color[0] = (0xFF & (argb.x >> 16)) / 256.0;
     color[1] = (0xFF & (argb.x >> 8 )) / 256.0;
     color[2] = (0xFF & (argb.x >> 0 )) / 256.0;
+
+    e[0] = color[0] * color[0] * (blockD.y / 256.0);
+    e[1] = color[1] * color[1] * (blockD.y / 256.0);
+    e[2] = color[2] * color[2] * (blockD.y / 256.0);
 }
 
 int octreeGet(int x, int y, int z, int depth, image2d_t treeData) {
@@ -142,7 +248,7 @@ int inbounds(float o[3], int depth) {
     return o[0] < bounds && o[1] < 2*bounds && o[2] < bounds && o[0] > -bounds && o[1] > 0 && o[2] > -bounds;
 }
 
-void exitBlock(float o[3], float d[3], int n[3], float *distance) {
+void exitBlock(float o[3], float d[3], float n[3], float *distance) {
     float tNext = 1000000000;
 
     float b[3];

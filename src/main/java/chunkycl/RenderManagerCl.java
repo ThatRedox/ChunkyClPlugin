@@ -221,12 +221,20 @@ public class RenderManagerCl extends Thread implements Renderer {
         origin.y -= bufferedScene.getOrigin().y;
         origin.z -= bufferedScene.getOrigin().z;
 
-        float[] depthmap = intersectCl.intersect(rayDirs, origin);
 
         double[] samples = bufferedScene.getSampleBuffer();
+        float[] rendermap = new float[samples.length];
 
-        for (int i = 0; i < depthmap.length; i++) {
-            samples[i] = depthmap[i];
+        for (int i = 0; i < 10; i++) {
+            float[] depthmap = intersectCl.intersect(rayDirs, origin, (int) System.currentTimeMillis());
+
+            for (int j = 0; j < rendermap.length; j++) {
+                rendermap[j] += depthmap[j] * (1.0 / 10);
+            }
+        }
+
+        for (int i = 0; i < rendermap.length; i++) {
+            samples[i] = rendermap[i];
         }
 
         synchronized (jobManager) {

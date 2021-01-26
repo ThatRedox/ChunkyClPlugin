@@ -11,6 +11,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Random;
 import java.util.Scanner;
 
 import se.llbit.chunky.block.Block;
@@ -30,7 +31,7 @@ public class OctreeIntersectCl {
     private cl_mem transparentArray = null;
     private cl_mem transparentLength = null;
     private cl_mem blockTextures = null;
-    private cl_mem blockTextureIndexes = null;
+    private cl_mem blockData = null;
 
     private cl_program program;
     private cl_kernel kernel;
@@ -239,7 +240,7 @@ public class OctreeIntersectCl {
         // Load all block textures into GPU texture memory
         Texture stoneTexture = blockPalette.get(palette.stoneId).getTexture(0);
         int[] blockTexturesArray = new int[stoneTexture.getData().length * blockPalette.size()];
-        int[] blockIndexesArray = new int[blockPalette.size()];
+        int[] blockIndexesArray = new int[blockPalette.size() * 4];
         int index = 0;
         for (int i = 0; i < blockPalette.size(); i++) {
             Block block = blockPalette.get(i);
@@ -253,9 +254,14 @@ public class OctreeIntersectCl {
                 System.arraycopy(tempCopyArray, 0, blockTexturesArray, 0, tempCopyArray.length);
             }
 
-            blockIndexesArray[i] = index;
+            blockIndexesArray[i*4] = index;
             System.arraycopy(textureData, 0, blockTexturesArray, index, textureData.length);
             index += textureData.length;
+
+            blockIndexesArray[i*4 + 1] = (int) (block.emittance * 256);
+            blockIndexesArray[i*4 + 2] = (int) (block.specular * 256);
+
+            // x = index, y/256 = emittance, z/256 = specular
         }
 
         format.image_channel_data_type = CL_UNSIGNED_INT32;
@@ -270,18 +276,18 @@ public class OctreeIntersectCl {
                 Pointer.to(blockTexturesArray), null);
 
         format.image_channel_data_type = CL_SIGNED_INT32;
-        format.image_channel_order = CL_INTENSITY;
+        format.image_channel_order = CL_RGBA;
 
         desc.image_type = CL_MEM_OBJECT_IMAGE1D;
         desc.image_width = blockIndexesArray.length;
-        blockTextureIndexes = clCreateImage(context,
+        blockData = clCreateImage(context,
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, format, desc,
                 Pointer.to(blockIndexesArray), null);
 
         renderTask.update("", 3, 3);
     }
 
-    public float[] intersect(float[] rayDirs, Vector3 origin) {
+    public float[] intersect(float[] rayDirs, Vector3 origin, int seed) {
         float[] rayRes = new float[rayDirs.length];
 
         float[] rayPos = new float[3];
@@ -297,6 +303,9 @@ public class OctreeIntersectCl {
         cl_mem clNormCoords = clCreateBuffer(context,
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
                 (long) Sizeof.cl_float * rayDirs.length, Pointer.to(rayDirs), null);
+        cl_mem clSeed = clCreateBuffer(context,
+                CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+                Sizeof.cl_int, Pointer.to(new int[] {seed}), null);
         cl_mem clRayRes = clCreateBuffer(context, CL_MEM_WRITE_ONLY,
                 (long) Sizeof.cl_float * rayRes.length, null, null);
 
@@ -309,8 +318,9 @@ public class OctreeIntersectCl {
         clSetKernelArg(kernel, 5, Sizeof.cl_mem, Pointer.to(transparentArray));
         clSetKernelArg(kernel, 6, Sizeof.cl_mem, Pointer.to(transparentLength));
         clSetKernelArg(kernel, 7, Sizeof.cl_mem, Pointer.to(blockTextures));
-        clSetKernelArg(kernel, 8, Sizeof.cl_mem, Pointer.to(blockTextureIndexes));
-        clSetKernelArg(kernel, 9, Sizeof.cl_mem, Pointer.to(clRayRes));
+        clSetKernelArg(kernel, 8, Sizeof.cl_mem, Pointer.to(blockData));
+        clSetKernelArg(kernel, 9, Sizeof.cl_mem, Pointer.to(clSeed));
+        clSetKernelArg(kernel, 10, Sizeof.cl_mem, Pointer.to(clRayRes));
 
         long[] global_work_size = new long[]{rayRes.length/3};
 
