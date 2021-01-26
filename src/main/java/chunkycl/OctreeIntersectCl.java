@@ -287,7 +287,7 @@ public class OctreeIntersectCl {
         renderTask.update("", 3, 3);
     }
 
-    public float[] intersect(float[] rayDirs, Vector3 origin, int seed) {
+    public float[] intersect(float[] rayDirs, Vector3 origin, int seed, int rayDepth) {
         float[] rayRes = new float[rayDirs.length];
 
         float[] rayPos = new float[3];
@@ -306,6 +306,9 @@ public class OctreeIntersectCl {
         cl_mem clSeed = clCreateBuffer(context,
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
                 Sizeof.cl_int, Pointer.to(new int[] {seed}), null);
+        cl_mem clRayDepth = clCreateBuffer(context,
+                CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+                Sizeof.cl_int, Pointer.to(new int[] {rayDepth}), null);
         cl_mem clRayRes = clCreateBuffer(context, CL_MEM_WRITE_ONLY,
                 (long) Sizeof.cl_float * rayRes.length, null, null);
 
@@ -320,7 +323,8 @@ public class OctreeIntersectCl {
         clSetKernelArg(kernel, 7, Sizeof.cl_mem, Pointer.to(blockTextures));
         clSetKernelArg(kernel, 8, Sizeof.cl_mem, Pointer.to(blockData));
         clSetKernelArg(kernel, 9, Sizeof.cl_mem, Pointer.to(clSeed));
-        clSetKernelArg(kernel, 10, Sizeof.cl_mem, Pointer.to(clRayRes));
+        clSetKernelArg(kernel, 10, Sizeof.cl_mem, Pointer.to(clRayDepth));
+        clSetKernelArg(kernel, 11, Sizeof.cl_mem, Pointer.to(clRayRes));
 
         long[] global_work_size = new long[]{rayRes.length/3};
 

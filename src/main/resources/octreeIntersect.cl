@@ -1,7 +1,7 @@
 #define EPS 0.0005
 
 void getTextureRay(float color[3], float o[3], float n[3], float e[3], int block, image2d_t textures, image1d_t blockData);
-int intersect(image2d_t octreeData, int depth, int x, int y, int z, __global const int transparent[], int transparentLength);
+int intersect(image2d_t octreeData, int depth, int x, int y, int z, const int transparent[], int transparentLength);
 int octreeGet(int x, int y, int z, int bounds, image2d_t treeData);
 int octreeRead(int index, image2d_t treeData);
 int inbounds(float o[3], int bounds);
@@ -22,6 +22,7 @@ __kernel void octreeIntersect(__global const float *rayPos,
                               image2d_t textures,
                               image1d_t blockData,
                               __global const int *seed,
+                              __global const int *rayDepth,
                               __global float *res)
 {
     int gid = get_global_id(0);
@@ -46,7 +47,7 @@ __kernel void octreeIntersect(__global const float *rayPos,
     float colorStack[3 * 6];
     float emittanceStack[3 * 6];
 
-    for (int bounces = 0; bounces < 6; bounces ++)
+    for (int bounces = 0; bounces < *rayDepth; bounces ++)
     {
         float e[3] = {0};
         int hit = 0;
@@ -59,6 +60,9 @@ __kernel void octreeIntersect(__global const float *rayPos,
                 hit = 1;
                 break;
             }
+
+            if (!inbounds(o, *depth))
+                break;
         }
 
         float color[3];
@@ -74,6 +78,18 @@ __kernel void octreeIntersect(__global const float *rayPos,
             e[0] = color[0] * color[0];
             e[1] = color[1] * color[1];
             e[2] = color[2] * color[2];
+
+            for (int j = bounces; j < *rayDepth; j++) {
+                colorStack[j*3 + 0] = color[0];
+                colorStack[j*3 + 1] = color[1];
+                colorStack[j*3 + 2] = color[2];
+
+                emittanceStack[j*3 + 0] = e[0];
+                emittanceStack[j*3 + 1] = e[1];
+                emittanceStack[j*3 + 2] = e[2];
+            }
+
+            break;
         }
 
         colorStack[bounces*3 + 0] = color[0];
@@ -87,7 +103,7 @@ __kernel void octreeIntersect(__global const float *rayPos,
         diffuseReflect(d, o, n, random);
     }
 
-    for (int i = 4; i >= 0; i--) {
+    for (int i = *rayDepth - 2; i >= 0; i--) {
         colorStack[i*3 + 0] *= colorStack[i*3 + 3] + emittanceStack[i*3 + 3];
         colorStack[i*3 + 1] *= colorStack[i*3 + 4] + emittanceStack[i*3 + 4];
         colorStack[i*3 + 2] *= colorStack[i*3 + 5] + emittanceStack[i*3 + 5];
@@ -232,7 +248,7 @@ int octreeRead(int index, image2d_t treeData) {
     return data.x;
 }
 
-int intersect(image2d_t octreeData, int depth, int x, int y, int z, __global const int transparent[], int transparentLength) {
+int intersect(image2d_t octreeData, int depth, int x, int y, int z, const int transparent[], int transparentLength) {
     int block = octreeGet(x, y, z, depth, octreeData);
 
     for (int i = 0; i < transparentLength; i++)
@@ -242,8 +258,15 @@ int intersect(image2d_t octreeData, int depth, int x, int y, int z, __global con
 }
 
 int inbounds(float o[3], int depth) {
-    float bounds = pow((float) 2, (float) (depth-1));
-    return o[0] < bounds && o[1] < 2*bounds && o[2] < bounds && o[0] > -bounds && o[1] > 0 && o[2] > -bounds;
+    int x = o[0];
+    int y = o[1];
+    int z = o[2];
+
+    int lx = x >> depth;
+    int ly = y >> depth;
+    int lz = z >> depth;
+
+    return lx == 0 && ly == 0 && lz == 0;
 }
 
 void exitBlock(float o[3], float d[3], float n[3], float *distance) {

@@ -170,19 +170,31 @@ public class RenderManagerCl extends Thread implements Renderer {
                             bufferedScene.swapBuffers();
                         }
                     });
+
+                    mode = bufferedScene.getMode();
                 }
 
-                System.out.println("Previewing");
+                if (mode == RenderMode.PREVIEW) {
 
-                previewRender();
+                    System.out.println("Previewing");
 
-                renderTask.update("Preview", 1, 1, "");
+                    previewRender();
 
-                synchronized (bufferedScene) {
-                    bufferedScene.swapBuffers();
+                    renderTask.update("Preview", 1, 1, "");
+
+                    synchronized (bufferedScene) {
+                        bufferedScene.swapBuffers();
+                    }
+
+                    canvas.repaint();
+                } else {
+                    System.out.println("Rendering");
+
+                    int targetSpp;
+                    targetSpp = bufferedScene.getTargetSpp();
+
+                    finalRenderer(targetSpp, renderTask);
                 }
-
-                canvas.repaint();
 
                 if (headless) {
                     break;
@@ -225,9 +237,9 @@ public class RenderManagerCl extends Thread implements Renderer {
         double[] samples = bufferedScene.getSampleBuffer();
         float[] rendermap = new float[samples.length];
 
-        int spp = 10;
+        int spp = 4;
         for (int i = 0; i < spp; i++) {
-            float[] depthmap = intersectCl.intersect(rayDirs, origin, (int) System.currentTimeMillis());
+            float[] depthmap = intersectCl.intersect(rayDirs, origin, (int) System.currentTimeMillis(), 2);
 
             for (int j = 0; j < rendermap.length; j++) {
                 rendermap[j] += depthmap[j] * (1.0 / spp);
@@ -252,6 +264,107 @@ public class RenderManagerCl extends Thread implements Renderer {
             jobManager.finalize = false;
             jobManager.notifyAll();
         }
+    }
+
+    private void finalRenderer(int targetSpp, TaskTracker.Task renderTask) throws InterruptedException {
+        renderTask.update("Rendering", targetSpp, 0);
+
+        int width = bufferedScene.canvasWidth();
+        int height = bufferedScene.canvasHeight();
+
+        double halfWidth = width / (2.0 * height);
+        double invHeight = 1.0 / height;
+
+        float[] rayDirs = new float[width * height * 3];
+
+        Camera cam = bufferedScene.camera();
+        Ray ray = new Ray();
+
+        for (int i = 0; i < width; i++) {
+            for (int j = 0; j < height; j++) {
+                cam.calcViewRay(ray, -halfWidth + i*invHeight, -.5 +  j*invHeight);
+                rayDirs[(j * width + i)*3 + 0] = (float) ray.d.x;
+                rayDirs[(j * width + i)*3 + 1] = (float) ray.d.y;
+                rayDirs[(j * width + i)*3 + 2] = (float) ray.d.z;
+            }
+        }
+
+        Vector3 origin = ray.o;
+        origin.x -= bufferedScene.getOrigin().x;
+        origin.y -= bufferedScene.getOrigin().y;
+        origin.z -= bufferedScene.getOrigin().z;
+
+        double[] samples = bufferedScene.getSampleBuffer();
+        float[] rendermap = new float[samples.length];
+
+        long startTime = System.currentTimeMillis();
+
+        for (int sample = 0; sample < targetSpp; sample++) {
+            float[] depthmap = intersectCl.intersect(rayDirs, origin, (int) System.currentTimeMillis(), bufferedScene.getRayDepth());
+
+            for (int j = 0; j < rendermap.length; j++) {
+                rendermap[j] += depthmap[j] * (1.0 / targetSpp);
+            }
+
+            for (int i = 0; i < rendermap.length; i++) {
+                samples[i] = rendermap[i] * ((float) targetSpp / (sample + 1));
+            }
+
+            synchronized (jobManager) {
+                jobManager.count = 0;
+                jobManager.finalize = true;
+                jobManager.notifyAll();
+            }
+
+            synchronized (jobManager) {
+                while (jobManager.count != numThreads) {
+                    jobManager.wait();
+                }
+
+                jobManager.finalize = false;
+                jobManager.notifyAll();
+            }
+
+            bufferedScene.renderTime = System.currentTimeMillis() - startTime;
+            bufferedScene.spp = sample + 1;
+            updateRenderProgress();
+
+            bufferedScene.swapBuffers();
+            canvas.repaint();
+        }
+    }
+
+    private void updateRenderProgress() {
+        double renderTime = bufferedScene.renderTime / 1000.0;
+
+        // Notify progress listener.
+        int target = bufferedScene.getTargetSpp();
+        long etaSeconds = (long) (((target - bufferedScene.spp) * renderTime) / bufferedScene.spp);
+        if (etaSeconds > 0) {
+            int seconds = (int) ((etaSeconds) % 60);
+            int minutes = (int) ((etaSeconds / 60) % 60);
+            int hours = (int) (etaSeconds / 3600);
+            String eta = String.format("%d:%02d:%02d", hours, minutes, seconds);
+            renderTask.update("Rendering", target, bufferedScene.spp, eta);
+        } else {
+            renderTask.update("Rendering", target, bufferedScene.spp, "");
+        }
+
+        synchronized (this) {
+            renderListeners.forEach(listener -> {
+                listener.setRenderTime(bufferedScene.renderTime);
+                listener.setSamplesPerSecond(samplesPerSecond());
+                listener.setSpp(bufferedScene.spp);
+            });
+        }
+    }
+
+    private int samplesPerSecond() {
+        int canvasWidth = bufferedScene.canvasWidth();
+        int canvasHeight = bufferedScene.canvasHeight();
+        long pixelsPerFrame = canvasWidth * canvasHeight;
+        double renderTime = bufferedScene.renderTime / 1000.0;
+        return (int) ((bufferedScene.spp * pixelsPerFrame) / renderTime);
     }
 
     public class JobManager {
