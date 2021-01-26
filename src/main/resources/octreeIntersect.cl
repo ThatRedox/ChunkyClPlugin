@@ -1,6 +1,6 @@
 #define EPS 0.0005
 
-void getTexturePixel(float color[3], int block, int x, int y, image3d_t textures);
+void getTextureRay(float color[3], float o[3], float n[3], int block, image2d_t textures, image1d_t indexes);
 int intersect(image2d_t octreeData, int depth, int x, int y, int z, __global const int transparent[], int transparentLength);
 int octreeGet(int x, int y, int z, int bounds, image2d_t treeData);
 int octreeRead(int index, image2d_t treeData);
@@ -14,7 +14,8 @@ __kernel void octreeIntersect(__global const float *rayPos,
                               __global const int *voxelLength,
                               __global const int *transparent,
                               __global const int *transparentLength,
-                              image3d_t textures,
+                              image2d_t textures,
+                              image1d_t textureIndexes,
                               __global float *res)
 {
     int gid = get_global_id(0);
@@ -46,25 +47,13 @@ __kernel void octreeIntersect(__global const float *rayPos,
 
     float color[3];
     if (hit) {
-        float texcoords[2];
-        if (n[0] == 1 || n[0] == -1) {
-            texcoords[0] = o[1];
-            texcoords[1] = o[2];
-        } else if (n[1] == 1 || n[1] == -1) {
-            texcoords[0] = o[0];
-            texcoords[1] = o[2];
-        } else if (n[2] == 1 || n[2] == -1) {
-            texcoords[0] = o[0];
-            texcoords[1] = o[1];
-        }
-
-        getTexturePixel(color, octreeGet(o[0], o[1], o[2], *depth, octreeData),
-                        (int) (texcoords[0] * 16 + 0.5) % 16,
-                        (int) (texcoords[1] * 16 + 0.5) % 16, textures);
+        getTextureRay(color, o, n,
+                      octreeGet(o[0], o[1], o[2], *depth, octreeData),
+                      textures, textureIndexes);
     } else {
-        color[0] = 1.0;
-        color[1] = 1.0;
-        color[2] = 1.0;
+        color[0] = 135/256.0;
+        color[1] = 206/256.0;
+        color[2] = 235/256.0;
     }
 
     res[gid*3 + 0] = color[0];
@@ -72,12 +61,39 @@ __kernel void octreeIntersect(__global const float *rayPos,
     res[gid*3 + 2] = color[2];
 }
 
-void getTexturePixel(float color[3], int block, int x, int y, image3d_t textures) {
+void getTextureRay(float color[3], float o[3], float n[3], int block, image2d_t textures, image1d_t indexes) {
     sampler_t imageSampler = CLK_NORMALIZED_COORDS_FALSE |
                              CLK_ADDRESS_CLAMP_TO_EDGE |
                              CLK_FILTER_NEAREST;
+    int index = read_imagei(indexes, imageSampler, block).x;
 
-    uint4 argb = read_imageui(textures, imageSampler, (int4) (x, y, block, 0));
+    float u, v;
+    float bx = floor(o[0]);
+    float by = floor(o[1]);
+    float bz = floor(o[2]);
+    if (n[1] != 0) {
+      u = o[0] - bx;
+      v = o[2] - bz;
+    } else if (n[0] != 0) {
+      u = o[2] - bz;
+      v = o[1] - by;
+    } else {
+      u = o[0] - bx;
+      v = o[1] - by;
+    }
+    if (n[0] > 0 || n[2] < 0) {
+      u = 1 - u;
+    }
+    if (n[1] > 0) {
+      v = 1 - v;
+    }
+
+    u = u * 16 - EPS;
+    v = (1 - v) * 16 - EPS;
+
+    index += 16 * (int) v + (int) u;
+
+    uint4 argb = read_imageui(textures, imageSampler, (int2) (index % 8192, index / 8192));
 
     color[0] = (0xFF & (argb.x >> 16)) / 256.0;
     color[1] = (0xFF & (argb.x >> 8 )) / 256.0;

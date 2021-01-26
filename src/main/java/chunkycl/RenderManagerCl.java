@@ -160,7 +160,7 @@ public class RenderManagerCl extends Thread implements Renderer {
                         }
                         if (reason == ResetReason.MATERIALS_CHANGED || reason == ResetReason.SCENE_LOADED) {
                             scene.importMaterials();
-                            intersectCl.load(bufferedScene);
+                            intersectCl.load(bufferedScene, renderTask);
                         }
 
                         bufferedScene.copyTransients(scene);
