@@ -185,7 +185,10 @@ public class OctreeIntersectCl {
         // Load octree into texture memory
         cl_image_format format = new cl_image_format();
         format.image_channel_data_type = CL_SIGNED_INT32;
-        format.image_channel_order = CL_INTENSITY;
+        format.image_channel_order = CL_RGBA;
+
+        int[] treeDataCopy = new int[(treeData.length/8192 + 1) * 8192];
+        System.arraycopy(treeData, 0, treeDataCopy, 0, treeData.length);
 
         cl_image_desc desc = new cl_image_desc();
         desc.image_type = CL_MEM_OBJECT_IMAGE2D;
@@ -194,7 +197,7 @@ public class OctreeIntersectCl {
 
         this.octreeData = clCreateImage(context,
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-                format, desc, Pointer.to(treeData), null);
+                format, desc, Pointer.to(treeDataCopy), null);
 
         this.voxelLength = clCreateBuffer(context,
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
@@ -264,8 +267,11 @@ public class OctreeIntersectCl {
             // x = index, y/256 = emittance, z/256 = specular
         }
 
+        int[] blockTexturesArrayCopy = new int[(blockTexturesArray.length/8192 + 1) * 8192];
+        System.arraycopy(blockTexturesArray, 0, blockTexturesArrayCopy, 0, blockTexturesArray.length);
+
         format.image_channel_data_type = CL_UNSIGNED_INT32;
-        format.image_channel_order = CL_INTENSITY;
+        format.image_channel_order = CL_RGBA;
 
         desc.image_type = CL_MEM_OBJECT_IMAGE2D;
         desc.image_width = Math.min(blockTexturesArray.length, 8192);
@@ -273,7 +279,7 @@ public class OctreeIntersectCl {
 
         blockTextures = clCreateImage(context,
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, format, desc,
-                Pointer.to(blockTexturesArray), null);
+                Pointer.to(blockTexturesArrayCopy), null);
 
         format.image_channel_data_type = CL_SIGNED_INT32;
         format.image_channel_order = CL_RGBA;

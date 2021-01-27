@@ -1,7 +1,7 @@
 #define EPS 0.0005
 
 void getTextureRay(float color[3], float o[3], float n[3], float e[3], int block, image2d_t textures, image1d_t blockData);
-int intersect(image2d_t octreeData, int depth, int x, int y, int z, const int transparent[], int transparentLength);
+int intersect(image2d_t octreeData, int depth, int x, int y, int z, __global const int *transparent, int transparentLength);
 int octreeGet(int x, int y, int z, int bounds, image2d_t treeData);
 int octreeRead(int index, image2d_t treeData);
 int inbounds(float o[3], int bounds);
@@ -209,11 +209,26 @@ void getTextureRay(float color[3], float o[3], float n[3], float e[3], int block
 
     index += 16 * (int) v + (int) u;
 
-    uint4 argb = read_imageui(textures, imageSampler, (int2) (index % 8192, index / 8192));
+    uint4 texturePixels = read_imageui(textures, imageSampler, (int2) ((index / 4) % 8192, (index / 4) / 8192));
+    unsigned int argb;
 
-    color[0] = (0xFF & (argb.x >> 16)) / 256.0;
-    color[1] = (0xFF & (argb.x >> 8 )) / 256.0;
-    color[2] = (0xFF & (argb.x >> 0 )) / 256.0;
+    switch (index % 4) {
+        case 0:
+            argb = texturePixels.x;
+            break;
+        case 1:
+            argb = texturePixels.y;
+            break;
+        case 2:
+            argb = texturePixels.z;
+            break;
+        default:
+            argb = texturePixels.w;
+    }
+
+    color[0] = (0xFF & (argb >> 16)) / 256.0;
+    color[1] = (0xFF & (argb >> 8 )) / 256.0;
+    color[2] = (0xFF & (argb >> 0 )) / 256.0;
 
     e[0] = color[0] * color[0] * (blockD.y / 256.0);
     e[1] = color[1] * color[1] * (blockD.y / 256.0);
@@ -244,11 +259,21 @@ int octreeRead(int index, image2d_t treeData) {
                              CLK_ADDRESS_CLAMP_TO_EDGE |
                              CLK_FILTER_NEAREST;
 
-    int4 data = read_imagei(treeData, voxelSampler, (int2) (index % 8192, index / 8192));
-    return data.x;
+    int4 data = read_imagei(treeData, voxelSampler, (int2) ((index / 4) % 8192, (index / 4) / 8192));
+
+    switch (index % 4) {
+        case 0:
+            return data.x;
+        case 1:
+            return data.y;
+        case 2:
+            return data.z;
+        default:
+            return data.w;
+    }
 }
 
-int intersect(image2d_t octreeData, int depth, int x, int y, int z, const int transparent[], int transparentLength) {
+int intersect(image2d_t octreeData, int depth, int x, int y, int z, __global const int *transparent, int transparentLength) {
     int block = octreeGet(x, y, z, depth, octreeData);
 
     for (int i = 0; i < transparentLength; i++)
