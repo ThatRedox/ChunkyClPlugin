@@ -1,4 +1,5 @@
-#define EPS 0.0005
+#define EPS 0.000005
+#define OFFSET 0.0001
 
 void getTextureRay(float color[3], float o[3], float n[3], float e[3], int block, image2d_t textures, image1d_t blockData);
 int intersect(image2d_t octreeData, int depth, int x, int y, int z, __global const int *transparent, int transparentLength);
@@ -28,7 +29,7 @@ __kernel void octreeIntersect(__global const float *rayPos,
     int gid = get_global_id(0);
     float distance = 0;
 
-    unsigned int rngState = *seed * (gid + 1);
+    unsigned int rngState = *seed + gid*5;
     unsigned int *random = &rngState;
     xorshift(random);
 
@@ -44,10 +45,14 @@ __kernel void octreeIntersect(__global const float *rayPos,
 
     float n[3] = {0};
 
-    float colorStack[3 * 6];
-    float emittanceStack[3 * 6];
+    int maxbounces = *rayDepth;
+    if (maxbounces > 23) maxbounces = 23;
 
-    for (int bounces = 0; bounces < *rayDepth; bounces ++)
+    float colorStack[3 * 24] = {0};
+    float emittanceStack[3 * 24] = {0};
+    int addEmittanceStack[24] = {0};
+
+    for (int bounces = 0; bounces < maxbounces; bounces ++)
     {
         float e[3] = {0};
         int hit = 0;
@@ -79,16 +84,6 @@ __kernel void octreeIntersect(__global const float *rayPos,
             e[1] = color[1] * color[1];
             e[2] = color[2] * color[2];
 
-            for (int j = bounces; j < *rayDepth; j++) {
-                colorStack[j*3 + 0] = color[0];
-                colorStack[j*3 + 1] = color[1];
-                colorStack[j*3 + 2] = color[2];
-
-                emittanceStack[j*3 + 0] = e[0];
-                emittanceStack[j*3 + 1] = e[1];
-                emittanceStack[j*3 + 2] = e[2];
-            }
-
             break;
         }
 
@@ -103,7 +98,7 @@ __kernel void octreeIntersect(__global const float *rayPos,
         diffuseReflect(d, o, n, random);
     }
 
-    for (int i = *rayDepth - 2; i >= 0; i--) {
+    for (int i = maxbounces - 1; i >= 0; i--) {
         colorStack[i*3 + 0] *= colorStack[i*3 + 3] + emittanceStack[i*3 + 3];
         colorStack[i*3 + 1] *= colorStack[i*3 + 4] + emittanceStack[i*3 + 4];
         colorStack[i*3 + 2] *= colorStack[i*3 + 5] + emittanceStack[i*3 + 5];
@@ -170,9 +165,9 @@ void diffuseReflect(float d[3], float o[3], float n[3], unsigned int *state) {
     d[1] = uy * tx + vy * ty + n[1] * tz;
     d[2] = uz * tx + vz * ty + n[2] * tz;
 
-    o[0] += d[0] * EPS;
-    o[1] += d[1] * EPS;
-    o[2] += d[2] * EPS;
+    o[0] += d[0] * OFFSET;
+    o[1] += d[1] * OFFSET;
+    o[2] += d[2] * OFFSET;
 }
 
 void getTextureRay(float color[3], float o[3], float n[3], float e[3], int block, image2d_t textures, image1d_t blockData) {
@@ -295,7 +290,7 @@ int inbounds(float o[3], int depth) {
 }
 
 void exitBlock(float o[3], float d[3], float n[3], float *distance) {
-    float tNext = 1000000000;
+    float tNext = 10000000;
 
     float b[3];
     b[0] = floor(o[0]);
@@ -345,7 +340,9 @@ void exitBlock(float o[3], float d[3], float n[3], float *distance) {
         }
     }
 
-    tNext += EPS;
+    o[0] += OFFSET * d[0];
+    o[1] += OFFSET * d[1];
+    o[2] += OFFSET * d[2];
 
     o[0] += tNext * d[0];
     o[1] += tNext * d[1];

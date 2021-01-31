@@ -2,7 +2,6 @@ package chunkycl;
 
 import static org.jocl.CL.*;
 
-import com.sun.glass.ui.Size;
 import org.jocl.*;
 
 import java.io.InputStream;
@@ -11,7 +10,6 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Random;
 import java.util.Scanner;
 
 import se.llbit.chunky.block.Block;
@@ -54,9 +52,9 @@ public class OctreeIntersectCl {
         final int deviceIndex = 0;
 
         // Load program source
-        InputStream i = OctreeIntersectCl.class.getClassLoader().getResourceAsStream("octreeIntersect.cl");
-        assert i != null;
-        Scanner s = new Scanner(i).useDelimiter("\\A");
+        InputStream programStream = OctreeIntersectCl.class.getClassLoader().getResourceAsStream("octreeIntersect.cl");
+        assert programStream != null;
+        Scanner s = new Scanner(programStream).useDelimiter("\\A");
         programSource = s.hasNext() ? s.next() : "";
 
         // Enable exceptions and subsequently omit error checks in this sample
@@ -86,7 +84,12 @@ public class OctreeIntersectCl {
         clGetDeviceIDs(platform, deviceType, numDevices, devices, null);
         cl_device_id device = devices[deviceIndex];
 
-        System.out.println("OpenCL Device: " + getString(device, CL_DEVICE_NAME));
+        System.out.println("OpenCL Devices:");
+        for (int i = 0; i < numDevices; i++) {
+            System.out.println("  [" + i  + "] " + getString(devices[i], CL_DEVICE_NAME));
+        }
+
+        System.out.println("\nUsing: " + getString(device, CL_DEVICE_NAME));
 
         workgroupSize = getSizes(device, CL_DEVICE_MAX_WORK_GROUP_SIZE, 1)[0];
 
@@ -267,15 +270,15 @@ public class OctreeIntersectCl {
             // x = index, y/256 = emittance, z/256 = specular
         }
 
-        int[] blockTexturesArrayCopy = new int[(blockTexturesArray.length/8192 + 1) * 8192];
+        int[] blockTexturesArrayCopy = new int[(blockTexturesArray.length/8192/3 + 1) * 8192];
         System.arraycopy(blockTexturesArray, 0, blockTexturesArrayCopy, 0, blockTexturesArray.length);
 
         format.image_channel_data_type = CL_UNSIGNED_INT32;
         format.image_channel_order = CL_RGBA;
 
         desc.image_type = CL_MEM_OBJECT_IMAGE2D;
-        desc.image_width = Math.min(blockTexturesArray.length, 8192);
-        desc.image_height = blockTexturesArray.length / 8192 + 1;
+        desc.image_width = Math.min(blockTexturesArray.length/3, 8192);
+        desc.image_height = blockTexturesArray.length / 8192 / 3 + 1;
 
         blockTextures = clCreateImage(context,
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, format, desc,
@@ -285,7 +288,7 @@ public class OctreeIntersectCl {
         format.image_channel_order = CL_RGBA;
 
         desc.image_type = CL_MEM_OBJECT_IMAGE1D;
-        desc.image_width = blockIndexesArray.length;
+        desc.image_width = blockIndexesArray.length / 3;
         blockData = clCreateImage(context,
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, format, desc,
                 Pointer.to(blockIndexesArray), null);
