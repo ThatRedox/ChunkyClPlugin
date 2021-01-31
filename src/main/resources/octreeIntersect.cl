@@ -76,13 +76,24 @@ __kernel void octreeIntersect(__global const float *rayPos,
                           octreeGet(o[0], o[1], o[2], *depth, octreeData),
                           textures, blockData);
         } else {
-            color[0] = 135/256.0;
-            color[1] = 206/256.0;
-            color[2] = 235/256.0;
+//            color[0] = 135/256.0;
+//            color[1] = 206/256.0;
+//            color[2] = 235/256.0;
+            color[0] = 1;
+            color[1] = 1;
+            color[2] = 1;
 
             e[0] = color[0] * color[0];
             e[1] = color[1] * color[1];
             e[2] = color[2] * color[2];
+
+            colorStack[bounces*3 + 0] = color[0];
+            colorStack[bounces*3 + 1] = color[1];
+            colorStack[bounces*3 + 2] = color[2];
+
+            emittanceStack[bounces*3 + 0] = e[0];
+            emittanceStack[bounces*3 + 1] = e[1];
+            emittanceStack[bounces*3 + 2] = e[2];
 
             break;
         }
