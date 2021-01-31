@@ -270,7 +270,7 @@ public class OctreeIntersectCl {
             // x = index, y/256 = emittance, z/256 = specular
         }
 
-        int[] blockTexturesArrayCopy = new int[(blockTexturesArray.length/8192/3 + 1) * 8192];
+        int[] blockTexturesArrayCopy = new int[(blockTexturesArray.length/8192/3 + 1) * 8192 * 3];
         System.arraycopy(blockTexturesArray, 0, blockTexturesArrayCopy, 0, blockTexturesArray.length);
 
         format.image_channel_data_type = CL_UNSIGNED_INT32;
