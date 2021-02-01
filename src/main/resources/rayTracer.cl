@@ -163,7 +163,8 @@ void xorshift(unsigned int *state) {
 float nextFloat(unsigned int *state) {
     xorshift(state);
 
-    return (*state & ((1<<24) - 1)) / ((float) (1 << 24));
+    return (*state >> 8) / ((float) (1 << 24));
+//    return (*state & ((1<<24) - 1)) / ((float) (1 << 24));
 }
 
 // Generate a diffuse reflection ray. Based on chunky code
@@ -210,9 +211,9 @@ void diffuseReflect(float d[3], float o[3], float n[3], unsigned int *state) {
     d[1] = uy * tx + vy * ty + n[1] * tz;
     d[2] = uz * tx + vz * ty + n[2] * tz;
 
-    o[0] += d[0] * OFFSET;
-    o[1] += d[1] * OFFSET;
-    o[2] += d[2] * OFFSET;
+    o[0] += d[0] * OFFSET * 2;
+    o[1] += d[1] * OFFSET * 2;
+    o[2] += d[2] * OFFSET * 2;
 }
 
 // Calculate the texture value of a ray
