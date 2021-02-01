@@ -27,4 +27,4 @@ jobs:
       uses: actions/upload-artifact@v2.2.2
       with:
         name: ChunkyClPlugin
-        path: build/libs
+        path: build/libs/ChunkyClPlugin.jar
