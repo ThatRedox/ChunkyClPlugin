@@ -2,6 +2,7 @@ package chunkycl;
 
 import se.llbit.chunky.renderer.scene.Scene;
 import se.llbit.log.Log;
+import se.llbit.math.PackedOctree;
 
 public class RenderWorkerCl extends Thread {
     private final int id;
@@ -21,7 +22,7 @@ public class RenderWorkerCl extends Thread {
         try {
             while (!isInterrupted()) {
                 synchronized (jobManager) {
-                    while (!jobManager.finalize) {
+                    while (!jobManager.finalize && !jobManager.preview) {
                         jobManager.wait();
                     }
                 }
@@ -31,25 +32,25 @@ public class RenderWorkerCl extends Thread {
                 int width = bufferedScene.canvasWidth();
                 int height = bufferedScene.canvasHeight();
 
-                try {
-                    for (int i = 0; i < width; i++) {
-                        for (int j = 0; j < height; j++) {
-                            if ((i + j) % threads == id) {
-                                bufferedScene.finalizePixel(i, j);
+                do {
+                    try {
+                        for (int i = 0; i < width; i++) {
+                            for (int j = 0; j < height; j++) {
+                                if ((i + j) % threads == id) {
+                                    bufferedScene.finalizePixel(i, j);
+                                }
                             }
                         }
+                    } catch (ArrayIndexOutOfBoundsException e) {
+                        // Resize?
                     }
-                } catch (ArrayIndexOutOfBoundsException e) {
-                    // Resize?
-                }
+                } while (jobManager.finalize);
 
                 synchronized (jobManager) {
                     jobManager.count += 1;
                     jobManager.notifyAll();
-                }
 
-                synchronized (jobManager) {
-                    while (jobManager.finalize) {
+                    while (jobManager.preview) {
                         jobManager.wait();
                     }
                 }

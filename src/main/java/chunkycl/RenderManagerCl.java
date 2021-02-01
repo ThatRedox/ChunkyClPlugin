@@ -168,6 +168,13 @@ public class RenderManagerCl extends Thread implements Renderer {
 
                         if (reason == ResetReason.SCENE_LOADED) {
                             bufferedScene.swapBuffers();
+
+                            String sceneStatus = bufferedScene.sceneStatus();
+                            synchronized (sceneListeners) {
+                                for (SceneStatusListener listener : sceneListeners) {
+                                    listener.sceneStatus(sceneStatus);
+                                }
+                            }
                         }
                     });
 
@@ -252,7 +259,8 @@ public class RenderManagerCl extends Thread implements Renderer {
 
         synchronized (jobManager) {
             jobManager.count = 0;
-            jobManager.finalize = true;
+            jobManager.finalize = false;
+            jobManager.preview = true;
             jobManager.notifyAll();
         }
 
@@ -261,7 +269,7 @@ public class RenderManagerCl extends Thread implements Renderer {
                 jobManager.wait();
             }
 
-            jobManager.finalize = false;
+            jobManager.preview = false;
             jobManager.notifyAll();
         }
     }
@@ -299,6 +307,13 @@ public class RenderManagerCl extends Thread implements Renderer {
 
         long startTime = System.currentTimeMillis();
 
+        synchronized (jobManager) {
+            jobManager.count = 0;
+            jobManager.finalize = true;
+            jobManager.preview = false;
+            jobManager.notifyAll();
+        }
+
         for (int sample = 0; sample < targetSpp; sample++) {
             float[] depthmap = intersectCl.intersect(rayDirs, origin, (int) System.currentTimeMillis(), bufferedScene.getRayDepth());
 
@@ -310,28 +325,30 @@ public class RenderManagerCl extends Thread implements Renderer {
                 samples[i] = rendermap[i] * ((float) targetSpp / (sample + 1));
             }
 
-            synchronized (jobManager) {
-                jobManager.count = 0;
-                jobManager.finalize = true;
-                jobManager.notifyAll();
-            }
-
-            synchronized (jobManager) {
-                while (jobManager.count != numThreads) {
-                    jobManager.wait();
-                }
-
-                jobManager.finalize = false;
-                jobManager.notifyAll();
-            }
-
             bufferedScene.renderTime = System.currentTimeMillis() - startTime;
             bufferedScene.spp = sample + 1;
             updateRenderProgress();
 
             bufferedScene.swapBuffers();
             canvas.repaint();
+
+            if (sample % 32 == 0) {
+                frameCompleteListener.accept(bufferedScene, sample);
+            }
+
+            if (mode == RenderMode.PAUSED || sceneProvider.pollSceneStateChange()) {
+                break;
+            }
         }
+
+        synchronized (jobManager) {
+            jobManager.finalize = false;
+        }
+
+        bufferedScene.swapBuffers();
+        canvas.repaint();
+
+        renderCompleteListener.accept(bufferedScene.renderTime, samplesPerSecond());
     }
 
     private void updateRenderProgress() {
@@ -369,6 +386,7 @@ public class RenderManagerCl extends Thread implements Renderer {
 
     public class JobManager {
         public boolean finalize = false;
+        public boolean preview = false;
         public int count = 0;
     }
 }
