@@ -2,6 +2,7 @@ package chunkycl;
 
 import static org.jocl.CL.*;
 
+import org.apache.commons.math3.util.FastMath;
 import org.jocl.*;
 
 import java.io.InputStream;
@@ -15,6 +16,7 @@ import java.util.Scanner;
 import se.llbit.chunky.block.Block;
 import se.llbit.chunky.chunk.BlockPalette;
 import se.llbit.chunky.renderer.scene.Scene;
+import se.llbit.chunky.renderer.scene.Sun;
 import se.llbit.chunky.resources.Texture;
 import se.llbit.log.Log;
 import se.llbit.math.Octree;
@@ -298,13 +300,18 @@ public class OctreeIntersectCl {
         renderTask.update("", 3, 3);
     }
 
-    public float[] intersect(float[] rayDirs, Vector3 origin, int seed, int rayDepth) {
+    public float[] intersect(float[] rayDirs, Vector3 origin, int seed, int rayDepth, boolean preview, Sun sun) {
         float[] rayRes = new float[rayDirs.length];
 
         float[] rayPos = new float[3];
         rayPos[0] = (float) origin.x;
         rayPos[1] = (float) origin.y;
         rayPos[2] = (float) origin.z;
+
+        float[] sunPos = new float[3];
+        sunPos[0] = (float) (FastMath.cos(sun.getAzimuth()) * FastMath.cos(sun.getAltitude()));
+        sunPos[1] = (float) (FastMath.sin(sun.getAltitude()));
+        sunPos[2] = (float) (FastMath.sin(sun.getAzimuth()) * FastMath.cos(sun.getAltitude()));
 
         Pointer srcRayRes = Pointer.to(rayRes);
 
@@ -320,6 +327,13 @@ public class OctreeIntersectCl {
         cl_mem clRayDepth = clCreateBuffer(context,
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
                 Sizeof.cl_int, Pointer.to(new int[] {rayDepth}), null);
+        cl_mem clSunPos = clCreateBuffer(context,
+                CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+                Sizeof.cl_float * 3, Pointer.to(sunPos), null);
+        cl_mem clPreview = clCreateBuffer(context,
+                CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+                Sizeof.cl_int, Pointer.to(new int[] {preview ? 1 : 0}), null);
+
         cl_mem clRayRes = clCreateBuffer(context, CL_MEM_WRITE_ONLY,
                 (long) Sizeof.cl_float * rayRes.length, null, null);
 
@@ -335,7 +349,9 @@ public class OctreeIntersectCl {
         clSetKernelArg(kernel, 8, Sizeof.cl_mem, Pointer.to(blockData));
         clSetKernelArg(kernel, 9, Sizeof.cl_mem, Pointer.to(clSeed));
         clSetKernelArg(kernel, 10, Sizeof.cl_mem, Pointer.to(clRayDepth));
-        clSetKernelArg(kernel, 11, Sizeof.cl_mem, Pointer.to(clRayRes));
+        clSetKernelArg(kernel, 11, Sizeof.cl_mem, Pointer.to(clPreview));
+        clSetKernelArg(kernel, 12, Sizeof.cl_mem, Pointer.to(clSunPos));
+        clSetKernelArg(kernel, 13, Sizeof.cl_mem, Pointer.to(clRayRes));
 
         long[] global_work_size = new long[]{rayRes.length/3};
 
@@ -357,6 +373,7 @@ public class OctreeIntersectCl {
         clReleaseMemObject(clRayRes);
         clReleaseMemObject(clSeed);
         clReleaseMemObject(clRayDepth);
+        clReleaseMemObject(clPreview);
 
         return rayRes;
     }

@@ -24,6 +24,8 @@ __kernel void octreeIntersect(__global const float *rayPos,
                               image1d_t blockData,
                               __global const int *seed,
                               __global const int *rayDepth,
+                              __global const int *preview,
+                              __global const float *sunPos,
                               __global float *res)
 {
     int gid = get_global_id(0);
@@ -120,10 +122,19 @@ __kernel void octreeIntersect(__global const float *rayPos,
         diffuseReflect(d, o, n, random);
     }
 
-    for (int i = maxbounces - 1; i >= 0; i--) {
-        colorStack[i*3 + 0] *= colorStack[i*3 + 3] + emittanceStack[i*3 + 3];
-        colorStack[i*3 + 1] *= colorStack[i*3 + 4] + emittanceStack[i*3 + 4];
-        colorStack[i*3 + 2] *= colorStack[i*3 + 5] + emittanceStack[i*3 + 5];
+    if (*preview) {
+        double shading = n[0] * 0.25 + n[1]*0.866 + n[2]*0.433;
+        if (shading < 0.3) shading = 0.3;
+
+        colorStack[0] *= shading;
+        colorStack[1] *= shading;
+        colorStack[2] *= shading;
+    } else {
+        for (int i = maxbounces - 1; i >= 0; i--) {
+            colorStack[i*3 + 0] *= colorStack[i*3 + 3] + emittanceStack[i*3 + 3];
+            colorStack[i*3 + 1] *= colorStack[i*3 + 4] + emittanceStack[i*3 + 4];
+            colorStack[i*3 + 2] *= colorStack[i*3 + 5] + emittanceStack[i*3 + 5];
+        }
     }
 
     res[gid*3 + 0] = colorStack[0];
