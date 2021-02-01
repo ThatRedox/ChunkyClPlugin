@@ -52,14 +52,16 @@ __kernel void rayTracer(__global const float *rayPos,
     // Ray normal
     float n[3] = {0};
 
+    // Junk array
+    float junk[3];
+
     // Jitter each ray randomly
     // TODO: Pass the jitter amount as an argument?
-    n[0] = rayDir[gid*3 + 3] - d[0];
-    n[1] = rayDir[gid*3 + 4] - d[1];
-    n[2] = rayDir[gid*3 + 5] - d[2];
+    junk[0] = rayDir[gid*3 + 3] - d[0];
+    junk[1] = rayDir[gid*3 + 4] - d[1];
+    junk[2] = rayDir[gid*3 + 5] - d[2];
 
-    float jitter = sqrt(n[0]*n[0] + n[1]*n[1] + n[2]*n[2]);
-    n[0] = n[1] = n[2] = 0;
+    float jitter = sqrt(junk[0]*junk[0] + junk[1]*junk[1] + junk[2]*junk[2]);
 
     d[0] += nextFloat(random) * jitter;
     d[1] += nextFloat(random) * jitter;
@@ -74,7 +76,7 @@ __kernel void rayTracer(__global const float *rayPos,
     float emittanceStack[3 * 24] = {0};
 
     // Do the bounces
-    for (int bounces = 0; bounces < maxbounces; bounces ++)
+    for (int bounces = 0; bounces < maxbounces; bounces++)
     {
         float e[3] = {0};
         int hit = 0;
@@ -124,6 +126,7 @@ __kernel void rayTracer(__global const float *rayPos,
         // Calculate new diffuse reflection ray
         // TODO: Implement specular reflection
         diffuseReflect(d, o, n, random);
+        exitBlock(o, d, junk, &distance);
     }
 
     if (*preview) {
@@ -144,9 +147,9 @@ __kernel void rayTracer(__global const float *rayPos,
         }
     }
 
-    res[gid*3 + 0] = colorStack[0];
-    res[gid*3 + 1] = colorStack[1];
-    res[gid*3 + 2] = colorStack[2];
+    res[gid*3 + 0] = colorStack[0] * (emittanceStack[0] + 1);
+    res[gid*3 + 1] = colorStack[1] * (emittanceStack[1] + 1);
+    res[gid*3 + 2] = colorStack[2] * (emittanceStack[2] + 1);
 }
 
 // Xorshift random number generator based on
@@ -164,7 +167,6 @@ float nextFloat(unsigned int *state) {
     xorshift(state);
 
     return (*state >> 8) / ((float) (1 << 24));
-//    return (*state & ((1<<24) - 1)) / ((float) (1 << 24));
 }
 
 // Generate a diffuse reflection ray. Based on chunky code
@@ -210,10 +212,6 @@ void diffuseReflect(float d[3], float o[3], float n[3], unsigned int *state) {
     d[0] = ux * tx + vx * ty + n[0] * tz;
     d[1] = uy * tx + vy * ty + n[1] * tz;
     d[2] = uz * tx + vz * ty + n[2] * tz;
-
-    o[0] += d[0] * OFFSET * 2;
-    o[1] += d[1] * OFFSET * 2;
-    o[2] += d[2] * OFFSET * 2;
 }
 
 // Calculate the texture value of a ray
