@@ -1,3 +1,13 @@
+plugins {
+	id 'org.openjfx.javafxplugin' version '0.0.8'
+	id 'java'
+}
+
+javafx {
+	version = "11"
+	modules = [ 'javafx.controls', 'javafx.fxml']
+}
+
 apply plugin: 'java'
 apply plugin: 'idea'
 
