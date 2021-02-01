@@ -24,7 +24,7 @@ import se.llbit.math.PackedOctree;
 import se.llbit.math.Vector3;
 import se.llbit.util.TaskTracker;
 
-public class OctreeIntersectCl {
+public class GpuRayTracer {
     private cl_mem octreeDepth = null;
     private cl_mem octreeData = null;
     private cl_mem voxelLength = null;
@@ -46,20 +46,19 @@ public class OctreeIntersectCl {
     private static String programSource;
 
     @SuppressWarnings("deprecation")
-    OctreeIntersectCl() {
+    GpuRayTracer() {
         // The platform, device type and device number
-        // that will be used
         final int platformIndex = 0;
         final long deviceType = CL_DEVICE_TYPE_ALL;
         final int deviceIndex = 0;
 
         // Load program source
-        InputStream programStream = OctreeIntersectCl.class.getClassLoader().getResourceAsStream("octreeIntersect.cl");
+        InputStream programStream = GpuRayTracer.class.getClassLoader().getResourceAsStream("rayTracer.cl");
         assert programStream != null;
         Scanner s = new Scanner(programStream).useDelimiter("\\A");
         programSource = s.hasNext() ? s.next() : "";
 
-        // Enable exceptions and subsequently omit error checks in this sample
+        // Enable exceptions
         CL.setExceptionsEnabled(true);
 
         // Obtain the number of platforms
@@ -86,11 +85,13 @@ public class OctreeIntersectCl {
         clGetDeviceIDs(platform, deviceType, numDevices, devices, null);
         cl_device_id device = devices[deviceIndex];
 
+        // Print out all connected devices
         System.out.println("OpenCL Devices:");
         for (int i = 0; i < numDevices; i++) {
             System.out.println("  [" + i  + "] " + getString(devices[i], CL_DEVICE_NAME));
         }
 
+        // Print out selected device
         System.out.println("\nUsing: " + getString(device, CL_DEVICE_NAME));
 
         workgroupSize = getSizes(device, CL_DEVICE_MAX_WORK_GROUP_SIZE, 1)[0];
@@ -105,20 +106,21 @@ public class OctreeIntersectCl {
 
         // Get OpenCL version
         this.version = new int[2];
-        String versionString = getString(device, CL_DRIVER_VERSION);
-        this.version[0] = Integer.parseInt(versionString.substring(0, 1));
-        this.version[1] = Integer.parseInt(versionString.substring(2, 3));
+        String versionString = getString(device, CL_DEVICE_VERSION);
+        this.version[0] = Integer.parseInt(versionString.substring(7, 8));
+        this.version[1] = Integer.parseInt(versionString.substring(9, 10));
+        System.out.println("       " + versionString);
 
+        // Create command queue with correct version
         if (this.version[0] >= 2) {
             commandQueue = clCreateCommandQueueWithProperties(
                     context, device, properties, null);
         } else {
-            Log.warn("OpenCL 2+ recommended.");
-
             commandQueue = clCreateCommandQueue(
                     context, device, 0, null);
         }
 
+        // Check if version is behind
         if (this.version[0] <= 1 && this.version[1] < 2) {
             Log.error("OpenCL 1.2+ required.");
         }
@@ -148,7 +150,7 @@ public class OctreeIntersectCl {
         }
 
         // Create the kernel
-        kernel = clCreateKernel(program, "octreeIntersect", null);
+        kernel = clCreateKernel(program, "rayTracer", null);
     }
 
     @SuppressWarnings("unchecked")
@@ -156,8 +158,19 @@ public class OctreeIntersectCl {
         Octree octree;
         int[] treeData;
 
+        // Free opencl memory if applicable
+        if (this.octreeData != null) {
+            clReleaseMemObject(this.octreeData);
+            clReleaseMemObject(this.voxelLength);
+            clReleaseMemObject(this.transparentArray);
+            clReleaseMemObject(this.transparentLength);
+            clReleaseMemObject(this.blockTextures);
+            clReleaseMemObject(this.blockData);
+        }
+
         renderTask.update("Loading Octree into GPU", 3, 0);
 
+        // Obtain octree through reflection
         try {
             Field worldOctree = scene.getClass().getDeclaredField("worldOctree");
             worldOctree.setAccessible(true);
@@ -175,21 +188,14 @@ public class OctreeIntersectCl {
             return;
         }
 
-        if (this.octreeData != null) {
-            clReleaseMemObject(this.octreeData);
-            clReleaseMemObject(this.voxelLength);
-            clReleaseMemObject(this.transparentArray);
-            clReleaseMemObject(this.transparentLength);
-            clReleaseMemObject(this.blockTextures);
-            clReleaseMemObject(this.blockData);
-        }
-
         // Load bounds into memory
         this.octreeDepth = clCreateBuffer(context,
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
                 Sizeof.cl_int, Pointer.to(new int[] {octree.getDepth()}), null);
 
-        // Load octree into texture memory
+        // Load octree into texture memory for performance reasons
+        // Octree data taken from packed octree is turned into a 8192 x (x) image
+        // Data is loaded into the rgba channels to maximize efficiency
         cl_image_format format = new cl_image_format();
         format.image_channel_data_type = CL_SIGNED_INT32;
         format.image_channel_order = CL_RGBA;
@@ -217,6 +223,7 @@ public class OctreeIntersectCl {
         List<Block> blockPalette;
         BlockPalette palette = scene.getPalette();
 
+        // Get block palette through reflection
         try {
             Field blockPaletteList = palette.getClass().getDeclaredField("palette");
             blockPaletteList.setAccessible(true);
@@ -226,16 +233,20 @@ public class OctreeIntersectCl {
             return;
         }
 
+        // Build transparent block list
         for (int i = 0; i < blockPalette.size(); i++) {
             if (palette.get(i).invisible)
                 transparentList.add(i);
         }
 
+        // Convert transparent block list into array
         int[] transparent = new int[transparentList.size()];
         for (int i = 0; i < transparent.length; i++) {
             transparent[i] = transparentList.remove(0);
         }
 
+        // Load transparent block list onto gpu as array.
+        // Size is relatively small so there is no need to load it as a texture
         this.transparentArray = clCreateBuffer(context,
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
                 (long) Sizeof.cl_int * transparent.length,
@@ -248,6 +259,7 @@ public class OctreeIntersectCl {
         renderTask.update("Loading Block Textures into GPU", 3, 2);
 
         // Load all block textures into GPU texture memory
+        // Load block texture data directly into an array which is dynamically sized for non-full blocks
         Texture stoneTexture = blockPalette.get(palette.stoneId).getTexture(0);
         int[] blockTexturesArray = new int[stoneTexture.getData().length * blockPalette.size()];
         int[] blockIndexesArray = new int[blockPalette.size() * 4];
@@ -257,6 +269,7 @@ public class OctreeIntersectCl {
             Texture texture = block.getTexture(0);
             int[] textureData = texture.getData();
 
+            // Resize array if necessary
             if (index + textureData.length > blockTexturesArray.length) {
                 int[] tempCopyArray = new int[blockTexturesArray.length];
                 System.arraycopy(blockTexturesArray, 0, tempCopyArray, 0, blockTexturesArray.length);
@@ -264,19 +277,23 @@ public class OctreeIntersectCl {
                 System.arraycopy(tempCopyArray, 0, blockTexturesArray, 0, tempCopyArray.length);
             }
 
+            // Add block texture data
             blockIndexesArray[i*4] = index;
             System.arraycopy(textureData, 0, blockTexturesArray, index, textureData.length);
             index += textureData.length;
 
+            // Include block information in auxiliary array
             blockIndexesArray[i*4 + 1] = (int) (block.emittance * scene.getEmitterIntensity() * 256);
             blockIndexesArray[i*4 + 2] = (int) (block.specular * 256);
 
             // x = index, y/256 = emittance, z/256 = specular
         }
 
+        // Copy block texture data into fitted array to prevent Segfaults
         int[] blockTexturesArrayCopy = new int[(blockTexturesArray.length/8192/3 + 1) * 8192 * 3];
         System.arraycopy(blockTexturesArray, 0, blockTexturesArrayCopy, 0, blockTexturesArray.length);
 
+        // Load arrays as images.
         format.image_channel_data_type = CL_UNSIGNED_INT32;
         format.image_channel_order = CL_RGBA;
 
@@ -297,10 +314,11 @@ public class OctreeIntersectCl {
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, format, desc,
                 Pointer.to(blockIndexesArray), null);
 
-        renderTask.update("", 3, 3);
+        renderTask.update("Loading GPU", 3, 3);
     }
 
-    public float[] intersect(float[] rayDirs, Vector3 origin, int seed, int rayDepth, boolean preview, Sun sun) {
+    public float[] rayTrace(float[] rayDirs, Vector3 origin, int seed, int rayDepth, boolean preview, Sun sun) {
+        // Results array
         float[] rayRes = new float[rayDirs.length];
 
         float[] rayPos = new float[3];
@@ -315,6 +333,7 @@ public class OctreeIntersectCl {
 
         Pointer srcRayRes = Pointer.to(rayRes);
 
+        // Transfer arguments to GPU memory
         cl_mem clRayPos = clCreateBuffer(context,
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
                 (long) Sizeof.cl_float * rayPos.length, Pointer.to(rayPos), null);
@@ -353,6 +372,7 @@ public class OctreeIntersectCl {
         clSetKernelArg(kernel, 12, Sizeof.cl_mem, Pointer.to(clSunPos));
         clSetKernelArg(kernel, 13, Sizeof.cl_mem, Pointer.to(clRayRes));
 
+        // Work size = rays
         long[] global_work_size = new long[]{rayRes.length/3};
 
         // Execute the program
@@ -378,6 +398,7 @@ public class OctreeIntersectCl {
         return rayRes;
     }
 
+    /** Get a string from OpenCL */
     private static String getString(cl_device_id device, int paramName)
     {
         // Obtain the length of the string that will be queried
@@ -392,6 +413,7 @@ public class OctreeIntersectCl {
         return new String(buffer, 0, buffer.length-1);
     }
 
+    /** get a long(array) from OpenCL */
     static long[] getSizes(cl_device_id device, int paramName, int numValues)
     {
         // The size of the returned data has to depend on

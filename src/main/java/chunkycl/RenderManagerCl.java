@@ -28,8 +28,6 @@ public class RenderManagerCl extends Thread implements Renderer {
 
     private SnapshotControl snapshotControl = SnapshotControl.DEFAULT;
 
-    private boolean finalizeAllFrames = false;
-
     private RenderContext context;
 
     private Random random;
@@ -46,7 +44,7 @@ public class RenderManagerCl extends Thread implements Renderer {
 
     private TaskTracker.Task renderTask;
 
-    public static final OctreeIntersectCl intersectCl = new OctreeIntersectCl();
+    public static final GpuRayTracer intersectCl = new GpuRayTracer();
 
     public RenderManagerCl(RenderContext context, boolean headless) {
         super("Render Manager");
@@ -168,7 +166,6 @@ public class RenderManagerCl extends Thread implements Renderer {
                         }
 
                         bufferedScene.copyTransients(scene);
-                        finalizeAllFrames = scene.shouldFinalizeBuffer();
 
                         if (reason == ResetReason.SCENE_LOADED) {
                             bufferedScene.swapBuffers();
@@ -219,6 +216,7 @@ public class RenderManagerCl extends Thread implements Renderer {
     }
 
     private void previewRender() throws InterruptedException {
+        // Generate camera starting rays
         int width = bufferedScene.canvasWidth();
         int height = bufferedScene.canvasHeight();
 
@@ -244,15 +242,16 @@ public class RenderManagerCl extends Thread implements Renderer {
         origin.y -= bufferedScene.getOrigin().y;
         origin.z -= bufferedScene.getOrigin().z;
 
-
         double[] samples = bufferedScene.getSampleBuffer();
 
-        float[] depthmap = intersectCl.intersect(rayDirs, origin, random.nextInt(), 1, true, bufferedScene.sun());
+        // Do the rendering
+        float[] depthmap = intersectCl.rayTrace(rayDirs, origin, random.nextInt(), 1, true, bufferedScene.sun());
 
         for (int i = 0; i < depthmap.length; i++) {
             samples[i] = depthmap[i];
         }
 
+        // Tell worker threads to finalize all pixels and exit
         synchronized (jobManager) {
             jobManager.count = 0;
             jobManager.finalize = false;
@@ -260,6 +259,7 @@ public class RenderManagerCl extends Thread implements Renderer {
             jobManager.notifyAll();
         }
 
+        // Wait for worker threads to finish
         synchronized (jobManager) {
             while (jobManager.count != numThreads) {
                 jobManager.wait();
@@ -273,6 +273,7 @@ public class RenderManagerCl extends Thread implements Renderer {
     private void finalRenderer(int targetSpp, TaskTracker.Task renderTask) throws InterruptedException {
         renderTask.update("Rendering", targetSpp, 0);
 
+        // Generate camera rays
         int width = bufferedScene.canvasWidth();
         int height = bufferedScene.canvasHeight();
 
@@ -303,6 +304,7 @@ public class RenderManagerCl extends Thread implements Renderer {
 
         long startTime = System.currentTimeMillis();
 
+        // Tell the render workers to continuously finalize all pixels
         synchronized (jobManager) {
             jobManager.count = 0;
             jobManager.finalize = true;
@@ -310,40 +312,51 @@ public class RenderManagerCl extends Thread implements Renderer {
             jobManager.notifyAll();
         }
 
-        for (int sample = 0; sample < targetSpp; sample++) {
-            float[] depthmap = intersectCl.intersect(rayDirs, origin, random.nextInt(), bufferedScene.getRayDepth(), false, bufferedScene.sun());
+        for (int sample = bufferedScene.spp; sample < targetSpp; sample++) {
+            // Do the rendering
+            float[] depthmap = intersectCl.rayTrace(rayDirs, origin, random.nextInt(), bufferedScene.getRayDepth(), false, bufferedScene.sun());
 
+            // Update the output buffer
             for (int j = 0; j < rendermap.length; j++) {
                 rendermap[j] += depthmap[j] * (1.0 / targetSpp);
             }
 
+            // Scale the preview buffer
             for (int i = 0; i < rendermap.length; i++) {
                 samples[i] = rendermap[i] * ((float) targetSpp / (sample + 1));
             }
 
+            // Update render bar
             bufferedScene.renderTime = System.currentTimeMillis() - startTime;
             bufferedScene.spp = sample + 1;
             updateRenderProgress();
 
+            // Update the screen
             bufferedScene.swapBuffers();
             canvas.repaint();
 
+            // Update frame complete listener
+            // TODO: execute if time since last frame > threshold? updating every frame causes performance issues
             if (sample % 32 == 0) {
                 frameCompleteListener.accept(bufferedScene, sample);
             }
 
+            // Check if render was canceled
             if (mode == RenderMode.PAUSED || sceneProvider.pollSceneStateChange()) {
                 break;
             }
         }
 
+        // Tell render workers to stop finalizing pixels
         synchronized (jobManager) {
             jobManager.finalize = false;
         }
 
+        // Update the screen
         bufferedScene.swapBuffers();
         canvas.repaint();
 
+        // Inform render is complete
         renderCompleteListener.accept(bufferedScene.renderTime, samplesPerSecond());
     }
 

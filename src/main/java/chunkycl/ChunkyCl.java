@@ -9,10 +9,11 @@ import se.llbit.chunky.ui.ChunkyFx;
 import java.lang.reflect.Field;
 
 /**
- * This plugin changes the Chunky path tracing renderer to render ambient occlusion.
+ * This plugin changes the Chunky path tracing renderer to a gpu based path tracer.
  */
 public class ChunkyCl implements Plugin {
     @Override public void attach(Chunky chunky) {
+        // Override the default render manager with reflection
         try {
             Field renderer = chunky.getClass().getDeclaredField("rendererFactory");
             renderer.setAccessible(true);

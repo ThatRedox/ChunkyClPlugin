@@ -2,7 +2,6 @@ package chunkycl;
 
 import se.llbit.chunky.renderer.scene.Scene;
 import se.llbit.log.Log;
-import se.llbit.math.PackedOctree;
 
 public class RenderWorkerCl extends Thread {
     private final int id;
@@ -21,6 +20,7 @@ public class RenderWorkerCl extends Thread {
     @Override public void run () {
         try {
             while (!isInterrupted()) {
+                // Wait for notification to start finalizing pixels
                 synchronized (jobManager) {
                     while (!jobManager.finalize && !jobManager.preview) {
                         jobManager.wait();
@@ -32,8 +32,11 @@ public class RenderWorkerCl extends Thread {
                 int width = bufferedScene.canvasWidth();
                 int height = bufferedScene.canvasHeight();
 
+                // Do this once if preview, do it continuously if rendering
                 do {
                     try {
+                        // Finalize pixel if (x+y) % threads == id
+
                         for (int i = 0; i < width; i++) {
                             for (int j = 0; j < height; j++) {
                                 if ((i + j) % threads == id) {
@@ -46,6 +49,8 @@ public class RenderWorkerCl extends Thread {
                     }
                 } while (jobManager.finalize);
 
+                // Notify done finalizing
+                // TODO: Maybe remove?
                 synchronized (jobManager) {
                     jobManager.count += 1;
                     jobManager.notifyAll();
