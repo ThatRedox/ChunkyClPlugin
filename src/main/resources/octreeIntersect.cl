@@ -29,7 +29,7 @@ __kernel void octreeIntersect(__global const float *rayPos,
     int gid = get_global_id(0);
     float distance = 0;
 
-    unsigned int rngState = *seed + gid*5;
+    unsigned int rngState = *seed * (gid+1);
     unsigned int *random = &rngState;
     xorshift(random);
 
@@ -44,6 +44,17 @@ __kernel void octreeIntersect(__global const float *rayPos,
     d[2] = rayDir[gid*3 + 2];
 
     float n[3] = {0};
+
+    n[0] = rayDir[gid*3 + 3] - d[0];
+    n[1] = rayDir[gid*3 + 4] - d[1];
+    n[2] = rayDir[gid*3 + 5] - d[2];
+
+    float jitter = sqrt(n[0]*n[0] + n[1]*n[1] + n[2]*n[2]);
+    n[0] = n[1] = n[2] = 0;
+
+    d[0] += nextFloat(random) * jitter;
+    d[1] += nextFloat(random) * jitter;
+    d[2] += nextFloat(random) * jitter;
 
     int maxbounces = *rayDepth;
     if (maxbounces > 23) maxbounces = 23;
@@ -124,7 +135,6 @@ void xorshift(unsigned int *state) {
     *state ^= *state << 13;
     *state ^= *state >> 7;
     *state ^= *state << 17;
-
     *state *= 0x5DEECE66D;
 }
 float nextFloat(unsigned int *state) {

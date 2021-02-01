@@ -32,6 +32,8 @@ public class RenderManagerCl extends Thread implements Renderer {
 
     private RenderContext context;
 
+    private Random random;
+
 
     private int cpuLoad;
     private SceneProvider sceneProvider;
@@ -57,6 +59,8 @@ public class RenderManagerCl extends Thread implements Renderer {
 
         this.headless = headless;
         bufferedScene = context.getChunky().getSceneFactory().newScene();
+
+        random = new Random(System.currentTimeMillis());
     }
 
     public int getNumThreads() {
@@ -246,7 +250,7 @@ public class RenderManagerCl extends Thread implements Renderer {
 
         int spp = 4;
         for (int i = 0; i < spp; i++) {
-            float[] depthmap = intersectCl.intersect(rayDirs, origin, (int) System.currentTimeMillis(), 2);
+            float[] depthmap = intersectCl.intersect(rayDirs, origin, random.nextInt(), 2);
 
             for (int j = 0; j < rendermap.length; j++) {
                 rendermap[j] += depthmap[j] * (1.0 / spp);
@@ -315,7 +319,7 @@ public class RenderManagerCl extends Thread implements Renderer {
         }
 
         for (int sample = 0; sample < targetSpp; sample++) {
-            float[] depthmap = intersectCl.intersect(rayDirs, origin, (int) System.currentTimeMillis(), bufferedScene.getRayDepth());
+            float[] depthmap = intersectCl.intersect(rayDirs, origin, random.nextInt(), bufferedScene.getRayDepth());
 
             for (int j = 0; j < rendermap.length; j++) {
                 rendermap[j] += depthmap[j] * (1.0 / targetSpp);
@@ -379,7 +383,7 @@ public class RenderManagerCl extends Thread implements Renderer {
     private int samplesPerSecond() {
         int canvasWidth = bufferedScene.canvasWidth();
         int canvasHeight = bufferedScene.canvasHeight();
-        long pixelsPerFrame = canvasWidth * canvasHeight;
+        long pixelsPerFrame = (long) canvasWidth * canvasHeight;
         double renderTime = bufferedScene.renderTime / 1000.0;
         return (int) ((bufferedScene.spp * pixelsPerFrame) / renderTime);
     }

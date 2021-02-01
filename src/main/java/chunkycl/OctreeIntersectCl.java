@@ -175,9 +175,11 @@ public class OctreeIntersectCl {
 
         if (this.octreeData != null) {
             clReleaseMemObject(this.octreeData);
-            clReleaseMemObject(this.octreeDepth);
+            clReleaseMemObject(this.voxelLength);
             clReleaseMemObject(this.transparentArray);
             clReleaseMemObject(this.transparentLength);
+            clReleaseMemObject(this.blockTextures);
+            clReleaseMemObject(this.blockData);
         }
 
         // Load bounds into memory
@@ -353,6 +355,8 @@ public class OctreeIntersectCl {
         clReleaseMemObject(clRayPos);
         clReleaseMemObject(clNormCoords);
         clReleaseMemObject(clRayRes);
+        clReleaseMemObject(clSeed);
+        clReleaseMemObject(clRayDepth);
 
         return rayRes;
     }
