@@ -207,8 +207,8 @@ public class GpuRayTracer {
 
         cl_image_desc desc = new cl_image_desc();
         desc.image_type = CL_MEM_OBJECT_IMAGE2D;
-        desc.image_width = Math.min(treeData.length, 8192);
-        desc.image_height = treeData.length / 8192 + 1;
+        desc.image_width = Math.min(treeData.length/4, 8192);
+        desc.image_height = treeData.length / 8192 / 4 + 1;
 
         this.octreeData = clCreateImage(context,
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
