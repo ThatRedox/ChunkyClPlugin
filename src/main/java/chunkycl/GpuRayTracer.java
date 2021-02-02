@@ -43,6 +43,8 @@ public class GpuRayTracer {
 
     public final long workgroupSize;
 
+    public int batchSize = 1048576;
+
     private static String programSource;
 
     @SuppressWarnings("deprecation")
@@ -337,12 +339,6 @@ public class GpuRayTracer {
         cl_mem clRayPos = clCreateBuffer(context,
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
                 (long) Sizeof.cl_float * rayPos.length, Pointer.to(rayPos), null);
-        cl_mem clNormCoords = clCreateBuffer(context,
-                CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-                (long) Sizeof.cl_float * rayDirs.length, Pointer.to(rayDirs), null);
-        cl_mem clSeed = clCreateBuffer(context,
-                CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-                Sizeof.cl_int, Pointer.to(new int[] {seed}), null);
         cl_mem clRayDepth = clCreateBuffer(context,
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
                 Sizeof.cl_int, Pointer.to(new int[] {rayDepth}), null);
@@ -353,8 +349,13 @@ public class GpuRayTracer {
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
                 Sizeof.cl_int, Pointer.to(new int[] {preview ? 1 : 0}), null);
 
+        // Batching arguments
+        cl_mem clNormCoords = clCreateBuffer(context,
+                CL_MEM_READ_ONLY, (long) Sizeof.cl_float * batchSize * 3, null, null);
+        cl_mem clSeed = clCreateBuffer(context,
+                CL_MEM_READ_ONLY, Sizeof.cl_int, null, null);
         cl_mem clRayRes = clCreateBuffer(context, CL_MEM_WRITE_ONLY,
-                (long) Sizeof.cl_float * rayRes.length, null, null);
+                (long) Sizeof.cl_float * batchSize * 3, null, null);
 
         // Set the arguments
         clSetKernelArg(kernel, 0, Sizeof.cl_mem, Pointer.to(clRayPos));
@@ -373,18 +374,35 @@ public class GpuRayTracer {
         clSetKernelArg(kernel, 13, Sizeof.cl_mem, Pointer.to(clRayRes));
 
         // Work size = rays
-        long[] global_work_size = new long[]{rayRes.length/3};
+        long[] global_work_size = new long[]{batchSize};
 
-        // Execute the program
-        clEnqueueNDRangeKernel(commandQueue, kernel, 1, null, global_work_size,
-                null, 0, null, null);
+        // Split the work into manageable chunks
+        int index = 0;
+        while (index < rayDirs.length) {
+            int batchLength = FastMath.min(batchSize * 3, rayDirs.length - index);
 
-        // Get the results
-        try {
-            clEnqueueReadBuffer(commandQueue, clRayRes, CL_TRUE, 0, (long) Sizeof.cl_float * rayRes.length,
-                    srcRayRes, 0, null, null);
-        } catch (CLException e) {
-            throw e;
+            // Copy batch onto GPU
+            // TODO: Mess with non-blocking copy
+            clEnqueueWriteBuffer(commandQueue, clNormCoords, CL_TRUE, 0, (long) Sizeof.cl_float * batchLength,
+                    Pointer.to(rayDirs).withByteOffset(Sizeof.cl_float * index),
+                    0, null, null);
+            clEnqueueWriteBuffer(commandQueue, clSeed, CL_TRUE, 0, Sizeof.cl_int,
+                    Pointer.to(new int[] {seed + index/3}), 0, null, null);
+
+            // Execute the program
+            clEnqueueNDRangeKernel(commandQueue, kernel, 1, null, global_work_size,
+                    null, 0, null, null);
+
+            // Get the results
+            try {
+                clEnqueueReadBuffer(commandQueue, clRayRes, CL_TRUE, 0, (long) Sizeof.cl_float * batchLength,
+                        Pointer.to(rayRes).withByteOffset(Sizeof.cl_float * index),
+                        0, null, null);
+            } catch (CLException e) {
+                throw e;
+            }
+
+            index += batchLength;
         }
 
         // Clean up
