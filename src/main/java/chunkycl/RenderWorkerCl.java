@@ -4,8 +4,6 @@ import se.llbit.chunky.renderer.scene.Scene;
 import se.llbit.log.Log;
 
 public class RenderWorkerCl extends Thread {
-    private static final int SLEEP_INTERVAL = 75000000;
-
     private final int id;
     private final RenderManagerCl manager;
     private RenderManagerCl.JobManager jobManager;
@@ -29,8 +27,6 @@ public class RenderWorkerCl extends Thread {
                     }
                 }
 
-                long jobStart = System.nanoTime();
-
                 Scene bufferedScene = manager.getBufferedScene();
                 int threads = manager.getNumThreads();
                 int width = bufferedScene.canvasWidth();
@@ -39,23 +35,24 @@ public class RenderWorkerCl extends Thread {
                 // Do this once if preview, do it continuously if rendering
                 do {
                     try {
-                        // Finalize pixel if (x+y) % threads == id
+                        long jobStart = System.nanoTime();
 
+                        // Finalize pixel if (x+y) % threads == id
                         for (int i = 0; i < width; i++) {
                             for (int j = 0; j < height; j++) {
                                 if ((i + j) % threads == id) {
                                     bufferedScene.finalizePixel(i, j);
                                 }
                             }
+                        }
 
-                            // Sleep to manage cpu usage
-                            if (System.nanoTime() - jobStart > SLEEP_INTERVAL) {
-                                if (manager.getCPULoad() < 100) {
-                                    double load = (100.0 - manager.getCPULoad()) / manager.getCPULoad();
-                                    sleep((long) ((System.nanoTime() - jobStart) / 1000000.0 * load));
-                                }
+                        // Sleep to manage cpu usage
+                        if (manager.getCPULoad() < 100) {
+                            double jobTime = System.nanoTime() - jobStart;
+                            jobTime /= 1000000.0;
 
-                                jobStart = System.nanoTime();
+                            synchronized (jobManager) {
+                                jobManager.wait((long) (jobTime / (manager.getCPULoad() / 100.0) - jobTime));
                             }
                         }
                     } catch (ArrayIndexOutOfBoundsException e) {

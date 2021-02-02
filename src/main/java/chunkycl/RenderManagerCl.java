@@ -300,9 +300,9 @@ public class RenderManagerCl extends Thread implements Renderer {
         origin.z -= bufferedScene.getOrigin().z;
 
         double[] samples = bufferedScene.getSampleBuffer();
-        float[] rendermap = new float[samples.length];
 
         long startTime = System.currentTimeMillis();
+        long updateTime = startTime;
 
         // Tell the render workers to continuously finalize all pixels
         synchronized (jobManager) {
@@ -314,16 +314,11 @@ public class RenderManagerCl extends Thread implements Renderer {
 
         for (int sample = bufferedScene.spp; sample < targetSpp; sample++) {
             // Do the rendering
-            float[] depthmap = intersectCl.rayTrace(rayDirs, origin, random.nextInt(), bufferedScene.getRayDepth(), false, bufferedScene.sun());
+            float[] rendermap = intersectCl.rayTrace(rayDirs, origin, random.nextInt(), bufferedScene.getRayDepth(), false, bufferedScene.sun());
 
             // Update the output buffer
-            for (int j = 0; j < rendermap.length; j++) {
-                rendermap[j] += depthmap[j] * (1.0 / targetSpp);
-            }
-
-            // Scale the preview buffer
             for (int i = 0; i < rendermap.length; i++) {
-                samples[i] = rendermap[i] * ((float) targetSpp / (sample + 1));
+                samples[i] = (samples[i] * bufferedScene.spp + rendermap[i]) / (bufferedScene.spp + 1);
             }
 
             // Update render bar
@@ -336,9 +331,9 @@ public class RenderManagerCl extends Thread implements Renderer {
             canvas.repaint();
 
             // Update frame complete listener
-            // TODO: execute if time since last frame > threshold? updating every frame causes performance issues
-            if (sample % 32 == 0) {
+            if (sample % 32 == 0 || System.currentTimeMillis() > updateTime + 1000) {
                 frameCompleteListener.accept(bufferedScene, sample);
+                updateTime = System.currentTimeMillis();
             }
 
             // Check if render was canceled
@@ -349,35 +344,23 @@ public class RenderManagerCl extends Thread implements Renderer {
 
         // Tell render workers to stop finalizing pixels
         synchronized (jobManager) {
-            jobManager.finalize = false;
-        }
-
-        // Wait for worker threads to finish
-        synchronized (jobManager) {
-            while (jobManager.count != numThreads) {
-                jobManager.wait();
-            }
-
-            jobManager.preview = false;
-            jobManager.notifyAll();
-        }
-
-        // Tell worker threads to finalize all pixels and exit
-        synchronized (jobManager) {
             jobManager.count = 0;
             jobManager.finalize = false;
-            jobManager.preview = true;
             jobManager.notifyAll();
-        }
 
-        // Wait for worker threads to finish
-        synchronized (jobManager) {
             while (jobManager.count != numThreads) {
                 jobManager.wait();
             }
 
             jobManager.preview = false;
             jobManager.notifyAll();
+        }
+
+        // Ensure finalization
+        for (int i = 0; i < width; i++) {
+            for (int j = 0; j < height; j++) {
+                bufferedScene.finalizePixel(i, j);
+            }
         }
 
         // Update the screen
