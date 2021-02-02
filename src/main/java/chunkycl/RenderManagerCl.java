@@ -308,7 +308,7 @@ public class RenderManagerCl extends Thread implements Renderer {
         synchronized (jobManager) {
             jobManager.count = 0;
             jobManager.finalize = true;
-            jobManager.preview = false;
+            jobManager.preview = true;
             jobManager.notifyAll();
         }
 
@@ -350,6 +350,34 @@ public class RenderManagerCl extends Thread implements Renderer {
         // Tell render workers to stop finalizing pixels
         synchronized (jobManager) {
             jobManager.finalize = false;
+        }
+
+        // Wait for worker threads to finish
+        synchronized (jobManager) {
+            while (jobManager.count != numThreads) {
+                jobManager.wait();
+            }
+
+            jobManager.preview = false;
+            jobManager.notifyAll();
+        }
+
+        // Tell worker threads to finalize all pixels and exit
+        synchronized (jobManager) {
+            jobManager.count = 0;
+            jobManager.finalize = false;
+            jobManager.preview = true;
+            jobManager.notifyAll();
+        }
+
+        // Wait for worker threads to finish
+        synchronized (jobManager) {
+            while (jobManager.count != numThreads) {
+                jobManager.wait();
+            }
+
+            jobManager.preview = false;
+            jobManager.notifyAll();
         }
 
         // Update the screen

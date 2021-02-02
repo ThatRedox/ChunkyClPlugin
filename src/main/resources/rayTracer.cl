@@ -106,9 +106,23 @@ __kernel void rayTracer(__global const float *rayPos,
             color[1] = 1;
             color[2] = 1;
 
-            e[0] = color[0] * color[0];
-            e[1] = color[1] * color[1];
-            e[2] = color[2] * color[2];
+            emittanceStack[bounces*3 + 0] = color[0] * color[0];
+            emittanceStack[bounces*3 + 1] = color[1] * color[1];
+            emittanceStack[bounces*3 + 2] = color[2] * color[2];
+
+            emittanceStack[bounces*3 + 3] = color[0] * color[0];
+            emittanceStack[bounces*3 + 4] = color[1] * color[1];
+            emittanceStack[bounces*3 + 5] = color[2] * color[2];
+
+            // Set color stack to sky color
+            for (int i = bounces; i < maxbounces; i++) {
+                colorStack[bounces*3 + 0] = color[0];
+                colorStack[bounces*3 + 1] = color[1];
+                colorStack[bounces*3 + 2] = color[2];
+            }
+
+            // Exit on sky hit
+            break;
         }
 
         // Add color and emittance to proper stacks

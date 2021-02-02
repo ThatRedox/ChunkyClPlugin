@@ -300,8 +300,8 @@ public class GpuRayTracer {
         format.image_channel_order = CL_RGBA;
 
         desc.image_type = CL_MEM_OBJECT_IMAGE2D;
-        desc.image_width = Math.min(blockTexturesArray.length/3, 8192);
-        desc.image_height = blockTexturesArray.length / 8192 / 3 + 1;
+        desc.image_width = Math.min(blockTexturesArray.length/4, 8192);
+        desc.image_height = blockTexturesArray.length / 8192 / 4 + 1;
 
         blockTextures = clCreateImage(context,
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, format, desc,
@@ -311,7 +311,7 @@ public class GpuRayTracer {
         format.image_channel_order = CL_RGBA;
 
         desc.image_type = CL_MEM_OBJECT_IMAGE1D;
-        desc.image_width = blockIndexesArray.length / 3;
+        desc.image_width = blockIndexesArray.length / 4;
         blockData = clCreateImage(context,
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, format, desc,
                 Pointer.to(blockIndexesArray), null);
