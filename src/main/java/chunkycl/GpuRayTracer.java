@@ -9,19 +9,19 @@ import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Scanner;
+import java.util.*;
 
 import se.llbit.chunky.block.Block;
 import se.llbit.chunky.chunk.BlockPalette;
 import se.llbit.chunky.renderer.scene.Scene;
 import se.llbit.chunky.renderer.scene.Sun;
 import se.llbit.chunky.resources.Texture;
+import se.llbit.chunky.world.WorldTexture;
 import se.llbit.log.Log;
 import se.llbit.math.Octree;
 import se.llbit.math.PackedOctree;
 import se.llbit.math.Vector3;
+import se.llbit.math.Vector3i;
 import se.llbit.util.TaskTracker;
 
 public class GpuRayTracer {
@@ -32,6 +32,8 @@ public class GpuRayTracer {
     private cl_mem transparentLength = null;
     private cl_mem blockTextures = null;
     private cl_mem blockData = null;
+    private cl_mem grassTextures = null;
+    private cl_mem foliageTextures = null;
 
     private cl_program program;
     private cl_kernel kernel;
@@ -44,6 +46,15 @@ public class GpuRayTracer {
     public final long workgroupSize;
 
     public int batchSize = 1048576;
+
+    private final String[] grassBlocks = new String[]{"minecraft:grass_block", "minecraft:grass",
+            "minecraft:tall_grass", "minecraft:fern", "minecraft:sugarcane"};
+    private final String[] foliageBlocks = new String[]{"minecraft:oak_leaves", "minecraft:dark_oak_leaves",
+            "minecraft:jungle_leaves", "minecraft:acacia_leaves", "minecraft_vines"};
+
+    private final String[] constantTintNames = new String[]{"minecraft:birch_leaves", "minecraft:spruce_leaves",
+            "minecraft:lily_pad"};
+    private final int[] constantTintColors = new int[]{0xFF80A755, 0xFF619961, 0xFF208030};
 
     private static String programSource;
 
@@ -168,6 +179,8 @@ public class GpuRayTracer {
             clReleaseMemObject(this.transparentLength);
             clReleaseMemObject(this.blockTextures);
             clReleaseMemObject(this.blockData);
+            clReleaseMemObject(this.grassTextures);
+            clReleaseMemObject(this.foliageTextures);
         }
 
         renderTask.update("Loading Octree into GPU", 3, 0);
@@ -260,6 +273,39 @@ public class GpuRayTracer {
 
         renderTask.update("Loading Block Textures into GPU", 3, 2);
 
+        // Load biome and foliage tinting
+        // Fetch the textures with reflection
+        int bounds = 1 << octree.getDepth();
+
+        int[] grassTexture = new int[bounds * bounds * 4];
+        for (int i = 0; i < bounds*2; i++) {
+            for (int j = 0; j < bounds*2; j++) {
+                float[] color = scene.getGrassColor(j-bounds, i-bounds);
+                grassTexture[i*bounds*2 + j] = (int)(256*color[0]) << 16 | (int)(256*color[1]) << 8 | (int)(256*color[2]);
+            }
+        }
+
+        int[] foliageTexture = new int[bounds * bounds * 4];
+        for (int i = 0; i < bounds*2; i++) {
+            for (int j = 0; j < bounds*2; j++) {
+                float[] color = scene.getFoliageColor(j-bounds, i-bounds);
+                foliageTexture[i*bounds*2 + j] = (int)(256*color[0]) << 16 | (int)(256*color[1]) << 8 | (int)(256*color[2]);
+            }
+        }
+
+        format.image_channel_data_type = CL_UNSIGNED_INT32;
+        format.image_channel_order = CL_INTENSITY;
+        desc.image_type = CL_MEM_OBJECT_IMAGE2D;
+        desc.image_width = bounds * 2L;
+        desc.image_height = bounds * 2L;
+
+        this.grassTextures = clCreateImage(context,
+                CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, format, desc,
+                Pointer.to(grassTexture), null);
+        this.foliageTextures = clCreateImage(context,
+                CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, format, desc,
+                Pointer.to(foliageTexture), null);
+
         // Load all block textures into GPU texture memory
         // Load block texture data directly into an array which is dynamically sized for non-full blocks
         Texture stoneTexture = blockPalette.get(palette.stoneId).getTexture(0);
@@ -280,13 +326,55 @@ public class GpuRayTracer {
             }
 
             // Add block texture data
-            blockIndexesArray[i*4] = index;
-            System.arraycopy(textureData, 0, blockTexturesArray, index, textureData.length);
+            blockIndexesArray[i * 4] = index;
+
+            // Check if block is tinted
+            String blockName = blockPalette.get(i).name;
+            if (Arrays.stream(constantTintNames).anyMatch(blockName::equals)) {
+                int tintIndex = 0;
+                for (int j = 0; j < constantTintNames.length; j++) {
+                    if (constantTintNames[j].equals(blockName)) {
+                        tintIndex = j;
+                        break;
+                    }
+                }
+                int tintColor = constantTintColors[tintIndex];
+
+                // TODO: Simplify this with existing function?
+                double tA = FastMath.pow((0xFF & (tintColor >>> 24)) / 256.0, Scene.DEFAULT_GAMMA);
+                double tR = FastMath.pow((0xFF & (tintColor >>> 16)) / 256.0, Scene.DEFAULT_GAMMA);
+                double tG = FastMath.pow((0xFF & (tintColor >>> 8)) / 256.0, Scene.DEFAULT_GAMMA);
+                double tB = FastMath.pow((0xFF & tintColor) / 256.0, Scene.DEFAULT_GAMMA);
+
+                // Multiply the texture by the tint
+                for (int j = 0; j < textureData.length; j++) {
+                    int blockColor = textureData[j];
+
+                    int bA = 0xFF & (blockColor >>> 24);
+                    int bR = 0xFF & (blockColor >>> 16);
+                    int bG = 0xFF & (blockColor >>> 8);
+                    int bB = 0xFF & blockColor;
+
+                    int color = (int)(bA * tA) << 24 | (int)(bR * tR) << 16 | (int)(bG * tG) << 8 | (int)(bB * tB);
+                    blockTexturesArray[index + j] = color;
+                }
+            } else {
+                System.arraycopy(textureData, 0, blockTexturesArray, index, textureData.length);
+            }
             index += textureData.length;
 
             // Include block information in auxiliary array
             blockIndexesArray[i*4 + 1] = (int) (block.emittance * scene.getEmitterIntensity() * 256);
             blockIndexesArray[i*4 + 2] = (int) (block.specular * 256);
+
+            // Biome tint flag
+            if (Arrays.stream(grassBlocks).anyMatch(blockName::equals)) {
+                blockIndexesArray[i*4 + 3] = 1;
+            } else if (Arrays.stream(foliageBlocks).anyMatch(blockName::equals)) {
+                blockIndexesArray[i*4 + 3] = 2;
+            } else {
+                blockIndexesArray[i*4 + 3] = 0;
+            }
 
             // x = index, y/256 = emittance, z/256 = specular
         }
@@ -371,7 +459,9 @@ public class GpuRayTracer {
         clSetKernelArg(kernel, 10, Sizeof.cl_mem, Pointer.to(clRayDepth));
         clSetKernelArg(kernel, 11, Sizeof.cl_mem, Pointer.to(clPreview));
         clSetKernelArg(kernel, 12, Sizeof.cl_mem, Pointer.to(clSunPos));
-        clSetKernelArg(kernel, 13, Sizeof.cl_mem, Pointer.to(clRayRes));
+        clSetKernelArg(kernel, 13, Sizeof.cl_mem, Pointer.to(grassTextures));
+        clSetKernelArg(kernel, 14, Sizeof.cl_mem, Pointer.to(foliageTextures));
+        clSetKernelArg(kernel, 15, Sizeof.cl_mem, Pointer.to(clRayRes));
 
         // Work size = rays
         long[] global_work_size = new long[]{batchSize};

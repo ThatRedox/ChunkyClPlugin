@@ -1,7 +1,7 @@
 #define EPS 0.000005    // Ray epsilon and exit offset
 #define OFFSET 0.0001   // TODO: refine these values?
 
-void getTextureRay(float color[3], float o[3], float n[3], float e[3], int block, image2d_t textures, image1d_t blockData);
+void getTextureRay(float color[3], float o[3], float n[3], float e[3], int block, image2d_t textures, image1d_t blockData, image2d_t grassTextures, image2d_t foliageTextures, int bounds);
 int intersect(image2d_t octreeData, int depth, int x, int y, int z, __global const int *transparent, int transparentLength);
 int octreeGet(int x, int y, int z, int bounds, image2d_t treeData);
 int octreeRead(int index, image2d_t treeData);
@@ -27,6 +27,8 @@ __kernel void rayTracer(__global const float *rayPos,
                         __global const int *rayDepth,
                         __global const int *preview,
                         __global const float *sunPos,
+                        image2d_t grassTextures,
+                        image2d_t foliageTextures,
                         __global float *res)
 {
     int gid = get_global_id(0);
@@ -100,7 +102,7 @@ __kernel void rayTracer(__global const float *rayPos,
         // TODO: Implement Nishita sky
         float color[3];
         if (hit) {
-            getTextureRay(color, o, n, e, octreeGet(o[0], o[1], o[2], *depth, octreeData), textures, blockData);
+            getTextureRay(color, o, n, e, octreeGet(o[0], o[1], o[2], *depth, octreeData), textures, blockData, grassTextures, foliageTextures, 1 << *depth);
         } else {
             color[0] = 1;
             color[1] = 1;
@@ -229,7 +231,7 @@ void diffuseReflect(float d[3], float o[3], float n[3], unsigned int *state) {
 }
 
 // Calculate the texture value of a ray
-void getTextureRay(float color[3], float o[3], float n[3], float e[3], int block, image2d_t textures, image1d_t blockData) {
+void getTextureRay(float color[3], float o[3], float n[3], float e[3], int block, image2d_t textures, image1d_t blockData, image2d_t grassTextures, image2d_t foliageTextures, int bounds) {
     sampler_t imageSampler = CLK_NORMALIZED_COORDS_FALSE |
                              CLK_ADDRESS_CLAMP_TO_EDGE |
                              CLK_FILTER_NEAREST;
@@ -287,6 +289,33 @@ void getTextureRay(float color[3], float o[3], float n[3], float e[3], int block
     color[0] = (0xFF & (argb >> 16)) / 256.0;
     color[1] = (0xFF & (argb >> 8 )) / 256.0;
     color[2] = (0xFF & (argb >> 0 )) / 256.0;
+
+    // Calculate tint
+    if (blockD.w != 0) {
+        uint4 tintLookup;
+        if (blockD.w == 1) {
+            tintLookup = read_imageui(grassTextures, imageSampler, (int2)(bx+bounds, bz+bounds));
+        } else {
+            tintLookup = read_imageui(foliageTextures, imageSampler, (int2)(bx+bounds, bz+bounds));
+        }
+        unsigned int tintColor = tintLookup.x;
+
+//        switch ((int)bx % 4) {
+//            case 0:
+//                tintColor = tintLookup.x;
+//            case 1:
+//                tintColor = tintLookup.y;
+//            case 2:
+//                tintColor = tintLookup.z;
+//            default:
+//                tintColor = tintLookup.w;
+//        }
+
+        // Separate argb and add to color
+        color[0] *= (0xFF & (tintColor >> 16)) / 256.0;
+        color[1] *= (0xFF & (tintColor >> 8)) / 256.0;
+        color[2] *= (0xFF & (tintColor >> 0)) / 256.0;
+    }
 
     // Calculate emittance
     e[0] = color[0] * color[0] * (blockD.y / 256.0);
