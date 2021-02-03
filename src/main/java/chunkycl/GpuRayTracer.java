@@ -294,9 +294,9 @@ public class GpuRayTracer {
         }
 
         format.image_channel_data_type = CL_UNSIGNED_INT32;
-        format.image_channel_order = CL_INTENSITY;
+        format.image_channel_order = CL_RGBA;
         desc.image_type = CL_MEM_OBJECT_IMAGE2D;
-        desc.image_width = bounds * 2L;
+        desc.image_width = bounds / 2;
         desc.image_height = bounds * 2L;
 
         this.grassTextures = clCreateImage(context,

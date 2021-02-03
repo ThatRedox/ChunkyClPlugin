@@ -294,22 +294,22 @@ void getTextureRay(float color[3], float o[3], float n[3], float e[3], int block
     if (blockD.w != 0) {
         uint4 tintLookup;
         if (blockD.w == 1) {
-            tintLookup = read_imageui(grassTextures, imageSampler, (int2)(bx+bounds, bz+bounds));
+            tintLookup = read_imageui(grassTextures, imageSampler, (int2)((bx+bounds)/4, bz+bounds));
         } else {
-            tintLookup = read_imageui(foliageTextures, imageSampler, (int2)(bx+bounds, bz+bounds));
+            tintLookup = read_imageui(foliageTextures, imageSampler, (int2)((bx+bounds)/4, bz+bounds));
         }
         unsigned int tintColor = tintLookup.x;
 
-//        switch ((int)bx % 4) {
-//            case 0:
-//                tintColor = tintLookup.x;
-//            case 1:
-//                tintColor = tintLookup.y;
-//            case 2:
-//                tintColor = tintLookup.z;
-//            default:
-//                tintColor = tintLookup.w;
-//        }
+        switch ((int)(bx + bounds) % 4) {
+            case 0:
+                tintColor = tintLookup.x;
+            case 1:
+                tintColor = tintLookup.y;
+            case 2:
+                tintColor = tintLookup.z;
+            default:
+                tintColor = tintLookup.w;
+        }
 
         // Separate argb and add to color
         color[0] *= (0xFF & (tintColor >> 16)) / 256.0;
