@@ -34,6 +34,7 @@ public class GpuRayTracer {
     private cl_mem blockData = null;
     private cl_mem grassTextures = null;
     private cl_mem foliageTextures = null;
+    private cl_mem sunIndex = null;
 
     private cl_program program;
     private cl_kernel kernel;
@@ -181,6 +182,7 @@ public class GpuRayTracer {
             clReleaseMemObject(this.blockData);
             clReleaseMemObject(this.grassTextures);
             clReleaseMemObject(this.foliageTextures);
+            clReleaseMemObject(this.sunIndex);
         }
 
         renderTask.update("Loading Octree into GPU", 3, 0);
@@ -379,6 +381,20 @@ public class GpuRayTracer {
             // x = index, y/256 = emittance, z/256 = specular
         }
 
+        // Add the sun
+        int[] textureData = Sun.texture.getData();
+        // Resize array if necessary
+        if (index + textureData.length > blockTexturesArray.length) {
+            int[] tempCopyArray = new int[blockTexturesArray.length];
+            System.arraycopy(blockTexturesArray, 0, tempCopyArray, 0, blockTexturesArray.length);
+            blockTexturesArray = new int[blockTexturesArray.length + 4*textureData.length];
+            System.arraycopy(tempCopyArray, 0, blockTexturesArray, 0, tempCopyArray.length);
+        }
+        System.arraycopy(textureData, 0, blockTexturesArray, index, textureData.length);
+        int sunIndex = index;
+        index += textureData.length;
+
+
         // Copy block texture data into fitted array to prevent Segfaults
         int[] blockTexturesArrayCopy = new int[(blockTexturesArray.length/8192/3 + 1) * 8192 * 3];
         System.arraycopy(blockTexturesArray, 0, blockTexturesArrayCopy, 0, blockTexturesArray.length);
@@ -404,10 +420,14 @@ public class GpuRayTracer {
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, format, desc,
                 Pointer.to(blockIndexesArray), null);
 
+        this.sunIndex = clCreateBuffer(context,
+                CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+                Sizeof.cl_int, Pointer.to(new int[] {sunIndex}), null);
+
         renderTask.update("Loading GPU", 3, 3);
     }
 
-    public float[] rayTrace(float[] rayDirs, Vector3 origin, int seed, int rayDepth, boolean preview, Sun sun) {
+    public float[] rayTrace(float[] rayDirs, Vector3 origin, int seed, int rayDepth, boolean preview, Sun sun, int drawDepth) {
         // Results array
         float[] rayRes = new float[rayDirs.length];
 
@@ -436,6 +456,12 @@ public class GpuRayTracer {
         cl_mem clPreview = clCreateBuffer(context,
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
                 Sizeof.cl_int, Pointer.to(new int[] {preview ? 1 : 0}), null);
+        cl_mem clSunIntensity = clCreateBuffer(context,
+                CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+                Sizeof.cl_float, Pointer.to(new float[] {(float) sun.getIntensity()}), null);
+        cl_mem clDrawDepth = clCreateBuffer(context,
+                CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+                Sizeof.cl_int, Pointer.to(new int[] {drawDepth}), null);
 
         // Batching arguments
         cl_mem clNormCoords = clCreateBuffer(context,
@@ -459,9 +485,12 @@ public class GpuRayTracer {
         clSetKernelArg(kernel, 10, Sizeof.cl_mem, Pointer.to(clRayDepth));
         clSetKernelArg(kernel, 11, Sizeof.cl_mem, Pointer.to(clPreview));
         clSetKernelArg(kernel, 12, Sizeof.cl_mem, Pointer.to(clSunPos));
-        clSetKernelArg(kernel, 13, Sizeof.cl_mem, Pointer.to(grassTextures));
-        clSetKernelArg(kernel, 14, Sizeof.cl_mem, Pointer.to(foliageTextures));
-        clSetKernelArg(kernel, 15, Sizeof.cl_mem, Pointer.to(clRayRes));
+        clSetKernelArg(kernel, 13, Sizeof.cl_mem, Pointer.to(sunIndex));
+        clSetKernelArg(kernel, 14, Sizeof.cl_mem, Pointer.to(clSunIntensity));
+        clSetKernelArg(kernel, 15, Sizeof.cl_mem, Pointer.to(grassTextures));
+        clSetKernelArg(kernel, 16, Sizeof.cl_mem, Pointer.to(foliageTextures));
+        clSetKernelArg(kernel, 17, Sizeof.cl_mem, Pointer.to(clDrawDepth));
+        clSetKernelArg(kernel, 18, Sizeof.cl_mem, Pointer.to(clRayRes));
 
         // Work size = rays
         long[] global_work_size = new long[]{batchSize};
@@ -502,6 +531,8 @@ public class GpuRayTracer {
         clReleaseMemObject(clSeed);
         clReleaseMemObject(clRayDepth);
         clReleaseMemObject(clPreview);
+        clReleaseMemObject(clSunIntensity);
+        clReleaseMemObject(clDrawDepth);
 
         return rayRes;
     }

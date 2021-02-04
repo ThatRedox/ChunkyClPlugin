@@ -1,6 +1,23 @@
 #define EPS 0.000005    // Ray epsilon and exit offset
 #define OFFSET 0.0001   // TODO: refine these values?
 
+float dot3(float a[3], float b[3]);
+void cross3(float a[3], float b[3], float r[3]);
+void normalize3(float a[3]);
+
+// Nishita Sky settings
+#define earthRadius 6360e3
+#define atmThickness 100e3
+#define rayleighScale 8e3
+#define mieScale 1.2e3
+#define betaRValue {3.8e-6, 13.5e-6, 33.1e-6}
+#define betaMValue {21e-6, 21e-6, 21e-6}
+#define samples 16
+#define samplesLight 8
+void calcSkyRay(float direction[3], float color[3], float e[3], float sunPos[3], float sunIntensity, image2d_t textures, int sunIndex);
+void sunIntersect(float direction[3], float color[3], float e[3], float sunPos[3], image2d_t textures, int sunIndex);
+float sphereIntersect(float origin[3], float direction[3], float radius);
+
 void getTextureRay(float color[3], float o[3], float n[3], float e[3], int block, image2d_t textures, image1d_t blockData, image2d_t grassTextures, image2d_t foliageTextures, int bounds);
 int intersect(image2d_t octreeData, int depth, int x, int y, int z, __global const int *transparent, int transparentLength);
 int octreeGet(int x, int y, int z, int bounds, image2d_t treeData);
@@ -27,8 +44,11 @@ __kernel void rayTracer(__global const float *rayPos,
                         __global const int *rayDepth,
                         __global const int *preview,
                         __global const float *sunPos,
+                        __global const int *sunIndex,
+                        __global const float *sunIntensity,
                         image2d_t grassTextures,
                         image2d_t foliageTextures,
+                        __global const int *drawDepth,
                         __global float *res)
 {
     int gid = get_global_id(0);
@@ -85,7 +105,7 @@ __kernel void rayTracer(__global const float *rayPos,
 
         // Ray march 256 times
         // TODO: Maybe march until octree exit? Test performance impact.
-        for (int i = 0; i < 256; i++) {
+        for (int i = 0; i < *drawDepth; i++) {
             if (!intersect(octreeData, *depth, o[0], o[1], o[2], transparent, *transparentLength))
                 exitBlock(o, d, n, &distance);
             else
@@ -104,17 +124,18 @@ __kernel void rayTracer(__global const float *rayPos,
         if (hit) {
             getTextureRay(color, o, n, e, octreeGet(o[0], o[1], o[2], *depth, octreeData), textures, blockData, grassTextures, foliageTextures, 1 << *depth);
         } else {
-            color[0] = 1;
-            color[1] = 1;
-            color[2] = 1;
+            float sunPosCopy[3] = {sunPos[0], sunPos[1], sunPos[2]};
+            calcSkyRay(d, color, e, sunPosCopy, *sunIntensity, textures, *sunIndex);
 
-            emittanceStack[bounces*3 + 0] = color[0] * color[0];
-            emittanceStack[bounces*3 + 1] = color[1] * color[1];
-            emittanceStack[bounces*3 + 2] = color[2] * color[2];
+            float sunScale = pow(*sunIntensity, 2.2f);
 
-            emittanceStack[bounces*3 + 3] = color[0] * color[0];
-            emittanceStack[bounces*3 + 4] = color[1] * color[1];
-            emittanceStack[bounces*3 + 5] = color[2] * color[2];
+            emittanceStack[bounces*3 + 0] = color[0] * sunScale * 10;
+            emittanceStack[bounces*3 + 1] = color[1] * sunScale * 10;
+            emittanceStack[bounces*3 + 2] = color[2] * sunScale * 10;
+
+            emittanceStack[bounces*3 + 3] = color[0] * sunScale * 10;
+            emittanceStack[bounces*3 + 4] = color[1] * sunScale * 10;
+            emittanceStack[bounces*3 + 5] = color[2] * sunScale * 10;
 
             // Set color stack to sky color
             for (int i = bounces; i < maxbounces; i++) {
@@ -147,7 +168,7 @@ __kernel void rayTracer(__global const float *rayPos,
 
     if (*preview) {
         // preview shading = first intersect color * sun&ambient shading
-        double shading = n[0] * 0.25 + n[1]*0.866 + n[2]*0.433;
+        float shading = n[0] * 0.25 + n[1]*0.866 + n[2]*0.433;
         if (shading < 0.3) shading = 0.3;
 
         colorStack[0] *= shading;
@@ -450,4 +471,196 @@ void exitBlock(float o[3], float d[3], float n[3], float *distance) {
     o[2] += tNext * d[2];
 
     *distance += tNext;
+}
+
+void calcSkyRay(float direction[3], float color[3], float e[3], float sunPos[3], float sunIntensity, image2d_t textures, int sunIndex) {
+    float origin[3] = {0, earthRadius + 1, 0};
+
+    float distance = sphereIntersect(origin, direction, earthRadius + atmThickness);
+    if (distance == -1) {
+        // No intersection
+        color[0] = color[1] = color[2] = 0;
+        return;
+    }
+
+    // Draw sun texture
+    color[0] = color[1] = color[2] = 0;
+    sunIntersect(direction, color, e, sunPos, textures, sunIndex);
+
+    float betaR[3] = betaRValue;
+    float betaM[3] = betaMValue;
+
+    float segmentLength = distance / samples;
+    float currentDist = 0;
+
+    float optDepthR = 0;
+    float optDepthM = 0;
+
+    float mu = dot3(direction, sunPos);
+    float phaseR = (3 / (16 * M_PI)) * (1 + mu*mu);
+    float g = 0.76;
+    float phaseM = 3 / (8 * M_PI) * ((1 - g*g) * (1 + mu*mu)) / ((2 + g*g) * pow((float)(1 + g*g - 2*g*mu), 1.5f));
+
+    float sumR[3] = {0};
+    float sumM[3] = {0};
+
+    float samplePosition[3];
+    float height, hr, hm;
+
+    float sunSamplePosition[3];
+    float sunLength, sunSegment, sunCurrent, optDepthSunR, optDepthSunM, sunHeight;
+
+    float tau[3];
+    float attenuation[3];
+
+    for (int i = 0; i < samples; i++) {
+        samplePosition[0] = origin[0] + (currentDist + segmentLength/2) * direction[0];
+        samplePosition[1] = origin[1] + (currentDist + segmentLength/2) * direction[1];
+        samplePosition[2] = origin[2] + (currentDist + segmentLength/2) * direction[2];
+        height = sqrt(dot3(samplePosition, samplePosition)) - earthRadius;
+
+        hr = exp(-height / rayleighScale) * segmentLength;
+        hm = exp(-height / mieScale) * segmentLength;
+        optDepthR += hr;
+        optDepthM += hm;
+
+        sunLength = sphereIntersect(samplePosition, sunPos, earthRadius + atmThickness);
+        sunSegment = sunLength / samplesLight;
+        sunCurrent = 0;
+
+        optDepthSunR = 0;
+        optDepthSunM = 0;
+
+        int flag = 0;
+        for (int j = 0; j < samplesLight; j++) {
+            sunSamplePosition[0] = samplePosition[0] + (sunCurrent + sunSegment/2) * sunPos[0];
+            sunSamplePosition[1] = samplePosition[1] + (sunCurrent + sunSegment/2) * sunPos[1];
+            sunSamplePosition[2] = samplePosition[2] + (sunCurrent + sunSegment/2) * sunPos[2];
+            sunHeight = sqrt(dot3(sunSamplePosition, samplePosition)) - earthRadius;
+
+            if (sunHeight < 0) {
+                flag = 1;
+                break;
+            }
+
+            optDepthSunR += exp(-sunHeight / rayleighScale) * sunSegment;
+            optDepthSunM += exp(-sunHeight / mieScale) * sunSegment;
+
+            sunCurrent += sunSegment;
+        }
+
+        if (!flag) {
+            tau[0] = betaR[0] * (optDepthR + optDepthSunR) + betaM[0] * 1.1 * (optDepthM + optDepthSunM);
+            tau[1] = betaR[1] * (optDepthR + optDepthSunR) + betaM[1] * 1.1 * (optDepthM + optDepthSunM);
+            tau[2] = betaR[2] * (optDepthR + optDepthSunR) + betaM[2] * 1.1 * (optDepthM + optDepthSunM);
+
+            attenuation[0] = exp(-tau[0]);
+            attenuation[1] = exp(-tau[1]);
+            attenuation[2] = exp(-tau[2]);
+
+            sumR[0] += attenuation[0] * hr;
+            sumR[1] += attenuation[1] * hr;
+            sumR[2] += attenuation[2] * hr;
+
+            sumM[0] += attenuation[0] * hm;
+            sumM[1] += attenuation[1] * hm;
+            sumM[2] += attenuation[2] * hm;
+        }
+
+        currentDist += segmentLength;
+    }
+
+    color[0] += (sumR[0] * betaR[0] * phaseR + sumM[0] * betaM[0] * phaseM) * sunIntensity * 5;
+    color[1] += (sumR[1] * betaR[1] * phaseR + sumM[1] * betaM[1] * phaseM) * sunIntensity * 5;
+    color[2] += (sumR[2] * betaR[2] * phaseR + sumM[2] * betaM[2] * phaseM) * sunIntensity * 5;
+}
+
+float sphereIntersect(float origin[3], float direction[3], float radius) {
+    float a = dot3(direction, direction);
+    float b = 2 * dot3(direction, origin);
+    float c = dot3(origin, origin) - radius*radius;
+
+    if (b == 0) {
+        if (a == 0) {
+            // No intersection
+            return -1;
+        }
+        return sqrt(-c/a);
+    }
+
+    float disc = b*b - 4*a*c;
+
+    if (disc < 0) {
+        // No intersection
+        return -1;
+    }
+    return (-b + sqrt(disc)) / (2*a);
+}
+
+void sunIntersect(float direction[3], float color[3], float e[3], float sunPos[3], image2d_t textures, int sunIndex) {
+    sampler_t imageSampler = CLK_NORMALIZED_COORDS_FALSE |
+                             CLK_ADDRESS_CLAMP_TO_EDGE |
+                             CLK_FILTER_NEAREST;
+
+    float su[3] = {0};
+    float sv[3];
+    if (fabs(sunPos[0]) > 0.1) {
+        su[1] = 1;
+    } else {
+        su[0] = 1;
+    }
+    cross3(sunPos, su, sv);
+    normalize3(sv);
+    cross3(sv, sunPos, su);
+
+    float radius = 0.03;
+    float width = radius * 4;
+    float width2 = width * 2;
+    float a;
+    a = M_PI / 2 - acos(dot3(direction, su)) + width;
+    if (a >= 0 && a < width2) {
+        float b = M_PI / 2 - acos(dot3(direction, sv)) + width;
+        if (b >= 0 && b < width2) {
+            int index = sunIndex;
+            index += (int)((a/width2) * 32 - EPS) + (int)((b/width2) * 32 - EPS) * 32;
+            uint4 texturePixels = read_imageui(textures, imageSampler, (int2) ((index / 4) % 8192, (index / 4) / 8192));
+            unsigned int argb;
+
+            switch (index % 4) {
+                case 0:
+                    argb = texturePixels.x;
+                    break;
+                case 1:
+                    argb = texturePixels.y;
+                    break;
+                case 2:
+                    argb = texturePixels.z;
+                    break;
+                default:
+                    argb = texturePixels.w;
+            }
+
+            // Separate ARGB value
+            color[0] = (0xFF & (argb >> 16)) / 256.0;
+            color[1] = (0xFF & (argb >> 8 )) / 256.0;
+            color[2] = (0xFF & (argb >> 0 )) / 256.0;
+        }
+    }
+}
+
+float dot3(float a[3], float b[3]) {
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+
+void cross3(float a[3], float b[3], float r[3]) {
+    r[0] = a[1]*b[2] - a[2]*b[1];
+    r[1] = a[2]*b[0] - a[0]*b[2];
+    r[2] = a[0]*b[1] - a[1]*b[0];
+}
+
+void normalize3(float a[3]) {
+    float length = sqrt(dot3(a, a));
+    a[0] /= length;
+    a[1] /= length;
+    a[2] /= length;
 }
