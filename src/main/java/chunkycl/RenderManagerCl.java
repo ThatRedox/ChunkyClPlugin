@@ -251,7 +251,7 @@ public class RenderManagerCl extends Thread implements Renderer {
         double[] samples = bufferedScene.getSampleBuffer();
 
         // Do the rendering
-        float[] depthmap = intersectCl.rayTrace(rayDirs, origin, random.nextInt(), 1, true, bufferedScene.sun(), drawDepth);
+        float[] depthmap = intersectCl.rayTrace(rayDirs, origin, random.nextInt(), 1, true, bufferedScene.sun(), drawDepth, bufferedScene.transparentSky() ? 0 : 1);
 
         for (int i = 0; i < depthmap.length; i++) {
             samples[i] = depthmap[i];
@@ -320,7 +320,7 @@ public class RenderManagerCl extends Thread implements Renderer {
 
         for (int sample = bufferedScene.spp; sample < targetSpp; sample++) {
             // Do the rendering
-            float[] rendermap = intersectCl.rayTrace(rayDirs, origin, random.nextInt(), bufferedScene.getRayDepth(), false, bufferedScene.sun(), drawDepth);
+            float[] rendermap = intersectCl.rayTrace(rayDirs, origin, random.nextInt(), bufferedScene.getRayDepth(), false, bufferedScene.sun(), drawDepth, bufferedScene.transparentSky() ? 0 : 1);
 
             // Update the output buffer
             for (int i = 0; i < rendermap.length; i++) {

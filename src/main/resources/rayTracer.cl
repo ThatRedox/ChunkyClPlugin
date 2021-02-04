@@ -46,6 +46,7 @@ __kernel void rayTracer(__global const float *rayPos,
                         __global const float *sunPos,
                         __global const int *sunIndex,
                         __global const float *sunIntensity,
+                        __global const int *enableSky,
                         image2d_t grassTextures,
                         image2d_t foliageTextures,
                         __global const int *drawDepth,
@@ -124,8 +125,12 @@ __kernel void rayTracer(__global const float *rayPos,
         if (hit) {
             getTextureRay(color, o, n, e, octreeGet(o[0], o[1], o[2], *depth, octreeData), textures, blockData, grassTextures, foliageTextures, 1 << *depth);
         } else {
-            float sunPosCopy[3] = {sunPos[0], sunPos[1], sunPos[2]};
-            calcSkyRay(d, color, e, sunPosCopy, *sunIntensity, textures, *sunIndex);
+            if (*enableSky) {
+                float sunPosCopy[3] = {sunPos[0], sunPos[1], sunPos[2]};
+                calcSkyRay(d, color, e, sunPosCopy, *sunIntensity, textures, *sunIndex);
+            } else {
+                color[0] = color[1] = color[2] = 1;
+            }
 
             float sunScale = pow(*sunIntensity, 2.2f);
 
