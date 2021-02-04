@@ -44,6 +44,8 @@ public class RenderManagerCl extends Thread implements Renderer {
 
     private TaskTracker.Task renderTask;
 
+    private int drawDepth = 256;
+
     public static final GpuRayTracer intersectCl = new GpuRayTracer();
 
     public RenderManagerCl(RenderContext context, boolean headless) {
@@ -59,6 +61,10 @@ public class RenderManagerCl extends Thread implements Renderer {
         bufferedScene = context.getChunky().getSceneFactory().newScene();
 
         random = new Random(System.currentTimeMillis());
+    }
+
+    public void setDrawDepth(int drawDepth) {
+        this.drawDepth = drawDepth;
     }
 
     public int getNumThreads() {
@@ -245,7 +251,7 @@ public class RenderManagerCl extends Thread implements Renderer {
         double[] samples = bufferedScene.getSampleBuffer();
 
         // Do the rendering
-        float[] depthmap = intersectCl.rayTrace(rayDirs, origin, random.nextInt(), 1, true, bufferedScene.sun(), 256);
+        float[] depthmap = intersectCl.rayTrace(rayDirs, origin, random.nextInt(), 1, true, bufferedScene.sun(), drawDepth);
 
         for (int i = 0; i < depthmap.length; i++) {
             samples[i] = depthmap[i];
@@ -314,7 +320,7 @@ public class RenderManagerCl extends Thread implements Renderer {
 
         for (int sample = bufferedScene.spp; sample < targetSpp; sample++) {
             // Do the rendering
-            float[] rendermap = intersectCl.rayTrace(rayDirs, origin, random.nextInt(), bufferedScene.getRayDepth(), false, bufferedScene.sun(), 256);
+            float[] rendermap = intersectCl.rayTrace(rayDirs, origin, random.nextInt(), bufferedScene.getRayDepth(), false, bufferedScene.sun(), drawDepth);
 
             // Update the output buffer
             for (int i = 0; i < rendermap.length; i++) {
