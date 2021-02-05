@@ -4,6 +4,7 @@ import se.llbit.chunky.PersistentSettings;
 import se.llbit.chunky.renderer.*;
 import se.llbit.chunky.renderer.scene.Camera;
 import se.llbit.chunky.renderer.scene.Scene;
+import se.llbit.chunky.renderer.scene.Sun;
 import se.llbit.chunky.resources.BitmapImage;
 import se.llbit.log.Log;
 import se.llbit.math.Ray;
@@ -35,6 +36,8 @@ public class RenderManagerCl extends Thread implements Renderer {
 
     private int cpuLoad;
     private SceneProvider sceneProvider;
+
+    private Sun prevSun = null;
 
     private BiConsumer<Long, Integer> renderCompleteListener;
     private BiConsumer<Scene, Integer> frameCompleteListener;
@@ -165,6 +168,11 @@ public class RenderManagerCl extends Thread implements Renderer {
                     sceneProvider.withSceneProtected(scene -> {
                         if (reason.overwriteState()) {
                             bufferedScene.copyState(scene);
+
+                            if (!bufferedScene.sun().equals(prevSun)) {
+                                intersectCl.generateSky(false, bufferedScene.sun());
+                                prevSun = bufferedScene.sun();
+                            }
                         }
                         if (reason == ResetReason.MATERIALS_CHANGED || reason == ResetReason.SCENE_LOADED) {
                             scene.importMaterials();
@@ -251,7 +259,7 @@ public class RenderManagerCl extends Thread implements Renderer {
         double[] samples = bufferedScene.getSampleBuffer();
 
         // Do the rendering
-        float[] depthmap = intersectCl.rayTrace(rayDirs, origin, random.nextInt(), 1, true, bufferedScene.sun(), drawDepth, bufferedScene.transparentSky() ? 0 : 1);
+        float[] depthmap = intersectCl.rayTrace(rayDirs, origin, random.nextInt(), 1, true, bufferedScene.sun(), drawDepth);
 
         for (int i = 0; i < depthmap.length; i++) {
             samples[i] = depthmap[i];
@@ -300,6 +308,9 @@ public class RenderManagerCl extends Thread implements Renderer {
             }
         }
 
+        // Render sky
+        intersectCl.generateSky(true, bufferedScene.sun());
+
         Vector3 origin = ray.o;
         origin.x -= bufferedScene.getOrigin().x;
         origin.y -= bufferedScene.getOrigin().y;
@@ -320,7 +331,7 @@ public class RenderManagerCl extends Thread implements Renderer {
 
         for (int sample = bufferedScene.spp; sample < targetSpp; sample++) {
             // Do the rendering
-            float[] rendermap = intersectCl.rayTrace(rayDirs, origin, random.nextInt(), bufferedScene.getRayDepth(), false, bufferedScene.sun(), drawDepth, bufferedScene.transparentSky() ? 0 : 1);
+            float[] rendermap = intersectCl.rayTrace(rayDirs, origin, random.nextInt(), bufferedScene.getRayDepth(), false, bufferedScene.sun(), drawDepth);
 
             // Update the output buffer
             for (int i = 0; i < rendermap.length; i++) {

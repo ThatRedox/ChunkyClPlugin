@@ -1,5 +1,6 @@
 package chunkycl;
 
+import static java.lang.Math.PI;
 import static org.jocl.CL.*;
 
 import org.apache.commons.math3.util.FastMath;
@@ -16,12 +17,8 @@ import se.llbit.chunky.chunk.BlockPalette;
 import se.llbit.chunky.renderer.scene.Scene;
 import se.llbit.chunky.renderer.scene.Sun;
 import se.llbit.chunky.resources.Texture;
-import se.llbit.chunky.world.WorldTexture;
 import se.llbit.log.Log;
-import se.llbit.math.Octree;
-import se.llbit.math.PackedOctree;
-import se.llbit.math.Vector3;
-import se.llbit.math.Vector3i;
+import se.llbit.math.*;
 import se.llbit.util.TaskTracker;
 
 public class GpuRayTracer {
@@ -35,6 +32,10 @@ public class GpuRayTracer {
     private cl_mem grassTextures = null;
     private cl_mem foliageTextures = null;
     private cl_mem sunIndex = null;
+    private cl_mem skyTexture;
+
+    private final int skyTextureResolution = 1024;
+    private final float[] skyImage = new float[skyTextureResolution * skyTextureResolution * 4];
 
     private cl_program program;
     private cl_kernel kernel;
@@ -165,6 +166,19 @@ public class GpuRayTracer {
 
         // Create the kernel
         kernel = clCreateKernel(program, "rayTracer", null);
+
+        // Preallocate sky texture
+        cl_image_format format = new cl_image_format();
+        format.image_channel_data_type = CL_FLOAT;
+        format.image_channel_order = CL_RGBA;
+
+        cl_image_desc desc = new cl_image_desc();
+        desc.image_type = CL_MEM_OBJECT_IMAGE2D;
+        desc.image_width = skyTextureResolution;
+        desc.image_height = skyTextureResolution;
+
+        skyTexture = clCreateImage(context, CL_MEM_READ_ONLY,
+                format, desc, null, null);
     }
 
     @SuppressWarnings("unchecked")
@@ -427,7 +441,41 @@ public class GpuRayTracer {
         renderTask.update("Loading GPU", 3, 3);
     }
 
-    public float[] rayTrace(float[] rayDirs, Vector3 origin, int seed, int rayDepth, boolean preview, Sun sun, int drawDepth, int enableSky) {
+    /** Generate sky. If mode is true = Nishita, false = Preetham */
+    public void generateSky(boolean mode, Sun sun) {
+        Ray ray = new Ray();
+        NishitaSky sky = null;
+        if (mode) {
+            sky = new NishitaSky(sun);
+        }
+
+        for (int i = 0; i < skyTextureResolution; i++) {
+            for (int j = 0; j < skyTextureResolution; j++) {
+                double theta = ((double) i / skyTextureResolution) * 2 * PI;
+                double phi = ((double) j / skyTextureResolution) * PI - PI/2;
+                double r = FastMath.cos(phi);
+                ray.d.set(FastMath.cos(theta) * r, FastMath.sin(phi), FastMath.sin(theta) * r);
+
+                Vector3 color;
+                if (mode) {
+                    color = sky.calcIncidentLight(ray);
+                } else {
+                    sun.calcSkyLight(ray, 0);
+                    color = new Vector3(ray.color.x, ray.color.y, ray.color.z);
+                }
+
+                skyImage[(j*skyTextureResolution + i) * 4 + 0] = (float) color.x;
+                skyImage[(j*skyTextureResolution + i) * 4 + 1] = (float) color.y;
+                skyImage[(j*skyTextureResolution + i) * 4 + 2] = (float) color.z;
+            }
+        }
+
+        clEnqueueWriteImage(commandQueue, skyTexture, CL_TRUE, new long[] {0, 0, 0},
+                new long[] {skyTextureResolution, skyTextureResolution, 1}, 0, 0,
+                Pointer.to(skyImage), 0, null, null);
+    }
+
+    public float[] rayTrace(float[] rayDirs, Vector3 origin, int seed, int rayDepth, boolean preview, Sun sun, int drawDepth) {
         // Results array
         float[] rayRes = new float[rayDirs.length];
 
@@ -462,9 +510,6 @@ public class GpuRayTracer {
         cl_mem clDrawDepth = clCreateBuffer(context,
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
                 Sizeof.cl_int, Pointer.to(new int[] {drawDepth}), null);
-        cl_mem clDrawSky = clCreateBuffer(context,
-                CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-                Sizeof.cl_int, Pointer.to(new int[] {enableSky}), null);
 
         // Batching arguments
         cl_mem clNormCoords = clCreateBuffer(context,
@@ -490,7 +535,7 @@ public class GpuRayTracer {
         clSetKernelArg(kernel, 12, Sizeof.cl_mem, Pointer.to(clSunPos));
         clSetKernelArg(kernel, 13, Sizeof.cl_mem, Pointer.to(sunIndex));
         clSetKernelArg(kernel, 14, Sizeof.cl_mem, Pointer.to(clSunIntensity));
-        clSetKernelArg(kernel, 15, Sizeof.cl_mem, Pointer.to(clDrawSky));
+        clSetKernelArg(kernel, 15, Sizeof.cl_mem, Pointer.to(skyTexture));
         clSetKernelArg(kernel, 16, Sizeof.cl_mem, Pointer.to(grassTextures));
         clSetKernelArg(kernel, 17, Sizeof.cl_mem, Pointer.to(foliageTextures));
         clSetKernelArg(kernel, 18, Sizeof.cl_mem, Pointer.to(clDrawDepth));
@@ -537,7 +582,6 @@ public class GpuRayTracer {
         clReleaseMemObject(clPreview);
         clReleaseMemObject(clSunIntensity);
         clReleaseMemObject(clDrawDepth);
-        clReleaseMemObject(clDrawSky);
 
         return rayRes;
     }
