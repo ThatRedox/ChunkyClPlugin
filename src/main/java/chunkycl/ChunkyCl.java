@@ -1,5 +1,7 @@
 package chunkycl;
 
+import javafx.scene.control.CheckBox;
+import javafx.scene.control.Tooltip;
 import javafx.scene.layout.VBox;
 import se.llbit.chunky.Plugin;
 import se.llbit.chunky.main.Chunky;
@@ -65,6 +67,29 @@ public class ChunkyCl implements Plugin {
 
                     // Add draw depth adjuster after ray depth
                     ((VBox) ((AdvancedTab) tab).getContent()).getChildren().add(4, drawDepthAdjuster);
+
+                    // Nishita sky selection
+                    CheckBox nishitaSky = new CheckBox("Use Nishita Sky");
+                    nishitaSky.setTooltip(new Tooltip("Use Nishita sky when rendering"));
+                    nishitaSky.setSelected(true);
+                    nishitaSky.setOnAction((event) -> {
+                        RenderController controller;
+
+                        // Get the render controller through reflection
+                        try {
+                            Field controllerField = tab.getClass().getDeclaredField("controller");
+                            controllerField.setAccessible(true);
+                            controller = (RenderController) controllerField.get(tab);
+                        } catch (NoSuchFieldException | IllegalAccessException e) {
+                            e.printStackTrace();
+                            return;
+                        }
+
+                        ((RenderManagerCl) controller.getRenderer()).setRenderSky(nishitaSky.isSelected() ? GpuRayTracer.SkyMode.NISHITA : GpuRayTracer.SkyMode.SKY);
+                    });
+
+                    // Add Nishita sky
+                    ((VBox) ((AdvancedTab) tab).getContent()).getChildren().add(5, nishitaSky);
                 }
             }
 

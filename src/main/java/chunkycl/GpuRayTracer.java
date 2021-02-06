@@ -15,6 +15,7 @@ import java.util.*;
 import se.llbit.chunky.block.Block;
 import se.llbit.chunky.chunk.BlockPalette;
 import se.llbit.chunky.renderer.scene.Scene;
+import se.llbit.chunky.renderer.scene.Sky;
 import se.llbit.chunky.renderer.scene.Sun;
 import se.llbit.chunky.resources.Texture;
 import se.llbit.log.Log;
@@ -59,6 +60,13 @@ public class GpuRayTracer {
     private final int[] constantTintColors = new int[]{0xFF80A755, 0xFF619961, 0xFF208030};
 
     private static String programSource;
+
+    enum SkyMode {
+        SKY,
+        NISHITA,
+        NISHITA_GPU,
+        PREETHAM
+    }
 
     @SuppressWarnings("deprecation")
     GpuRayTracer() {
@@ -442,12 +450,11 @@ public class GpuRayTracer {
     }
 
     /** Generate sky. If mode is true = Nishita, false = Preetham */
-    public void generateSky(boolean mode, Sun sun) {
+    public void generateSky(SkyMode mode, Scene scene) {
         Ray ray = new Ray();
-        NishitaSky sky = null;
-        if (mode) {
-            sky = new NishitaSky(sun);
-        }
+        Sky sky = scene.sky();
+        Sun sun = scene.sun();
+        NishitaSky nishitaSky = new NishitaSky(sun);
 
         for (int i = 0; i < skyTextureResolution; i++) {
             for (int j = 0; j < skyTextureResolution; j++) {
@@ -457,11 +464,20 @@ public class GpuRayTracer {
                 ray.d.set(FastMath.cos(theta) * r, FastMath.sin(phi), FastMath.sin(theta) * r);
 
                 Vector3 color;
-                if (mode) {
-                    color = sky.calcIncidentLight(ray);
-                } else {
-                    sun.calcSkyLight(ray, 0);
-                    color = new Vector3(ray.color.x, ray.color.y, ray.color.z);
+                switch (mode) {
+                    case NISHITA_GPU:
+                        Log.info("Nishita GPU not yet implemented. Falling back to Nishita CPU");
+                    case NISHITA:
+                        color = nishitaSky.calcIncidentLight(ray);
+                        break;
+                    case PREETHAM:
+                        sun.calcSkyLight(ray, 0);
+                        color = new Vector3(ray.color.x, ray.color.y, ray.color.z);
+                        break;
+                    case SKY:
+                    default:
+                        sky.getSkyDiffuseColorInner(ray);
+                        color = new Vector3(ray.color.x, ray.color.y, ray.color.z);
                 }
 
                 skyImage[(j*skyTextureResolution + i) * 4 + 0] = (float) color.x;

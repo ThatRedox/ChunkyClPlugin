@@ -37,8 +37,6 @@ public class RenderManagerCl extends Thread implements Renderer {
     private int cpuLoad;
     private SceneProvider sceneProvider;
 
-    private Sun prevSun = null;
-
     private BiConsumer<Long, Integer> renderCompleteListener;
     private BiConsumer<Scene, Integer> frameCompleteListener;
 
@@ -48,6 +46,7 @@ public class RenderManagerCl extends Thread implements Renderer {
     private TaskTracker.Task renderTask;
 
     private int drawDepth = 256;
+    private GpuRayTracer.SkyMode renderSky = GpuRayTracer.SkyMode.NISHITA;
 
     public static final GpuRayTracer intersectCl = new GpuRayTracer();
 
@@ -64,6 +63,10 @@ public class RenderManagerCl extends Thread implements Renderer {
         bufferedScene = context.getChunky().getSceneFactory().newScene();
 
         random = new Random(System.currentTimeMillis());
+    }
+
+    public void setRenderSky(GpuRayTracer.SkyMode mode) {
+        this.renderSky = mode;
     }
 
     public void setDrawDepth(int drawDepth) {
@@ -169,10 +172,7 @@ public class RenderManagerCl extends Thread implements Renderer {
                         if (reason.overwriteState()) {
                             bufferedScene.copyState(scene);
 
-                            if (!bufferedScene.sun().equals(prevSun)) {
-                                intersectCl.generateSky(false, bufferedScene.sun());
-                                prevSun = bufferedScene.sun();
-                            }
+                            intersectCl.generateSky(GpuRayTracer.SkyMode.SKY, bufferedScene);
                         }
                         if (reason == ResetReason.MATERIALS_CHANGED || reason == ResetReason.SCENE_LOADED) {
                             scene.importMaterials();
@@ -309,7 +309,7 @@ public class RenderManagerCl extends Thread implements Renderer {
         }
 
         // Render sky
-        intersectCl.generateSky(true, bufferedScene.sun());
+        intersectCl.generateSky(renderSky, bufferedScene);
 
         Vector3 origin = ray.o;
         origin.x -= bufferedScene.getOrigin().x;
