@@ -1,9 +1,9 @@
 
-![Build](https://ci.wertarbyte.com/job/ChunkyCL/lastStableBuild/badge/icon?style=flat-square)
+![Build](https://ci.wertarbyte.com/job/ChunkyCL/lastBuild/badge/icon?style=flat-square)
 
 # ChunkyCL
 
-ChunkyCL is a plugin to the Minecraft Pathtracer [Chunky](https://github.com/chunky-dev/chunky) which harnesses the power of the GPU with OpenCL 1.2 to accelerate rendering.
+ChunkyCL is a plugin to the Minecraft Pathtracer [Chunky](https://github.com/chunky-dev/chunky) which harnesses the power of the GPU with OpenCL 1.2+ to accelerate rendering.
 It is currently a work in progress and does not support many features such as non-cube blocks and biome tinting. The core renderer itself is still under development
 so render results may change drastically between versions.
 
