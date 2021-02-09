@@ -1,5 +1,5 @@
 
-![Java CI with Gradle](https://github.com/alexhliu/ChunkyClPlugin/workflows/Java%20CI%20with%20Gradle/badge.svg)
+![Build](https://ci.wertarbyte.com/job/ChunkyCL/lastStableBuild/badge/icon?style=flat-square)
 
 # ChunkyCL
 
@@ -9,8 +9,7 @@ so render results may change drastically between versions.
 
 ## Installation
 
-Download the [latest plugin build by selecting the most recent workflow and downloading the ChunkyClPlugin Artifact](https://github.com/alexhliu/ChunkyClPlugin/actions?query=is%3Asuccess+event%3Apush+branch%3Amaster) and extract the zip file.
-In the Chunky Launcher, expand `Advanced Settings` and click on `Manage plugins`. In the `Plugin Manger` window click on `Add` and select the `.jar` file in the extracted
+Download the [latest plugin build](https://discord.com/channels/@me/804323812166074378/808804495206776873). In the Chunky Launcher, expand `Advanced Settings` and click on `Manage plugins`. In the `Plugin Manger` window click on `Add` and select the `.jar` file in the extracted
 zip file. Click on `Save` and start Chunky as usual.
 
 ### Performance
