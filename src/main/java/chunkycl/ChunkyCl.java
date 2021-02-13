@@ -23,14 +23,8 @@ import java.util.List;
  */
 public class ChunkyCl implements Plugin {
     @Override public void attach(Chunky chunky) {
-        // Override the default render manager with reflection
-        try {
-            Field renderer = chunky.getClass().getDeclaredField("rendererFactory");
-            renderer.setAccessible(true);
-            renderer.set(chunky, (RendererFactory) RenderManagerCl::new);
-        } catch (NoSuchFieldException | IllegalAccessException e) {
-            e.printStackTrace();
-        }
+        // Change to GPU renderer
+        chunky.setRendererFactory(RenderManagerCl::new);
 
         RenderControlsTabTransformer prev = chunky.getRenderControlsTabTransformer();
         chunky.setRenderControlsTabTransformer(tabs -> {
@@ -67,29 +61,6 @@ public class ChunkyCl implements Plugin {
 
                     // Add draw depth adjuster after ray depth
                     ((VBox) ((AdvancedTab) tab).getContent()).getChildren().add(4, drawDepthAdjuster);
-
-                    // Nishita sky selection
-                    CheckBox nishitaSky = new CheckBox("Use Nishita Sky");
-                    nishitaSky.setTooltip(new Tooltip("Use Nishita sky when rendering"));
-                    nishitaSky.setSelected(true);
-                    nishitaSky.setOnAction((event) -> {
-                        RenderController controller;
-
-                        // Get the render controller through reflection
-                        try {
-                            Field controllerField = tab.getClass().getDeclaredField("controller");
-                            controllerField.setAccessible(true);
-                            controller = (RenderController) controllerField.get(tab);
-                        } catch (NoSuchFieldException | IllegalAccessException e) {
-                            e.printStackTrace();
-                            return;
-                        }
-
-                        ((RenderManagerCl) controller.getRenderer()).setRenderSky(nishitaSky.isSelected() ? GpuRayTracer.SkyMode.NISHITA : GpuRayTracer.SkyMode.SKY);
-                    });
-
-                    // Add Nishita sky
-                    ((VBox) ((AdvancedTab) tab).getContent()).getChildren().add(5, nishitaSky);
                 }
             }
 

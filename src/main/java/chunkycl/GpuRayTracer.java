@@ -14,9 +14,7 @@ import java.util.*;
 
 import se.llbit.chunky.block.Block;
 import se.llbit.chunky.chunk.BlockPalette;
-import se.llbit.chunky.renderer.scene.Scene;
-import se.llbit.chunky.renderer.scene.Sky;
-import se.llbit.chunky.renderer.scene.Sun;
+import se.llbit.chunky.renderer.scene.*;
 import se.llbit.chunky.resources.Texture;
 import se.llbit.log.Log;
 import se.llbit.math.*;
@@ -35,7 +33,7 @@ public class GpuRayTracer {
     private cl_mem sunIndex = null;
     private cl_mem skyTexture;
 
-    private final int skyTextureResolution = 1024;
+    private int skyTextureResolution = 128;
     private final float[] skyImage = new float[skyTextureResolution * skyTextureResolution * 4];
 
     private cl_program program;
@@ -453,8 +451,19 @@ public class GpuRayTracer {
     public void generateSky(SkyMode mode, Scene scene) {
         Ray ray = new Ray();
         Sky sky = scene.sky();
-        Sun sun = scene.sun();
-        NishitaSky nishitaSky = new NishitaSky(sun);
+
+        // Get skycache resolution through reflection
+        try {
+            Field skyCache = sky.getClass().getDeclaredField("skyCache");
+            skyCache.setAccessible(true);
+            SkyCache cache = (SkyCache) skyCache.get(sky);
+            skyTextureResolution = cache.getSkyResolution();
+        } catch (IllegalAccessException | NoSuchFieldException e) {
+            e.printStackTrace();
+        }
+
+        SimulatedSky simSky = sky.getSimulatedSky();
+        boolean simulated = sky.getSkyMode() == Sky.SkyMode.SIMULATED;
 
         for (int i = 0; i < skyTextureResolution; i++) {
             for (int j = 0; j < skyTextureResolution; j++) {
@@ -464,20 +473,11 @@ public class GpuRayTracer {
                 ray.d.set(FastMath.cos(theta) * r, FastMath.sin(phi), FastMath.sin(theta) * r);
 
                 Vector3 color;
-                switch (mode) {
-                    case NISHITA_GPU:
-                        Log.info("Nishita GPU not yet implemented. Falling back to Nishita CPU");
-                    case NISHITA:
-                        color = nishitaSky.calcIncidentLight(ray);
-                        break;
-                    case PREETHAM:
-                        sun.calcSkyLight(ray, 0);
-                        color = new Vector3(ray.color.x, ray.color.y, ray.color.z);
-                        break;
-                    case SKY:
-                    default:
-                        sky.getSkyDiffuseColorInner(ray);
-                        color = new Vector3(ray.color.x, ray.color.y, ray.color.z);
+                if (simulated) {
+                    color = simSky.calcIncidentLight(ray);
+                } else {
+                    sky.getSkyDiffuseColorInner(ray);
+                    color = new Vector3(ray.color.x, ray.color.y, ray.color.z);
                 }
 
                 skyImage[(j*skyTextureResolution + i) * 4 + 0] = (float) color.x;

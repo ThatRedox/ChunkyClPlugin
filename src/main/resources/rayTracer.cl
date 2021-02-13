@@ -74,7 +74,7 @@ __kernel void rayTracer(__global const float *rayPos,
     junk[1] = rayDir[gid*3 + 4] - d[1];
     junk[2] = rayDir[gid*3 + 5] - d[2];
 
-    float jitter = sqrt(junk[0]*junk[0] + junk[1]*junk[1] + junk[2]*junk[2]);
+    float jitter = sqrt(junk[0]*junk[0] + junk[1]*junk[1] + junk[2]*junk[2])/2.0;
 
     d[0] += nextFloat(random) * jitter;
     d[1] += nextFloat(random) * jitter;
@@ -466,7 +466,7 @@ void exitBlock(float o[3], float d[3], float n[3], float *distance) {
 
 void calcSkyRay(float direction[3], float color[3], float e[3], image2d_t skyTexture, float sunPos[3], float sunIntensity, image2d_t textures, int sunIndex) {
     sampler_t skySampler = CLK_NORMALIZED_COORDS_TRUE |
-                           CLK_ADDRESS_REPEAT |
+                           CLK_ADDRESS_CLAMP_TO_EDGE |
                            CLK_FILTER_LINEAR;
 
     // Draw sun texture
