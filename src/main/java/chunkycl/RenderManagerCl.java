@@ -215,6 +215,8 @@ public class RenderManagerCl extends Thread implements Renderer {
                     int targetSpp;
                     targetSpp = bufferedScene.getTargetSpp();
 
+                    intersectCl.load(bufferedScene, renderTask);
+
                     finalRenderer(targetSpp, renderTask);
                 }
 

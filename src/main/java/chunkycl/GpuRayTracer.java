@@ -697,37 +697,47 @@ public class GpuRayTracer {
             if (prim instanceof TexturedTriangle) {
                 TexturedTriangle triangle = (TexturedTriangle) prim;
                 trigs.add(0);   // Textured triangle = ID 0
-                trigs.add((float) triangle.e1.x);   // 1
+                packAabb(triangle.bounds, trigs);   // 1-6
+                trigs.add((float) triangle.e1.x);   // 7
                 trigs.add((float) triangle.e1.y);
                 trigs.add((float) triangle.e1.z);
-                trigs.add((float) triangle.e2.x);   // 4
+                trigs.add((float) triangle.e2.x);   // 10
                 trigs.add((float) triangle.e2.y);
                 trigs.add((float) triangle.e2.z);
-                trigs.add((float) triangle.o.x);    // 7
+                trigs.add((float) triangle.o.x);    // 13
                 trigs.add((float) triangle.o.y);
                 trigs.add((float) triangle.o.z);
-                trigs.add((float) triangle.n.x);    // 10
+                trigs.add((float) triangle.n.x);    // 16
                 trigs.add((float) triangle.n.y);
                 trigs.add((float) triangle.n.z);
-                trigs.add((float) triangle.t1.x);   // 13
+                trigs.add((float) triangle.t1.x);   // 19
                 trigs.add((float) triangle.t1.y);
-                trigs.add((float) triangle.t2.x);   // 15
+                trigs.add((float) triangle.t2.x);   // 21
                 trigs.add((float) triangle.t2.y);
-                trigs.add((float) triangle.t3.x);   // 17
+                trigs.add((float) triangle.t3.x);   // 23
                 trigs.add((float) triangle.t3.y);
-                trigs.add(triangle.doubleSided ? 1 : 0);    // 19
-                trigs.add((float) triangle.material.getTexture(0).getWidth());  // 20
-                trigs.add((float) triangle.material.getTexture(0).getHeight()); // 21
-                trigs.add(triangle.material.emittance);     // 22
+                trigs.add(triangle.doubleSided ? 1 : 0);    // 25
+                trigs.add((float) triangle.material.getTexture(0).getWidth());  // 26
+                trigs.add((float) triangle.material.getTexture(0).getHeight()); // 27
+                trigs.add(triangle.material.emittance);     // 28
 
                 if (!indexes.containsKey(triangle.material)) {
                     indexes.put(triangle.material, textures.size());
                     textures.addAll(IntList.of(triangle.material.getTexture(0).getData()));
                 }
 
-                trigs.add(indexes.get(triangle.material));  // 23
+                trigs.add(indexes.get(triangle.material));  // 29
             }
         }
+    }
+
+    void packAabb(AABB box, FloatArrayList array) {
+        array.add((float) box.xmin);
+        array.add((float) box.xmax);
+        array.add((float) box.ymin);
+        array.add((float) box.ymax);
+        array.add((float) box.zmin);
+        array.add((float) box.zmax);
     }
 
     /** Get a string from OpenCL */

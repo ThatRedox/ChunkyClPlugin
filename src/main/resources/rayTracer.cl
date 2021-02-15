@@ -223,7 +223,7 @@ float nextFloat(unsigned int *state) {
 }
 
 int entityIntersect(float color[3], float o[3], float d[3], float n[3], float e[3], float* tbest, image2d_t entityData, image2d_t entityTrigs, image2d_t entityTextures) {
-    float xmin, xmax, ymin, ymax, zmin, zmax, temp;
+    float xmin, xmax, ymin, ymax, zmin, zmax;
     float size = indexf(entityData, 0);
     int hit = 0;
 
@@ -238,15 +238,16 @@ int entityIntersect(float color[3], float o[3], float d[3], float n[3], float e[
         zmax = indexf(entityData, data+6);
 
         if (aabbInside(o, xmin, xmax, ymin, ymax, zmin, zmax) ||
-            (temp = aabbIntersect(o, d, xmin, xmax, ymin, ymax, zmin, zmax)) != -1) {
+            aabbIntersect(o, d, xmin, xmax, ymin, ymax, zmin, zmax)) {
             data = indexf(entityData, data);
             int length = indexf(entityTrigs, data);
             data += 1;
 
             for (int j = 0; j < length; j++) {
-                switch ((int) indexf(entityTrigs, data + j*24)) {
+                int index = data + j * 30;
+                switch ((int) indexf(entityTrigs, index)) {
                     case 0:
-                        hit = texturedTriangle(color, o, d, n, e, tbest, data + j*24, entityTrigs, entityTextures) || hit;
+                        hit = texturedTriangle(color, o, d, n, e, tbest, index, entityTrigs, entityTextures) || hit;
                         break;
                 }
             }
@@ -629,11 +630,7 @@ float aabbIntersect(float o[3], float d[3], float xmin, float xmax, float ymin, 
     float tmin = fmax(fmax(fmin(tx1, tx2), fmin(ty1, ty2)), fmin(tz1, tz2));
     float tmax = fmin(fmin(fmax(tx1, tx2), fmax(ty1, ty2)), fmax(tz1, tz2));
 
-    if (tmin <= tmax+OFFSET && tmin >= 0) {
-        return 1;
-    } else {
-        return -1;
-    }
+    return tmin <= tmax+OFFSET && tmin >= 0;
 }
 
 int aabbInside(float o[3], float xmin, float xmax, float ymin, float ymax, float zmin, float zmax) {
@@ -645,36 +642,49 @@ int aabbInside(float o[3], float xmin, float xmax, float ymin, float ymax, float
 int texturedTriangle(float color[3], float ro[3], float rd[3], float rn[3], float re[3], float* tbest, int index, image2d_t entityTrigs, image2d_t entityTextures) {
     if (indexf(entityTrigs, index) != 0) return 0;  // Not textured triangle why was this even called?
 
+    // Check aabb
+    float xmin, xmax, ymin, ymax, zmin, zmax;
+    xmin = indexf(entityTrigs, index+1);
+    xmax = indexf(entityTrigs, index+2);
+    ymin = indexf(entityTrigs, index+3);
+    ymax = indexf(entityTrigs, index+4);
+    zmin = indexf(entityTrigs, index+5);
+    zmax = indexf(entityTrigs, index+6);
+
+    if (!aabbInside(ro, xmin, xmax, ymin, ymax, zmin, zmax) &&
+        !aabbIntersect(ro, rd, xmin, xmax, ymin, ymax, zmin, zmax))
+        return 0;   // Does not intersect
+
     float3 e1, e2, o, n;
     float2 t1, t2, t3;
     int doubleSided;
 
-    e1 = (float3)(indexf(entityTrigs, index+1),
-                  indexf(entityTrigs, index+2),
-                  indexf(entityTrigs, index+3));
+    e1 = (float3)(indexf(entityTrigs, index+7),
+                  indexf(entityTrigs, index+8),
+                  indexf(entityTrigs, index+9));
 
-    e2 = (float3)(indexf(entityTrigs, index+4),
-                  indexf(entityTrigs, index+5),
-                  indexf(entityTrigs, index+6));
+    e2 = (float3)(indexf(entityTrigs, index+10),
+                  indexf(entityTrigs, index+11),
+                  indexf(entityTrigs, index+12));
 
-    o = (float3)(indexf(entityTrigs, index+7),
-                 indexf(entityTrigs, index+8),
-                 indexf(entityTrigs, index+9));
+    o = (float3)(indexf(entityTrigs, index+13),
+                 indexf(entityTrigs, index+14),
+                 indexf(entityTrigs, index+15));
 
-    n = (float3)(indexf(entityTrigs, index+10),
-                 indexf(entityTrigs, index+11),
-                 indexf(entityTrigs, index+12));
+    n = (float3)(indexf(entityTrigs, index+16),
+                 indexf(entityTrigs, index+17),
+                 indexf(entityTrigs, index+18));
 
-    t1 = (float2)(indexf(entityTrigs, index+13),
-                  indexf(entityTrigs, index+14));
+    t1 = (float2)(indexf(entityTrigs, index+19),
+                  indexf(entityTrigs, index+20));
 
-    t2 = (float2)(indexf(entityTrigs, index+15),
-                  indexf(entityTrigs, index+16));
+    t2 = (float2)(indexf(entityTrigs, index+21),
+                  indexf(entityTrigs, index+22));
 
-    t3 = (float2)(indexf(entityTrigs, index+17),
-                  indexf(entityTrigs, index+18));
+    t3 = (float2)(indexf(entityTrigs, index+23),
+                  indexf(entityTrigs, index+24));
 
-    doubleSided = indexf(entityTrigs, index+19);
+    doubleSided = indexf(entityTrigs, index+25);
 
     float3 pvec, qvec, tvec;
 
@@ -706,14 +716,14 @@ int texturedTriangle(float color[3], float ro[3], float rd[3], float rn[3], floa
         float2 uv = (float2) (t1.x * u + t2.x * v + t3.x * w,
                               t1.y * u + t2.y * v + t3.y * w);
 
-        float width = indexf(entityTrigs, index+20);
-        float height = indexf(entityTrigs, index+21);
+        float width = indexf(entityTrigs, index+26);
+        float height = indexf(entityTrigs, index+27);
 
         int x = uv.x * width - EPS;
         int y = (1 - uv.y) * height - EPS;
 
-        unsigned int argb = indexu(entityTextures, width*y + x + indexf(entityTrigs, index+23));
-        float emittance = indexf(entityTrigs, index+22);
+        unsigned int argb = indexu(entityTextures, width*y + x + indexf(entityTrigs, index+29));
+        float emittance = indexf(entityTrigs, index+28);
 
         if ((0xFF & (argb >> 24)) > 0) {
             *tbest = t;
