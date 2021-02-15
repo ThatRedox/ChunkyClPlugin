@@ -3,6 +3,9 @@ package chunkycl;
 import static java.lang.Math.PI;
 import static org.jocl.CL.*;
 
+import it.unimi.dsi.fastutil.floats.FloatArrayList;
+import it.unimi.dsi.fastutil.ints.IntArrayList;
+import it.unimi.dsi.fastutil.ints.IntList;
 import org.apache.commons.math3.util.FastMath;
 import org.jocl.*;
 
@@ -14,10 +17,14 @@ import java.util.*;
 
 import se.llbit.chunky.block.Block;
 import se.llbit.chunky.chunk.BlockPalette;
+import se.llbit.chunky.entity.Entity;
 import se.llbit.chunky.renderer.scene.*;
 import se.llbit.chunky.resources.Texture;
+import se.llbit.chunky.world.Material;
 import se.llbit.log.Log;
 import se.llbit.math.*;
+import se.llbit.math.primitive.Primitive;
+import se.llbit.math.primitive.TexturedTriangle;
 import se.llbit.util.TaskTracker;
 
 public class GpuRayTracer {
@@ -31,7 +38,10 @@ public class GpuRayTracer {
     private cl_mem grassTextures = null;
     private cl_mem foliageTextures = null;
     private cl_mem sunIndex = null;
-    private cl_mem skyTexture;
+    private cl_mem skyTexture = null;
+    private cl_mem entityData = null;
+    private cl_mem entityTrigs = null;
+    private cl_mem bvhTextures = null;
 
     private int skyTextureResolution = 128;
     private final float[] skyImage = new float[skyTextureResolution * skyTextureResolution * 4];
@@ -46,7 +56,7 @@ public class GpuRayTracer {
 
     public final long workgroupSize;
 
-    public int batchSize = 1048576;
+    public int batchSize = 2<<18;
 
     private final String[] grassBlocks = new String[]{"minecraft:grass_block", "minecraft:grass",
             "minecraft:tall_grass", "minecraft:fern", "minecraft:sugarcane"};
@@ -203,9 +213,12 @@ public class GpuRayTracer {
             clReleaseMemObject(this.grassTextures);
             clReleaseMemObject(this.foliageTextures);
             clReleaseMemObject(this.sunIndex);
+            clReleaseMemObject(this.entityData);
+            clReleaseMemObject(this.entityTrigs);
+            clReleaseMemObject(this.bvhTextures);
         }
 
-        renderTask.update("Loading Octree into GPU", 3, 0);
+        renderTask.update("Loading Octree into GPU", 4, 0);
 
         // Obtain octree through reflection
         try {
@@ -253,7 +266,7 @@ public class GpuRayTracer {
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
                 Sizeof.cl_int, Pointer.to(new int[] {treeData.length}), null);
 
-        renderTask.update("Loading blocks into GPU", 3, 1);
+        renderTask.update("Loading blocks into GPU", 4, 1);
 
         // Create transparent block table
         List<Integer> transparentList = new LinkedList<>();
@@ -293,7 +306,7 @@ public class GpuRayTracer {
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, Sizeof.cl_int,
                 Pointer.to(new int[] {transparent.length}), null);
 
-        renderTask.update("Loading Block Textures into GPU", 3, 2);
+        renderTask.update("Loading Block Textures into GPU", 4, 2);
 
         // Load biome and foliage tinting
         // Fetch the textures with reflection
@@ -444,7 +457,77 @@ public class GpuRayTracer {
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
                 Sizeof.cl_int, Pointer.to(new int[] {sunIndex}), null);
 
-        renderTask.update("Loading GPU", 3, 3);
+        renderTask.update("Loading BVH", 4, 3);
+
+        LinkedList<Entity> entities = new LinkedList<>();
+        entities.addAll(scene.getEntities());
+        entities.addAll(scene.getActors());
+
+        FloatArrayList entityArray = new FloatArrayList();
+        FloatArrayList entityTrigs = new FloatArrayList();
+        IntArrayList entityTextures = new IntArrayList();
+        Map<Material, Integer> materialIndexes = new IdentityHashMap<>();
+
+        entityArray.add(entities.size());
+
+        Vector3 offset = new Vector3(-scene.getOrigin().x, -scene.getOrigin().y, -scene.getOrigin().z);
+        for (Entity entity : entities) {
+            Collection<Primitive> primitiveCollection = entity.primitives(offset);
+            Primitive[] primitives = new Primitive[primitiveCollection.size()];
+            primitiveCollection.toArray(primitives);
+
+            AABB box = primitives[0].bounds();
+            box = new AABB(box.xmin, box.xmax, box.ymin, box.ymax, box.zmin, box.zmax);
+
+            for (Primitive prim : primitives) {
+                AABB bound = prim.bounds();
+
+                box.xmin = FastMath.min(box.xmin, bound.xmin);
+                box.xmax = FastMath.max(box.xmax, bound.xmax);
+                box.ymin = FastMath.min(box.ymin, bound.ymin);
+                box.ymax = FastMath.max(box.ymax, bound.ymax);
+                box.zmin = FastMath.min(box.zmin, bound.zmin);
+                box.zmax = FastMath.max(box.zmax, bound.zmax);
+            }
+
+            entityArray.add(entityTrigs.size());
+            entityArray.add((float) box.xmin);
+            entityArray.add((float) box.xmax);
+            entityArray.add((float) box.ymin);
+            entityArray.add((float) box.ymax);
+            entityArray.add((float) box.zmin);
+            entityArray.add((float) box.zmax);
+
+            packPrimitives(primitives, entityTrigs, entityTextures, materialIndexes);
+        }
+
+        format.image_channel_data_type = CL_FLOAT;
+        format.image_channel_order = CL_RGBA;
+
+        desc.image_type = CL_MEM_OBJECT_IMAGE2D;
+        desc.image_width = 8192;
+        desc.image_height = entityArray.size() / 8192 + 1;
+
+        this.entityData = clCreateImage(context,
+                CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, format, desc,
+                Pointer.to(entityArray.toFloatArray()), null);
+
+        desc.image_height = entityTrigs.size() / 8192 + 1;
+
+        this.entityTrigs = clCreateImage(context,
+                CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, format, desc,
+                Pointer.to(entityTrigs.toFloatArray()), null);
+
+        format.image_channel_data_type = CL_UNSIGNED_INT32;
+        format.image_channel_order = CL_RGBA;
+
+        desc.image_height = entityTextures.size() / 8192 + 1;
+
+        this.bvhTextures = clCreateImage(context,
+                CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, format, desc,
+                Pointer.to(entityTextures.toIntArray()), null);
+
+        renderTask.update("Loading GPU", 4, 4);
     }
 
     /** Generate sky. If mode is true = Nishita, false = Preetham */
@@ -554,8 +637,11 @@ public class GpuRayTracer {
         clSetKernelArg(kernel, 15, Sizeof.cl_mem, Pointer.to(skyTexture));
         clSetKernelArg(kernel, 16, Sizeof.cl_mem, Pointer.to(grassTextures));
         clSetKernelArg(kernel, 17, Sizeof.cl_mem, Pointer.to(foliageTextures));
-        clSetKernelArg(kernel, 18, Sizeof.cl_mem, Pointer.to(clDrawDepth));
-        clSetKernelArg(kernel, 19, Sizeof.cl_mem, Pointer.to(clRayRes));
+        clSetKernelArg(kernel, 18, Sizeof.cl_mem, Pointer.to(entityData));
+        clSetKernelArg(kernel, 19, Sizeof.cl_mem, Pointer.to(entityTrigs));
+        clSetKernelArg(kernel, 20, Sizeof.cl_mem, Pointer.to(bvhTextures));
+        clSetKernelArg(kernel, 21, Sizeof.cl_mem, Pointer.to(clDrawDepth));
+        clSetKernelArg(kernel, 22, Sizeof.cl_mem, Pointer.to(clRayRes));
 
         // Work size = rays
         long[] global_work_size = new long[]{batchSize};
@@ -600,6 +686,48 @@ public class GpuRayTracer {
         clReleaseMemObject(clDrawDepth);
 
         return rayRes;
+    }
+
+    private void packPrimitives(Primitive[] primitives, FloatArrayList trigs, IntArrayList textures, Map<Material, Integer> indexes) {
+        int index = trigs.size();
+        trigs.add(0);
+
+        for (Primitive prim : primitives) {
+            trigs.set(index, trigs.getFloat(index) + 1);
+            if (prim instanceof TexturedTriangle) {
+                TexturedTriangle triangle = (TexturedTriangle) prim;
+                trigs.add(0);   // Textured triangle = ID 0
+                trigs.add((float) triangle.e1.x);   // 1
+                trigs.add((float) triangle.e1.y);
+                trigs.add((float) triangle.e1.z);
+                trigs.add((float) triangle.e2.x);   // 4
+                trigs.add((float) triangle.e2.y);
+                trigs.add((float) triangle.e2.z);
+                trigs.add((float) triangle.o.x);    // 7
+                trigs.add((float) triangle.o.y);
+                trigs.add((float) triangle.o.z);
+                trigs.add((float) triangle.n.x);    // 10
+                trigs.add((float) triangle.n.y);
+                trigs.add((float) triangle.n.z);
+                trigs.add((float) triangle.t1.x);   // 13
+                trigs.add((float) triangle.t1.y);
+                trigs.add((float) triangle.t2.x);   // 15
+                trigs.add((float) triangle.t2.y);
+                trigs.add((float) triangle.t3.x);   // 17
+                trigs.add((float) triangle.t3.y);
+                trigs.add(triangle.doubleSided ? 1 : 0);    // 19
+                trigs.add((float) triangle.material.getTexture(0).getWidth());  // 20
+                trigs.add((float) triangle.material.getTexture(0).getHeight()); // 21
+                trigs.add(triangle.material.emittance);     // 22
+
+                if (!indexes.containsKey(triangle.material)) {
+                    indexes.put(triangle.material, textures.size());
+                    textures.addAll(IntList.of(triangle.material.getTexture(0).getData()));
+                }
+
+                trigs.add(indexes.get(triangle.material));  // 23
+            }
+        }
     }
 
     /** Get a string from OpenCL */

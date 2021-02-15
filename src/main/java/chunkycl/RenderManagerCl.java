@@ -296,6 +296,8 @@ public class RenderManagerCl extends Thread implements Renderer {
 
         float[] rayDirs = new float[width * height * 3];
 
+        int rand = random.nextInt();
+
         Camera cam = bufferedScene.camera();
         Ray ray = new Ray();
 
@@ -331,7 +333,8 @@ public class RenderManagerCl extends Thread implements Renderer {
 
         for (int sample = bufferedScene.spp; sample < targetSpp; sample++) {
             // Do the rendering
-            float[] rendermap = intersectCl.rayTrace(rayDirs, origin, random.nextInt(), bufferedScene.getRayDepth(), false, bufferedScene.sun(), drawDepth);
+            float[] rendermap = intersectCl.rayTrace(rayDirs, origin, rand, bufferedScene.getRayDepth(), false, bufferedScene.sun(), drawDepth);
+            rand += intersectCl.batchSize;
 
             // Update the output buffer
             for (int i = 0; i < rendermap.length; i++) {

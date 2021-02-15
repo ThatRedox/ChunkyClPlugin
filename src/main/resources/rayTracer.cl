@@ -15,6 +15,15 @@ int octreeRead(int index, image2d_t treeData);
 int inbounds(float o[3], int bounds);
 void exitBlock(float o[3], float d[3], float n[3], float *distance);
 void diffuseReflect(float d[3], float o[3], float n[3], unsigned int *state);
+int entityIntersect(float color[3], float o[3], float d[3], float n[3], float e[3], image2d_t entityData, image2d_t entityTrigs, image2d_t entityTextures);
+int texturedTriangle(float color[3], float ro[3], float rd[3], float rn[3], float re[3], float* tbest, int index, image2d_t entityTrigs, image2d_t entityTextures);
+float aabbIntersect(float o[3], float d[3], float xmin, float xmax, float ymin, float ymax, float zmin, float zmax);
+int aabbInside(float o[3], float xmin, float xmax, float ymin, float ymax, float zmin, float zmax);
+float indexf(image2d_t img, int index);
+int indexi(image2d_t img, int index);
+unsigned int indexu(image2d_t img, int index);
+
+const sampler_t indexSampler = CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_NEAREST;
 
 // Randomness
 void xorshift(unsigned int *state);
@@ -39,6 +48,9 @@ __kernel void rayTracer(__global const float *rayPos,
                         image2d_t skyTexture,
                         image2d_t grassTextures,
                         image2d_t foliageTextures,
+                        image2d_t entityData,
+                        image2d_t entityTrigs,
+                        image2d_t entityTextures,
                         __global const int *drawDepth,
                         __global float *res)
 {
@@ -46,8 +58,9 @@ __kernel void rayTracer(__global const float *rayPos,
     float distance = 0;
 
     // Initialize rng
-    unsigned int rngState = *seed * (gid+1);
+    unsigned int rngState = *seed + gid;
     unsigned int *random = &rngState;
+    xorshift(random);
     xorshift(random);
 
     // Ray origin
@@ -80,6 +93,8 @@ __kernel void rayTracer(__global const float *rayPos,
     d[1] += nextFloat(random) * jitter;
     d[2] += nextFloat(random) * jitter;
 
+    normalize3(d);
+
     // Cap max bounces at 23 since no dynamic memory allocation
     int maxbounces = *rayDepth;
     if (maxbounces > 23) maxbounces = 23;
@@ -91,50 +106,60 @@ __kernel void rayTracer(__global const float *rayPos,
     // Do the bounces
     for (int bounces = 0; bounces < maxbounces; bounces++)
     {
+        float color[3];
         float e[3] = {0};
         int hit = 0;
 
-        // Ray march 256 times
-        // TODO: Maybe march until octree exit? Test performance impact.
-        for (int i = 0; i < *drawDepth; i++) {
-            if (!intersect(octreeData, *depth, o[0], o[1], o[2], transparent, *transparentLength))
-                exitBlock(o, d, n, &distance);
-            else
-            {
-                hit = 1;
-                break;
-            }
+        // BVH intersection
+        if (entityIntersect(color, o, d, n, e, entityData, entityTrigs, entityTextures)) {
+            hit = 2;
+        } else {
+            // Ray march
+            for (int i = 0; i < *drawDepth; i++) {
+                if (!intersect(octreeData, *depth, o[0], o[1], o[2], transparent, *transparentLength))
+                    exitBlock(o, d, n, &distance);
+                else
+                {
+                    hit = 1;
+                    break;
+                }
 
-            if (!inbounds(o, *depth))
-                break;
+                if (!inbounds(o, *depth))
+                    break;
+            }
         }
 
         // Set color to sky color (1, 1, 1) or texture color
         // TODO: Implement Nishita sky
-        float color[3];
-        if (hit) {
-            getTextureRay(color, o, n, e, octreeGet(o[0], o[1], o[2], *depth, octreeData), textures, blockData, grassTextures, foliageTextures, 1 << *depth);
-        } else {
-            float sunPosCopy[3] = {sunPos[0], sunPos[1], sunPos[2]};
-            calcSkyRay(d, color, e, skyTexture, sunPosCopy, *sunIntensity, textures, *sunIndex);
+        switch(hit) {
+            case 2: break;
+            case 1:
+                getTextureRay(color, o, n, e, octreeGet(o[0], o[1], o[2], *depth, octreeData), textures, blockData, grassTextures, foliageTextures, 1 << *depth);
+                break;
+            default: {
+                float sunPosCopy[3] = {sunPos[0], sunPos[1], sunPos[2]};
+                calcSkyRay(d, color, e, skyTexture, sunPosCopy, *sunIntensity, textures, *sunIndex);
 
-            float sunScale = pow(*sunIntensity, 2.2f);
+                float sunScale = pow(*sunIntensity, 2.2f);
 
-            emittanceStack[bounces*3 + 0] = color[0] * sunScale;
-            emittanceStack[bounces*3 + 1] = color[1] * sunScale;
-            emittanceStack[bounces*3 + 2] = color[2] * sunScale;
+                emittanceStack[bounces*3 + 0] = color[0] * sunScale;
+                emittanceStack[bounces*3 + 1] = color[1] * sunScale;
+                emittanceStack[bounces*3 + 2] = color[2] * sunScale;
 
-            emittanceStack[bounces*3 + 3] = color[0] * sunScale;
-            emittanceStack[bounces*3 + 4] = color[1] * sunScale;
-            emittanceStack[bounces*3 + 5] = color[2] * sunScale;
+                emittanceStack[bounces*3 + 3] = color[0] * sunScale;
+                emittanceStack[bounces*3 + 4] = color[1] * sunScale;
+                emittanceStack[bounces*3 + 5] = color[2] * sunScale;
 
-            // Set color stack to sky color
-            for (int i = bounces; i < maxbounces; i++) {
-                colorStack[bounces*3 + 0] = color[0];
-                colorStack[bounces*3 + 1] = color[1];
-                colorStack[bounces*3 + 2] = color[2];
+                // Set color stack to sky color
+                for (int i = bounces; i < maxbounces; i++) {
+                    colorStack[bounces*3 + 0] = color[0];
+                    colorStack[bounces*3 + 1] = color[1];
+                    colorStack[bounces*3 + 2] = color[2];
+                }
             }
+        }
 
+        if (hit == 0) {
             // Exit on sky hit
             break;
         }
@@ -195,6 +220,41 @@ float nextFloat(unsigned int *state) {
     xorshift(state);
 
     return (*state >> 8) / ((float) (1 << 24));
+}
+
+int entityIntersect(float color[3], float o[3], float d[3], float n[3], float e[3], image2d_t entityData, image2d_t entityTrigs, image2d_t entityTextures) {
+    float xmin, xmax, ymin, ymax, zmin, zmax, temp;
+    float size = indexf(entityData, 0);
+    float tbest = 1000000;
+    int hit = 0;
+
+    for (int i = 0; i < size; i++) {
+        int data = i*7 + 1;
+
+        xmin = indexf(entityData, data+1);
+        xmax = indexf(entityData, data+2);
+        ymin = indexf(entityData, data+3);
+        ymax = indexf(entityData, data+4);
+        zmin = indexf(entityData, data+5);
+        zmax = indexf(entityData, data+6);
+
+        if (aabbInside(o, xmin, xmax, ymin, ymax, zmin, zmax) ||
+            (temp = aabbIntersect(o, d, xmin, xmax, ymin, ymax, zmin, zmax)) != -1) {
+            data = indexf(entityData, data);
+            int length = indexf(entityTrigs, data);
+            data += 1;
+
+            for (int j = 0; j < length; j++) {
+                switch ((int) indexf(entityTrigs, data + j*24)) {
+                    case 0:
+                        if (texturedTriangle(color, o, d, n, e, &tbest, data + j*24, entityTrigs, entityTextures)) hit = 1;
+                        break;
+                }
+            }
+        }
+    }
+
+    return hit;
 }
 
 // Generate a diffuse reflection ray. Based on chunky code
@@ -551,4 +611,159 @@ void normalize3(float a[3]) {
     a[0] /= length;
     a[1] /= length;
     a[2] /= length;
+}
+
+float aabbIntersect(float o[3], float d[3], float xmin, float xmax, float ymin, float ymax, float zmin, float zmax) {
+    float rx = 1 / d[0];
+    float ry = 1 / d[1];
+    float rz = 1 / d[2];
+
+    float tx1 = (xmin - o[0]) * rx;
+    float tx2 = (xmax - o[0]) * rx;
+
+    float ty1 = (ymin - o[1]) * ry;
+    float ty2 = (ymax - o[1]) * ry;
+
+    float tz1 = (zmin - o[2]) * rz;
+    float tz2 = (zmax - o[2]) * rz;
+
+    float tmin = fmax(fmax(fmin(tx1, tx2), fmin(ty1, ty2)), fmin(tz1, tz2));
+    float tmax = fmin(fmin(fmax(tx1, tx2), fmax(ty1, ty2)), fmax(tz1, tz2));
+
+    if (tmin <= tmax+OFFSET && tmin >= 0) {
+        return 1;
+    } else {
+        return -1;
+    }
+}
+
+int aabbInside(float o[3], float xmin, float xmax, float ymin, float ymax, float zmin, float zmax) {
+    return o[0] >= xmin && o[0] <= xmax &&
+           o[1] >= ymin && o[1] <= ymax &&
+           o[2] >= zmin && o[2] <= zmax;
+}
+
+int texturedTriangle(float color[3], float ro[3], float rd[3], float rn[3], float re[3], float* tbest, int index, image2d_t entityTrigs, image2d_t entityTextures) {
+    if (indexf(entityTrigs, index) != 0) return 0;  // Not textured triangle why was this even called?
+
+    float3 e1, e2, o, n;
+    float2 t1, t2, t3;
+    int doubleSided;
+
+    e1 = (float3)(indexf(entityTrigs, index+1),
+                  indexf(entityTrigs, index+2),
+                  indexf(entityTrigs, index+3));
+
+    e2 = (float3)(indexf(entityTrigs, index+4),
+                  indexf(entityTrigs, index+5),
+                  indexf(entityTrigs, index+6));
+
+    o = (float3)(indexf(entityTrigs, index+7),
+                 indexf(entityTrigs, index+8),
+                 indexf(entityTrigs, index+9));
+
+    n = (float3)(indexf(entityTrigs, index+10),
+                 indexf(entityTrigs, index+11),
+                 indexf(entityTrigs, index+12));
+
+    t1 = (float2)(indexf(entityTrigs, index+13),
+                  indexf(entityTrigs, index+14));
+
+    t2 = (float2)(indexf(entityTrigs, index+15),
+                  indexf(entityTrigs, index+16));
+
+    t3 = (float2)(indexf(entityTrigs, index+17),
+                  indexf(entityTrigs, index+18));
+
+    doubleSided = indexf(entityTrigs, index+19) == 0;
+
+    float3 pvec, qvec, tvec;
+
+    pvec = cross((float3) (rd[0], rd[1], rd[2]), e2);
+    float det = dot(e1, pvec);
+    if (doubleSided) {
+        if (det > -EPS && det < EPS) return 0;
+    } else if (det > -EPS) {
+        return 0;
+    }
+    float recip = 1 / det;
+
+    tvec = (float3) (ro[0] - o.x, ro[1] - o.y, ro[2] - o.z);
+
+    float u = dot(tvec, pvec) * recip;
+
+    if (u < 0 || u > 1) return 0;
+
+    qvec = cross(tvec, e1);
+
+    float v = dot((float3) (rd[0], rd[1], rd[2]), qvec) * recip;
+
+    if (v < 0 || (u+v) > 1) return 0;
+
+    float t = dot(e2, qvec) * recip;
+
+    if (t > EPS && t < *tbest) {
+        float w = 1 - u - v;
+        float2 uv = (float2) (t1.x * u + t2.x * v + t3.x * w,
+                              t1.y * u + t2.y * v + t3.y * w);
+
+        float width = indexf(entityTrigs, index+20);
+        float height = indexf(entityTrigs, index+21);
+
+        int x = uv.x * width - EPS;
+        int y = (1 - uv.y) * height - EPS;
+
+        unsigned int argb = indexu(entityTextures, width*y + x + indexf(entityTrigs, index+23));
+        float emittance = indexf(entityTrigs, index+22);
+
+        if ((0xFF & (argb >> 24)) > 0) {
+            *tbest = t;
+
+            color[0] = (0xFF & (argb >> 16)) / 256.0;
+            color[1] = (0xFF & (argb >> 8 )) / 256.0;
+            color[2] = (0xFF & (argb >> 0 )) / 256.0;
+
+            re[0] = color[0] * color[0] * emittance;
+            re[1] = color[1] * color[1] * emittance;
+            re[2] = color[2] * color[2] * emittance;
+
+            rn[0] = n.x;
+            rn[1] = n.y;
+            rn[2] = n.z;
+
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+float indexf(image2d_t img, int index) {
+    float4 roi = read_imagef(img, indexSampler, (int2) ((index / 4) % 8192, (index / 4) / 8192));
+    switch (index % 4) {
+        case 0: return roi.x;
+        case 1: return roi.y;
+        case 2: return roi.z;
+        default: return roi.w;
+    }
+}
+
+int indexi(image2d_t img, int index) {
+    int4 roi = read_imagei(img, indexSampler, (int2) ((index / 4) % 8192, (index / 4) / 8192));
+    switch (index % 4) {
+        case 0: return roi.x;
+        case 1: return roi.y;
+        case 2: return roi.z;
+        default: return roi.w;
+    }
+}
+
+unsigned int indexu(image2d_t img, int index) {
+    uint4 roi = read_imageui(img, indexSampler, (int2) ((index / 4) % 8192, (index / 4) / 8192));
+    switch (index % 4) {
+        case 0: return roi.x;
+        case 1: return roi.y;
+        case 2: return roi.z;
+        default: return roi.w;
+    }
 }
