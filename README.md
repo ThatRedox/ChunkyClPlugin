@@ -9,8 +9,11 @@ so render results may change drastically between versions.
 
 ## Installation
 
+### Note: The latest version requires at least snapshot `2.4.0-77-g55a3c929`
 Download the [latest plugin build](https://ci.wertarbyte.com/job/ChunkyCL/lastSuccessfulBuild/artifact/ChunkyCL.jar). In the Chunky Launcher, expand `Advanced Settings` and click on `Manage plugins`. In the `Plugin Manger` window click on `Add` and select the `.jar` file in the extracted
 zip file. Click on `Save` and start Chunky as usual.
+
+To download the latest snapshot, open `Advanced Settings` in the Chunky Launcher and enable `Download Snapshots`. Then click on the `Check for update` button.
 
 ### Performance
 
