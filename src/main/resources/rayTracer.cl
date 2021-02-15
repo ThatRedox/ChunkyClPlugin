@@ -15,7 +15,7 @@ int octreeRead(int index, image2d_t treeData);
 int inbounds(float o[3], int bounds);
 void exitBlock(float o[3], float d[3], float n[3], float *distance);
 void diffuseReflect(float d[3], float o[3], float n[3], unsigned int *state);
-int entityIntersect(float color[3], float o[3], float d[3], float n[3], float e[3], image2d_t entityData, image2d_t entityTrigs, image2d_t entityTextures);
+int entityIntersect(float color[3], float o[3], float d[3], float n[3], float e[3], float* tbest, image2d_t entityData, image2d_t entityTrigs, image2d_t entityTextures);
 int texturedTriangle(float color[3], float ro[3], float rd[3], float rn[3], float re[3], float* tbest, int index, image2d_t entityTrigs, image2d_t entityTextures);
 float aabbIntersect(float o[3], float d[3], float xmin, float xmax, float ymin, float ymax, float zmin, float zmax);
 int aabbInside(float o[3], float xmin, float xmax, float ymin, float ymax, float zmin, float zmax);
@@ -55,7 +55,6 @@ __kernel void rayTracer(__global const float *rayPos,
                         __global float *res)
 {
     int gid = get_global_id(0);
-    float distance = 0;
 
     // Initialize rng
     unsigned int rngState = *seed + gid;
@@ -106,61 +105,65 @@ __kernel void rayTracer(__global const float *rayPos,
     // Do the bounces
     for (int bounces = 0; bounces < maxbounces; bounces++)
     {
+        float os[3] = {o[0], o[1], o[2]};
+        float distance = 0;
         float color[3];
         float e[3] = {0};
         int hit = 0;
 
-        // BVH intersection
-        if (entityIntersect(color, o, d, n, e, entityData, entityTrigs, entityTextures)) {
-            hit = 2;
-        } else {
-            // Ray march
-            for (int i = 0; i < *drawDepth; i++) {
-                if (!intersect(octreeData, *depth, o[0], o[1], o[2], transparent, *transparentLength))
-                    exitBlock(o, d, n, &distance);
-                else
-                {
-                    hit = 1;
-                    break;
-                }
-
-                if (!inbounds(o, *depth))
-                    break;
-            }
-        }
-
-        // Set color to sky color (1, 1, 1) or texture color
-        // TODO: Implement Nishita sky
-        switch(hit) {
-            case 2: break;
-            case 1:
-                getTextureRay(color, o, n, e, octreeGet(o[0], o[1], o[2], *depth, octreeData), textures, blockData, grassTextures, foliageTextures, 1 << *depth);
+        // Ray march
+        for (int i = 0; i < *drawDepth; i++) {
+            if (!intersect(octreeData, *depth, o[0], o[1], o[2], transparent, *transparentLength))
+                exitBlock(o, d, n, &distance);
+            else {
+                hit = 1;
                 break;
-            default: {
-                float sunPosCopy[3] = {sunPos[0], sunPos[1], sunPos[2]};
-                calcSkyRay(d, color, e, skyTexture, sunPosCopy, *sunIntensity, textures, *sunIndex);
-
-                float sunScale = pow(*sunIntensity, 2.2f);
-
-                emittanceStack[bounces*3 + 0] = color[0] * sunScale;
-                emittanceStack[bounces*3 + 1] = color[1] * sunScale;
-                emittanceStack[bounces*3 + 2] = color[2] * sunScale;
-
-                emittanceStack[bounces*3 + 3] = color[0] * sunScale;
-                emittanceStack[bounces*3 + 4] = color[1] * sunScale;
-                emittanceStack[bounces*3 + 5] = color[2] * sunScale;
-
-                // Set color stack to sky color
-                for (int i = bounces; i < maxbounces; i++) {
-                    colorStack[bounces*3 + 0] = color[0];
-                    colorStack[bounces*3 + 1] = color[1];
-                    colorStack[bounces*3 + 2] = color[2];
-                }
             }
+
+            if (!inbounds(o, *depth))
+                break;
         }
 
-        if (hit == 0) {
-            // Exit on sky hit
+        // Set color to sky color or texture color
+        if (hit) {
+            getTextureRay(color, o, n, e, octreeGet(o[0], o[1], o[2], *depth, octreeData), textures, blockData, grassTextures, foliageTextures, 1 << *depth);
+        } else {
+            float sunPosCopy[3] = {sunPos[0], sunPos[1], sunPos[2]};
+            calcSkyRay(d, color, e, skyTexture, sunPosCopy, *sunIntensity, textures, *sunIndex);
+        }
+
+        // BVH intersection
+        if (entityIntersect(color, os, d, n, e, &distance, entityData, entityTrigs, entityTextures)) {
+            hit = 1;
+
+            os[0] += d[0] * distance;
+            os[1] += d[1] * distance;
+            os[2] += d[2] * distance;
+
+            o[0] = os[0];
+            o[1] = os[1];
+            o[2] = os[2];
+        }
+
+        // Exit on sky hit
+        if (!hit) {
+            float sunScale = pow(*sunIntensity, 2.2f);
+
+            emittanceStack[bounces*3 + 0] = color[0] * sunScale;
+            emittanceStack[bounces*3 + 1] = color[1] * sunScale;
+            emittanceStack[bounces*3 + 2] = color[2] * sunScale;
+
+            emittanceStack[bounces*3 + 3] = color[0] * sunScale;
+            emittanceStack[bounces*3 + 4] = color[1] * sunScale;
+            emittanceStack[bounces*3 + 5] = color[2] * sunScale;
+
+            // Set color stack to sky color
+            for (int i = bounces; i < maxbounces; i++) {
+                colorStack[bounces*3 + 0] = color[0];
+                colorStack[bounces*3 + 1] = color[1];
+                colorStack[bounces*3 + 2] = color[2];
+            }
+
             break;
         }
 
@@ -172,9 +175,6 @@ __kernel void rayTracer(__global const float *rayPos,
         emittanceStack[bounces*3 + 0] = e[0];
         emittanceStack[bounces*3 + 1] = e[1];
         emittanceStack[bounces*3 + 2] = e[2];
-
-        // Exit on sky-hit
-        if (!hit) break;
 
         // Calculate new diffuse reflection ray
         // TODO: Implement specular reflection
@@ -222,10 +222,9 @@ float nextFloat(unsigned int *state) {
     return (*state >> 8) / ((float) (1 << 24));
 }
 
-int entityIntersect(float color[3], float o[3], float d[3], float n[3], float e[3], image2d_t entityData, image2d_t entityTrigs, image2d_t entityTextures) {
+int entityIntersect(float color[3], float o[3], float d[3], float n[3], float e[3], float* tbest, image2d_t entityData, image2d_t entityTrigs, image2d_t entityTextures) {
     float xmin, xmax, ymin, ymax, zmin, zmax, temp;
     float size = indexf(entityData, 0);
-    float tbest = 1000000;
     int hit = 0;
 
     for (int i = 0; i < size; i++) {
@@ -247,7 +246,7 @@ int entityIntersect(float color[3], float o[3], float d[3], float n[3], float e[
             for (int j = 0; j < length; j++) {
                 switch ((int) indexf(entityTrigs, data + j*24)) {
                     case 0:
-                        if (texturedTriangle(color, o, d, n, e, &tbest, data + j*24, entityTrigs, entityTextures)) hit = 1;
+                        hit = texturedTriangle(color, o, d, n, e, tbest, data + j*24, entityTrigs, entityTextures) || hit;
                         break;
                 }
             }
@@ -675,7 +674,7 @@ int texturedTriangle(float color[3], float ro[3], float rd[3], float rn[3], floa
     t3 = (float2)(indexf(entityTrigs, index+17),
                   indexf(entityTrigs, index+18));
 
-    doubleSided = indexf(entityTrigs, index+19) == 0;
+    doubleSided = indexf(entityTrigs, index+19);
 
     float3 pvec, qvec, tvec;
 
