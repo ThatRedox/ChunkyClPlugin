@@ -1,5 +1,6 @@
 package chunkycl;
 
+import org.apache.commons.math3.util.FastMath;
 import se.llbit.chunky.renderer.scene.Scene;
 import se.llbit.log.Log;
 
@@ -23,7 +24,7 @@ public class RenderWorkerCl extends Thread {
                 // Wait for notification to start finalizing pixels
                 synchronized (jobManager) {
                     while (!jobManager.finalize && !jobManager.preview) {
-                        jobManager.wait();
+                        jobManager.wait(100);
                     }
                 }
 
@@ -52,7 +53,7 @@ public class RenderWorkerCl extends Thread {
                             jobTime /= 1000000.0;
 
                             synchronized (jobManager) {
-                                jobManager.wait((long) (jobTime / (manager.getCPULoad() / 100.0) - jobTime));
+                                jobManager.wait((long) FastMath.max(jobTime / (manager.getCPULoad() / 100.0) - jobTime, 1));
                             }
                         }
                     } catch (ArrayIndexOutOfBoundsException e) {
@@ -67,7 +68,7 @@ public class RenderWorkerCl extends Thread {
                     jobManager.notifyAll();
 
                     while (jobManager.preview) {
-                        jobManager.wait();
+                        jobManager.wait(100);
                     }
                 }
             }
