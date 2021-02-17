@@ -69,13 +69,6 @@ public class GpuRayTracer {
 
     private static String programSource;
 
-    enum SkyMode {
-        SKY,
-        NISHITA,
-        NISHITA_GPU,
-        PREETHAM
-    }
-
     @SuppressWarnings("deprecation")
     GpuRayTracer() {
         // The platform, device type and device number
@@ -218,7 +211,9 @@ public class GpuRayTracer {
             clReleaseMemObject(this.bvhTextures);
         }
 
-        renderTask.update("Loading Octree into GPU", 4, 0);
+        if (renderTask != null) {
+            renderTask.update("Loading Octree into GPU", 4, 0);
+        }
 
         // Obtain octree through reflection
         try {
@@ -266,7 +261,9 @@ public class GpuRayTracer {
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
                 Sizeof.cl_int, Pointer.to(new int[] {treeData.length}), null);
 
-        renderTask.update("Loading blocks into GPU", 4, 1);
+        if (renderTask != null) {
+            renderTask.update("Loading blocks into GPU", 4, 1);
+        }
 
         // Create transparent block table
         List<Integer> transparentList = new LinkedList<>();
@@ -306,7 +303,9 @@ public class GpuRayTracer {
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, Sizeof.cl_int,
                 Pointer.to(new int[] {transparent.length}), null);
 
-        renderTask.update("Loading Block Textures into GPU", 4, 2);
+        if (renderTask != null) {
+            renderTask.update("Loading Block Textures into GPU", 4, 2);
+        }
 
         // Load biome and foliage tinting
         // Fetch the textures with reflection
@@ -457,7 +456,9 @@ public class GpuRayTracer {
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
                 Sizeof.cl_int, Pointer.to(new int[] {sunIndex}), null);
 
-        renderTask.update("Loading BVH", 4, 3);
+        if (renderTask != null) {
+            renderTask.update("Loading BVH", 4, 3);
+        }
 
         LinkedList<Entity> entities = new LinkedList<>();
         entities.addAll(scene.getEntities());
@@ -506,32 +507,41 @@ public class GpuRayTracer {
 
         desc.image_type = CL_MEM_OBJECT_IMAGE2D;
         desc.image_width = 8192;
-        desc.image_height = entityArray.size() / 8192 + 1;
+        desc.image_height = entityArray.size() / 8192 / 4 + 1;
+
+        float[] entityArrayFloats = new float[(entityArray.size()/8192 + 1) * 8192];
+        entityArray.toArray(entityArrayFloats);
 
         this.entityData = clCreateImage(context,
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, format, desc,
-                Pointer.to(entityArray.toFloatArray()), null);
+                Pointer.to(entityArrayFloats), null);
 
-        desc.image_height = entityTrigs.size() / 8192 + 1;
+        desc.image_height = entityTrigs.size() / 8192 / 4 + 1;
+        float[] entityTrigsArray = new float[(entityTrigs.size()/8192 + 1) * 8192];
+        entityTrigs.toArray(entityTrigsArray);
 
         this.entityTrigs = clCreateImage(context,
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, format, desc,
-                Pointer.to(entityTrigs.toFloatArray()), null);
+                Pointer.to(entityTrigsArray), null);
 
         format.image_channel_data_type = CL_UNSIGNED_INT32;
         format.image_channel_order = CL_RGBA;
 
-        desc.image_height = entityTextures.size() / 8192 + 1;
+        desc.image_height = entityTextures.size() / 8192 / 4 + 1;
+        int[] entityTexturesArray = new int[(entityTextures.size()/8192 + 1) * 8192];
+        entityTextures.toArray(entityTexturesArray);
 
         this.bvhTextures = clCreateImage(context,
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, format, desc,
-                Pointer.to(entityTextures.toIntArray()), null);
+                Pointer.to(entityTexturesArray), null);
 
-        renderTask.update("Loading GPU", 4, 4);
+        if (renderTask != null) {
+            renderTask.update("Loading GPU", 4, 4);
+        }
     }
 
     /** Generate sky. If mode is true = Nishita, false = Preetham */
-    public void generateSky(SkyMode mode, Scene scene) {
+    public void generateSky(Scene scene) {
         Ray ray = new Ray();
         Sky sky = scene.sky();
 
@@ -574,7 +584,12 @@ public class GpuRayTracer {
                 Pointer.to(skyImage), 0, null, null);
     }
 
-    public float[] rayTrace(float[] rayDirs, Vector3 origin, int seed, int rayDepth, boolean preview, Sun sun, int drawDepth) {
+    public float[] rayTrace(float[] rayDirs, Vector3 origin, Random random, int rayDepth, boolean preview, Scene scene, int drawDepth) {
+        // Load if necessary
+        if (octreeData == null) {
+            load(scene, null);
+        }
+
         // Results array
         float[] rayRes = new float[rayDirs.length];
 
@@ -583,6 +598,7 @@ public class GpuRayTracer {
         rayPos[1] = (float) origin.y;
         rayPos[2] = (float) origin.z;
 
+        Sun sun = scene.sun();
         float[] sunPos = new float[3];
         sunPos[0] = (float) (FastMath.cos(sun.getAzimuth()) * FastMath.cos(sun.getAltitude()));
         sunPos[1] = (float) (FastMath.sin(sun.getAltitude()));
@@ -657,7 +673,7 @@ public class GpuRayTracer {
                     Pointer.to(rayDirs).withByteOffset(Sizeof.cl_float * index),
                     0, null, null);
             clEnqueueWriteBuffer(commandQueue, clSeed, CL_TRUE, 0, Sizeof.cl_int,
-                    Pointer.to(new int[] {seed + index/3}), 0, null, null);
+                    Pointer.to(new int[] {random.nextInt()}), 0, null, null);
 
             // Execute the program
             clEnqueueNDRangeKernel(commandQueue, kernel, 1, null, global_work_size,

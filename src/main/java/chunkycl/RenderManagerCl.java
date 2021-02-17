@@ -46,7 +46,6 @@ public class RenderManagerCl extends Thread implements Renderer {
     private TaskTracker.Task renderTask;
 
     private int drawDepth = 256;
-    private GpuRayTracer.SkyMode renderSky = GpuRayTracer.SkyMode.NISHITA;
 
     public static final GpuRayTracer intersectCl = new GpuRayTracer();
 
@@ -63,10 +62,6 @@ public class RenderManagerCl extends Thread implements Renderer {
         bufferedScene = context.getChunky().getSceneFactory().newScene();
 
         random = new Random(System.currentTimeMillis());
-    }
-
-    public void setRenderSky(GpuRayTracer.SkyMode mode) {
-        this.renderSky = mode;
     }
 
     public void setDrawDepth(int drawDepth) {
@@ -172,7 +167,7 @@ public class RenderManagerCl extends Thread implements Renderer {
                         if (reason.overwriteState()) {
                             bufferedScene.copyState(scene);
 
-                            intersectCl.generateSky(GpuRayTracer.SkyMode.SKY, bufferedScene);
+                            intersectCl.generateSky(bufferedScene);
                         }
                         if (reason == ResetReason.MATERIALS_CHANGED || reason == ResetReason.SCENE_LOADED) {
                             scene.importMaterials();
@@ -261,7 +256,7 @@ public class RenderManagerCl extends Thread implements Renderer {
         double[] samples = bufferedScene.getSampleBuffer();
 
         // Do the rendering
-        float[] depthmap = intersectCl.rayTrace(rayDirs, origin, random.nextInt(), 1, true, bufferedScene.sun(), drawDepth);
+        float[] depthmap = intersectCl.rayTrace(rayDirs, origin, random, 1, true, bufferedScene, drawDepth);
 
         for (int i = 0; i < depthmap.length; i++) {
             samples[i] = depthmap[i];
@@ -298,8 +293,6 @@ public class RenderManagerCl extends Thread implements Renderer {
 
         float[] rayDirs = new float[width * height * 3];
 
-        int rand = random.nextInt();
-
         Camera cam = bufferedScene.camera();
         Ray ray = new Ray();
 
@@ -313,7 +306,7 @@ public class RenderManagerCl extends Thread implements Renderer {
         }
 
         // Render sky
-        intersectCl.generateSky(renderSky, bufferedScene);
+        intersectCl.generateSky(bufferedScene);
 
         Vector3 origin = ray.o;
         origin.x -= bufferedScene.getOrigin().x;
@@ -335,8 +328,7 @@ public class RenderManagerCl extends Thread implements Renderer {
 
         for (int sample = bufferedScene.spp; sample < targetSpp; sample++) {
             // Do the rendering
-            float[] rendermap = intersectCl.rayTrace(rayDirs, origin, rand, bufferedScene.getRayDepth(), false, bufferedScene.sun(), drawDepth);
-            rand += intersectCl.batchSize;
+            float[] rendermap = intersectCl.rayTrace(rayDirs, origin, random, bufferedScene.getRayDepth(), false, bufferedScene, drawDepth);
 
             // Update the output buffer
             for (int i = 0; i < rendermap.length; i++) {
