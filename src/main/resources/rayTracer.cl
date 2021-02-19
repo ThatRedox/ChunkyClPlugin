@@ -17,11 +17,19 @@ void exitBlock(float o[3], float d[3], float n[3], float *distance);
 void diffuseReflect(float d[3], float o[3], float n[3], unsigned int *state);
 int entityIntersect(float color[3], float o[3], float d[3], float n[3], float e[3], float* tbest, image2d_t entityData, image2d_t entityTrigs, image2d_t entityTextures);
 int texturedTriangle(float color[3], float ro[3], float rd[3], float rn[3], float re[3], float* tbest, int index, image2d_t entityTrigs, image2d_t entityTextures);
-float aabbIntersect(float o[3], float d[3], float xmin, float xmax, float ymin, float ymax, float zmin, float zmax);
+int aabbIntersect(float o[3], float d[3], float xmin, float xmax, float ymin, float ymax, float zmin, float zmax);
+int aabbIntersectClose(float o[3], float d[3], float distance, float xmin, float xmax, float ymin, float ymax, float zmin, float zmax);
 int aabbInside(float o[3], float xmin, float xmax, float ymin, float ymax, float zmin, float zmax);
+
+// Texture read functions
 float indexf(image2d_t img, int index);
 int indexi(image2d_t img, int index);
 unsigned int indexu(image2d_t img, int index);
+
+// Texture read array functions
+void areadf(image2d_t img, int index, int length, float output[]);
+void areadi(image2d_t img, int index, int length, int output[]);
+void areadu(image2d_t img, int index, int length, unsigned int output[]);
 
 const sampler_t indexSampler = CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_NEAREST;
 
@@ -51,6 +59,7 @@ __kernel void rayTracer(__global const float *rayPos,
                         image2d_t entityData,
                         image2d_t entityTrigs,
                         image2d_t entityTextures,
+                        __global const int *drawEntities,
                         __global const int *drawDepth,
                         __global float *res)
 {
@@ -133,16 +142,18 @@ __kernel void rayTracer(__global const float *rayPos,
         }
 
         // BVH intersection
-        if (entityIntersect(color, os, d, n, e, &distance, entityData, entityTrigs, entityTextures)) {
-            hit = 1;
+        if (*drawEntities) {
+            if (entityIntersect(color, os, d, n, e, &distance, entityData, entityTrigs, entityTextures)) {
+                hit = 1;
 
-            os[0] += d[0] * distance;
-            os[1] += d[1] * distance;
-            os[2] += d[2] * distance;
+                os[0] += d[0] * distance;
+                os[1] += d[1] * distance;
+                os[2] += d[2] * distance;
 
-            o[0] = os[0];
-            o[1] = os[1];
-            o[2] = os[2];
+                o[0] = os[0];
+                o[1] = os[1];
+                o[2] = os[2];
+            }
         }
 
         // Exit on sky hit
@@ -224,33 +235,41 @@ float nextFloat(unsigned int *state) {
 
 int entityIntersect(float color[3], float o[3], float d[3], float n[3], float e[3], float* tbest, image2d_t entityData, image2d_t entityTrigs, image2d_t entityTextures) {
     float xmin, xmax, ymin, ymax, zmin, zmax;
-    float size = indexf(entityData, 0);
     int hit = 0;
 
-    for (int i = 0; i < size; i++) {
-        int data = i*7 + 1;
+    int toVisit = 0;
+    int currentNode = 0;
+    int nodesToVisit[64];
 
-        xmin = indexf(entityData, data+1);
-        xmax = indexf(entityData, data+2);
-        ymin = indexf(entityData, data+3);
-        ymax = indexf(entityData, data+4);
-        zmin = indexf(entityData, data+5);
-        zmax = indexf(entityData, data+6);
+    while (true) {
+        float node[8];
+        areadf(entityData, currentNode, 8, node);
 
-        if (aabbInside(o, xmin, xmax, ymin, ymax, zmin, zmax) ||
-            aabbIntersect(o, d, xmin, xmax, ymin, ymax, zmin, zmax)) {
-            data = indexf(entityData, data);
-            int length = indexf(entityTrigs, data);
-            data += 1;
+        if (aabbIntersectClose(o, d, *tbest, node[2], node[3], node[4], node[5], node[6], node[7])) {
+            if (node[0] <= 0) {
+                // Is leaf
+                int primIndex = -node[0];
+                int numPrim = node[1];
 
-            for (int j = 0; j < length; j++) {
-                int index = data + j * 30;
-                switch ((int) indexf(entityTrigs, index)) {
-                    case 0:
-                        hit = texturedTriangle(color, o, d, n, e, tbest, index, entityTrigs, entityTextures) || hit;
-                        break;
+                for (int i = 0; i < numPrim; i++) {
+                    int index = primIndex + i * 30;
+                    switch ((int) indexf(entityTrigs, index)) {
+                        case 0:
+                            if (texturedTriangle(color, o, d, n, e, tbest, index, entityTrigs, entityTextures))
+                                hit = 1;
+                            break;
+                    }
                 }
+
+                if (toVisit == 0) break;
+                currentNode = nodesToVisit[--toVisit];
+            } else {
+                nodesToVisit[toVisit++] = node[0];
+                currentNode = currentNode+8;
             }
+        } else {
+            if (toVisit == 0) break;
+            currentNode = nodesToVisit[--toVisit];
         }
     }
 
@@ -613,7 +632,9 @@ void normalize3(float a[3]) {
     a[2] /= length;
 }
 
-float aabbIntersect(float o[3], float d[3], float xmin, float xmax, float ymin, float ymax, float zmin, float zmax) {
+int aabbIntersect(float o[3], float d[3], float xmin, float xmax, float ymin, float ymax, float zmin, float zmax) {
+    if (aabbInside(o, xmin, xmax, ymin, ymax, zmin, zmax)) return 1;
+
     float rx = 1 / d[0];
     float ry = 1 / d[1];
     float rz = 1 / d[2];
@@ -633,6 +654,28 @@ float aabbIntersect(float o[3], float d[3], float xmin, float xmax, float ymin, 
     return tmin <= tmax+OFFSET && tmin >= 0;
 }
 
+int aabbIntersectClose(float o[3], float d[3], float distance, float xmin, float xmax, float ymin, float ymax, float zmin, float zmax) {
+    if (aabbInside(o, xmin, xmax, ymin, ymax, zmin, zmax)) return 1;
+
+    float rx = 1 / d[0];
+    float ry = 1 / d[1];
+    float rz = 1 / d[2];
+
+    float tx1 = (xmin - o[0]) * rx;
+    float tx2 = (xmax - o[0]) * rx;
+
+    float ty1 = (ymin - o[1]) * ry;
+    float ty2 = (ymax - o[1]) * ry;
+
+    float tz1 = (zmin - o[2]) * rz;
+    float tz2 = (zmax - o[2]) * rz;
+
+    float tmin = fmax(fmax(fmin(tx1, tx2), fmin(ty1, ty2)), fmin(tz1, tz2));
+    float tmax = fmin(fmin(fmax(tx1, tx2), fmax(ty1, ty2)), fmax(tz1, tz2));
+
+    return tmin <= tmax+OFFSET && tmin >= 0 && tmin <= distance;
+}
+
 int aabbInside(float o[3], float xmin, float xmax, float ymin, float ymax, float zmin, float zmax) {
     return o[0] >= xmin && o[0] <= xmax &&
            o[1] >= ymin && o[1] <= ymax &&
@@ -643,48 +686,33 @@ int texturedTriangle(float color[3], float ro[3], float rd[3], float rn[3], floa
     if (indexf(entityTrigs, index) != 0) return 0;  // Not textured triangle why was this even called?
 
     // Check aabb
-    float xmin, xmax, ymin, ymax, zmin, zmax;
-    xmin = indexf(entityTrigs, index+1);
-    xmax = indexf(entityTrigs, index+2);
-    ymin = indexf(entityTrigs, index+3);
-    ymax = indexf(entityTrigs, index+4);
-    zmin = indexf(entityTrigs, index+5);
-    zmax = indexf(entityTrigs, index+6);
+    float aabb[6];
+    areadf(entityTrigs, index+1, 6, aabb);
 
-    if (!aabbInside(ro, xmin, xmax, ymin, ymax, zmin, zmax) &&
-        !aabbIntersect(ro, rd, xmin, xmax, ymin, ymax, zmin, zmax))
-        return 0;   // Does not intersect
+    if (!aabbIntersectClose(ro, rd, *tbest, aabb[0], aabb[1], aabb[2], aabb[3], aabb[4], aabb[5])) return 0;   // Does not intersect
 
     float3 e1, e2, o, n;
     float2 t1, t2, t3;
     int doubleSided;
 
-    e1 = (float3)(indexf(entityTrigs, index+7),
-                  indexf(entityTrigs, index+8),
-                  indexf(entityTrigs, index+9));
+    float trig[19];
+    areadf(entityTrigs, index+7, 19, trig);
 
-    e2 = (float3)(indexf(entityTrigs, index+10),
-                  indexf(entityTrigs, index+11),
-                  indexf(entityTrigs, index+12));
+    e1 = (float3)(trig[0], trig[1], trig[2]);
 
-    o = (float3)(indexf(entityTrigs, index+13),
-                 indexf(entityTrigs, index+14),
-                 indexf(entityTrigs, index+15));
+    e2 = (float3)(trig[3], trig[4], trig[5]);
 
-    n = (float3)(indexf(entityTrigs, index+16),
-                 indexf(entityTrigs, index+17),
-                 indexf(entityTrigs, index+18));
+    o = (float3)(trig[6], trig[7], trig[8]);
 
-    t1 = (float2)(indexf(entityTrigs, index+19),
-                  indexf(entityTrigs, index+20));
+    n = (float3)(trig[9], trig[10], trig[11]);
 
-    t2 = (float2)(indexf(entityTrigs, index+21),
-                  indexf(entityTrigs, index+22));
+    t1 = (float2)(trig[12], trig[13]);
 
-    t3 = (float2)(indexf(entityTrigs, index+23),
-                  indexf(entityTrigs, index+24));
+    t2 = (float2)(trig[14], trig[15]);
 
-    doubleSided = indexf(entityTrigs, index+25);
+    t3 = (float2)(trig[16], trig[17]);
+
+    doubleSided = trig[18];
 
     float3 pvec, qvec, tvec;
 
@@ -716,14 +744,17 @@ int texturedTriangle(float color[3], float ro[3], float rd[3], float rn[3], floa
         float2 uv = (float2) (t1.x * u + t2.x * v + t3.x * w,
                               t1.y * u + t2.y * v + t3.y * w);
 
-        float width = indexf(entityTrigs, index+26);
-        float height = indexf(entityTrigs, index+27);
+        float tex[4];
+        areadf(entityTrigs, index+26, 4, tex);
+
+        float width = tex[0];
+        float height = tex[1];
 
         int x = uv.x * width - EPS;
         int y = (1 - uv.y) * height - EPS;
 
-        unsigned int argb = indexu(entityTextures, width*y + x + indexf(entityTrigs, index+29));
-        float emittance = indexf(entityTrigs, index+28);
+        unsigned int argb = indexu(entityTextures, width*y + x + tex[3]);
+        float emittance = tex[2];
 
         if ((0xFF & (argb >> 24)) > 0) {
             *tbest = t;
@@ -774,5 +805,56 @@ unsigned int indexu(image2d_t img, int index) {
         case 1: return roi.y;
         case 2: return roi.z;
         default: return roi.w;
+    }
+}
+
+void areadf(image2d_t img, int index, int length, float output[]) {
+    float4 roi = read_imagef(img, indexSampler, (int2) ((index / 4) % 8192, (index / 4) / 8192));
+    for (int i = 0; i < length; i++) {
+        if ((index + i) % 4 == 0 && i != 0) {
+            index += 4;
+            roi = read_imagef(img, indexSampler, (int2) ((index / 4) % 8192, (index / 4) / 8192));
+        }
+
+        switch ((index + i) % 4) {
+            case 0: output[i] = roi.x; break;
+            case 1: output[i] = roi.y; break;
+            case 2: output[i] = roi.z; break;
+            default: output[i] = roi.w; break;
+        }
+    }
+}
+
+void areadi(image2d_t img, int index, int length, int output[]) {
+    int4 roi = read_imagei(img, indexSampler, (int2) ((index / 4) % 8192, (index / 4) / 8192));
+    for (int i = 0; i < length; i++) {
+        if ((index + i) % 4 == 0 && i != 0) {
+            index += 4;
+            roi = read_imagei(img, indexSampler, (int2) ((index / 4) % 8192, (index / 4) / 8192));
+        }
+
+        switch ((index + i) % 4) {
+            case 0: output[i] = roi.x; break;
+            case 1: output[i] = roi.y; break;
+            case 2: output[i] = roi.z; break;
+            default: output[i] = roi.w; break;
+        }
+    }
+}
+
+void areadu(image2d_t img, int index, int length, unsigned int output[]) {
+    uint4 roi = read_imageui(img, indexSampler, (int2) ((index / 4) % 8192, (index / 4) / 8192));
+    for (int i = 0; i < length; i++) {
+        if ((index + i) % 4 == 0 && i != 0) {
+            index += 4;
+            roi = read_imageui(img, indexSampler, (int2) ((index / 4) % 8192, (index / 4) / 8192));
+        }
+
+        switch ((index + i) % 4) {
+            case 0: output[i] = roi.x; break;
+            case 1: output[i] = roi.y; break;
+            case 2: output[i] = roi.z; break;
+            default: output[i] = roi.w; break;
+        }
     }
 }

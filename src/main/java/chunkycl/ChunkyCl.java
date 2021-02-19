@@ -61,6 +61,32 @@ public class ChunkyCl implements Plugin {
 
                     // Add draw depth adjuster after ray depth
                     ((VBox) ((AdvancedTab) tab).getContent()).getChildren().add(4, drawDepthAdjuster);
+
+                    CheckBox drawEntitiesCheckBox = new CheckBox("Draw Entities");
+                    drawEntitiesCheckBox.setTooltip(new Tooltip("Draw entities, disabling may improve performance."));
+                    drawEntitiesCheckBox.setSelected(true);
+                    drawEntitiesCheckBox.selectedProperty().addListener((observable, oldValue, newValue) -> {
+                        RenderController controller;
+
+                        // Get the render controller through reflection
+                        try {
+                            Field controllerField = tab.getClass().getDeclaredField("controller");
+                            controllerField.setAccessible(true);
+                            controller = (RenderController) controllerField.get(tab);
+                        } catch (NoSuchFieldException | IllegalAccessException e) {
+                            e.printStackTrace();
+                            return;
+                        }
+
+                        // Set drawEntities
+                        ((RenderManagerCl) controller.getRenderer()).setDrawEntities(newValue);
+
+                        // Force refresh
+                        controller.getSceneManager().getScene().refresh();
+                    });
+
+                    // Add drawEntities after draw depth
+                    ((VBox) ((AdvancedTab) tab).getContent()).getChildren().add(5, drawEntitiesCheckBox);
                 }
             }
 

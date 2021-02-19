@@ -17,7 +17,6 @@ import java.util.*;
 
 import se.llbit.chunky.block.Block;
 import se.llbit.chunky.chunk.BlockPalette;
-import se.llbit.chunky.entity.Entity;
 import se.llbit.chunky.renderer.scene.*;
 import se.llbit.chunky.resources.Texture;
 import se.llbit.chunky.world.Material;
@@ -460,47 +459,37 @@ public class GpuRayTracer {
             renderTask.update("Loading BVH", 4, 3);
         }
 
-        LinkedList<Entity> entities = new LinkedList<>();
-        entities.addAll(scene.getEntities());
-        entities.addAll(scene.getActors());
+        BVH mainBvh, actorBvh;
+        try {
+            Field mainBvhField = scene.getClass().getDeclaredField("bvh");
+            mainBvhField.setAccessible(true);
+            mainBvh = (BVH) mainBvhField.get(scene);
+
+            Field actorBvhField = scene.getClass().getDeclaredField("actorBvh");
+            actorBvhField.setAccessible(true);
+            actorBvh = (BVH) actorBvhField.get(scene);
+        } catch (IllegalAccessException | NoSuchFieldException e) {
+            e.printStackTrace();
+            return;
+        }
 
         FloatArrayList entityArray = new FloatArrayList();
         FloatArrayList entityTrigs = new FloatArrayList();
         IntArrayList entityTextures = new IntArrayList();
         Map<Material, Integer> materialIndexes = new IdentityHashMap<>();
 
-        entityArray.add(entities.size());
+        entityArray.add(0); // Second child index
+        entityArray.add(0); // 0 primitives
+        packAabb(new AABB(FastMath.min(mainBvh.getRoot().bb.xmin, actorBvh.getRoot().bb.xmin),
+                          FastMath.max(mainBvh.getRoot().bb.xmax, actorBvh.getRoot().bb.xmax),
+                          FastMath.min(mainBvh.getRoot().bb.ymin, actorBvh.getRoot().bb.ymin),
+                          FastMath.max(mainBvh.getRoot().bb.ymax, actorBvh.getRoot().bb.ymax),
+                          FastMath.min(mainBvh.getRoot().bb.zmin, actorBvh.getRoot().bb.zmin),
+                          FastMath.max(mainBvh.getRoot().bb.zmax, actorBvh.getRoot().bb.zmax)), entityArray);
 
-        Vector3 offset = new Vector3(-scene.getOrigin().x, -scene.getOrigin().y, -scene.getOrigin().z);
-        for (Entity entity : entities) {
-            Collection<Primitive> primitiveCollection = entity.primitives(offset);
-            Primitive[] primitives = new Primitive[primitiveCollection.size()];
-            primitiveCollection.toArray(primitives);
-
-            AABB box = primitives[0].bounds();
-            box = new AABB(box.xmin, box.xmax, box.ymin, box.ymax, box.zmin, box.zmax);
-
-            for (Primitive prim : primitives) {
-                AABB bound = prim.bounds();
-
-                box.xmin = FastMath.min(box.xmin, bound.xmin);
-                box.xmax = FastMath.max(box.xmax, bound.xmax);
-                box.ymin = FastMath.min(box.ymin, bound.ymin);
-                box.ymax = FastMath.max(box.ymax, bound.ymax);
-                box.zmin = FastMath.min(box.zmin, bound.zmin);
-                box.zmax = FastMath.max(box.zmax, bound.zmax);
-            }
-
-            entityArray.add(entityTrigs.size());
-            entityArray.add((float) box.xmin);
-            entityArray.add((float) box.xmax);
-            entityArray.add((float) box.ymin);
-            entityArray.add((float) box.ymax);
-            entityArray.add((float) box.zmin);
-            entityArray.add((float) box.zmax);
-
-            packPrimitives(primitives, entityTrigs, entityTextures, materialIndexes);
-        }
+        packBvh(mainBvh.getRoot(), entityArray, entityTrigs, entityTextures, materialIndexes);
+        entityArray.set(0, entityArray.size());
+        packBvh(actorBvh.getRoot(), entityArray, entityTrigs, entityTextures, materialIndexes);
 
         format.image_channel_data_type = CL_FLOAT;
         format.image_channel_order = CL_RGBA;
@@ -584,7 +573,7 @@ public class GpuRayTracer {
                 Pointer.to(skyImage), 0, null, null);
     }
 
-    public float[] rayTrace(float[] rayDirs, Vector3 origin, Random random, int rayDepth, boolean preview, Scene scene, int drawDepth) {
+    public float[] rayTrace(float[] rayDirs, Vector3 origin, Random random, int rayDepth, boolean preview, Scene scene, int drawDepth, boolean drawEntities) {
         // Load if necessary
         if (octreeData == null) {
             load(scene, null);
@@ -625,6 +614,9 @@ public class GpuRayTracer {
         cl_mem clDrawDepth = clCreateBuffer(context,
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
                 Sizeof.cl_int, Pointer.to(new int[] {drawDepth}), null);
+        cl_mem clDrawEntities = clCreateBuffer(context,
+                CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+                Sizeof.cl_int, Pointer.to(new int[] {drawEntities ? 1 : 0}), null);
 
         // Batching arguments
         cl_mem clNormCoords = clCreateBuffer(context,
@@ -656,8 +648,9 @@ public class GpuRayTracer {
         clSetKernelArg(kernel, 18, Sizeof.cl_mem, Pointer.to(entityData));
         clSetKernelArg(kernel, 19, Sizeof.cl_mem, Pointer.to(entityTrigs));
         clSetKernelArg(kernel, 20, Sizeof.cl_mem, Pointer.to(bvhTextures));
-        clSetKernelArg(kernel, 21, Sizeof.cl_mem, Pointer.to(clDrawDepth));
-        clSetKernelArg(kernel, 22, Sizeof.cl_mem, Pointer.to(clRayRes));
+        clSetKernelArg(kernel, 21, Sizeof.cl_mem, Pointer.to(clDrawEntities));
+        clSetKernelArg(kernel, 22, Sizeof.cl_mem, Pointer.to(clDrawDepth));
+        clSetKernelArg(kernel, 23, Sizeof.cl_mem, Pointer.to(clRayRes));
 
         // Work size = rays
         long[] global_work_size = new long[]{batchSize};
@@ -704,12 +697,29 @@ public class GpuRayTracer {
         return rayRes;
     }
 
-    private void packPrimitives(Primitive[] primitives, FloatArrayList trigs, IntArrayList textures, Map<Material, Integer> indexes) {
-        int index = trigs.size();
-        trigs.add(0);
+    private void packBvh(BVH.Node node, FloatArrayList data, FloatArrayList trigs, IntArrayList textures, Map<Material, Integer> indexes) {
+        int index = data.size();
+        data.add(0);    // Next node/primitive location
+        data.add(0);    // Num primitives
+        packAabb(node.bb, data);
 
+        if (node instanceof BVH.Group) {
+            data.set(index + 1, 0);         // No primitives
+            packBvh(((BVH.Group) node).child1, data, trigs, textures, indexes); // First child
+            data.set(index, data.size());   // Second child
+            packBvh(((BVH.Group) node).child2, data, trigs, textures, indexes);
+        } else if (node instanceof  BVH.Leaf) {
+            Primitive[] primitives = node.primitives;
+            data.set(index + 1, primitives.length);
+            data.set(index, -trigs.size()); // Primitives index (*-1) to reduce array lookup
+            packPrimitives(primitives, trigs, textures, indexes);
+        } else if (node == null) {
+            data.set(index, index+8);
+        }
+    }
+
+    private void packPrimitives(Primitive[] primitives, FloatArrayList trigs, IntArrayList textures, Map<Material, Integer> indexes) {
         for (Primitive prim : primitives) {
-            trigs.set(index, trigs.getFloat(index) + 1);
             if (prim instanceof TexturedTriangle) {
                 TexturedTriangle triangle = (TexturedTriangle) prim;
                 trigs.add(0);   // Textured triangle = ID 0
