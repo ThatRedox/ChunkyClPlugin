@@ -4,7 +4,6 @@ import se.llbit.chunky.PersistentSettings;
 import se.llbit.chunky.renderer.*;
 import se.llbit.chunky.renderer.scene.Camera;
 import se.llbit.chunky.renderer.scene.Scene;
-import se.llbit.chunky.renderer.scene.Sun;
 import se.llbit.chunky.resources.BitmapImage;
 import se.llbit.log.Log;
 import se.llbit.math.Ray;
@@ -19,11 +18,10 @@ public class RenderManagerCl extends Thread implements Renderer {
     private static final Repaintable EMPTY_CANVAS = () -> {};
     private Repaintable canvas = EMPTY_CANVAS;
 
-    private Thread[] workers = {};
+    private Finalizer finalizer;
     private final Scene bufferedScene;
     private final boolean headless;
     private int numThreads;
-    private JobManager jobManager;
 
     private RenderMode mode = RenderMode.PREVIEW;
 
@@ -54,7 +52,7 @@ public class RenderManagerCl extends Thread implements Renderer {
 
         numThreads = context.numRenderThreads();
         cpuLoad = PersistentSettings.getCPULoad();
-        this.jobManager = new JobManager();
+        finalizer = new Finalizer(this);
 
         this.context = context;
 
@@ -70,10 +68,6 @@ public class RenderManagerCl extends Thread implements Renderer {
 
     public int getNumThreads() {
         return numThreads;
-    }
-
-    public JobManager getJobManager() {
-        return jobManager;
     }
 
     @Override public void setSceneProvider(SceneProvider sceneProvider) {
@@ -153,12 +147,6 @@ public class RenderManagerCl extends Thread implements Renderer {
 
     @Override public void run() {
         try {
-            workers = new Thread[numThreads];
-            for (int i = 0; i < numThreads; i++) {
-                workers[i] = new RenderWorkerCl(this, i);
-                workers[i].start();
-            }
-
             while (!isInterrupted()) {
                 ResetReason reason = sceneProvider.awaitSceneStateChange();
 
@@ -198,12 +186,6 @@ public class RenderManagerCl extends Thread implements Renderer {
                     previewRender();
 
                     renderTask.update("Preview", 1, 1, "");
-
-                    synchronized (bufferedScene) {
-                        bufferedScene.swapBuffers();
-                    }
-
-                    canvas.repaint();
                 } else {
                     System.out.println("Rendering");
 
@@ -263,22 +245,9 @@ public class RenderManagerCl extends Thread implements Renderer {
         }
 
         // Tell worker threads to finalize all pixels and exit
-        synchronized (jobManager) {
-            jobManager.count = 0;
-            jobManager.finalize = false;
-            jobManager.preview = true;
-            jobManager.notifyAll();
-        }
-
-        // Wait for worker threads to finish
-        synchronized (jobManager) {
-            while (jobManager.count != numThreads) {
-                jobManager.wait();
-            }
-
-            jobManager.preview = false;
-            jobManager.notifyAll();
-        }
+        finalizer.finalizeOnce();
+        bufferedScene.swapBuffers();
+        canvas.repaint();
     }
 
     private void finalRenderer(int targetSpp, TaskTracker.Task renderTask) throws InterruptedException {
@@ -319,12 +288,7 @@ public class RenderManagerCl extends Thread implements Renderer {
         long updateTime = startTime;
 
         // Tell the render workers to continuously finalize all pixels
-        synchronized (jobManager) {
-            jobManager.count = 0;
-            jobManager.finalize = true;
-            jobManager.preview = true;
-            jobManager.notifyAll();
-        }
+        finalizer.finalizeSoon();
 
         for (int sample = bufferedScene.spp; sample < targetSpp; sample++) {
             // Do the rendering
@@ -341,8 +305,12 @@ public class RenderManagerCl extends Thread implements Renderer {
             updateRenderProgress();
 
             // Update the screen
-            bufferedScene.swapBuffers();
-            canvas.repaint();
+            if (!finalizer.isFinalizing()) {
+                bufferedScene.swapBuffers();
+                canvas.repaint();
+
+                finalizer.finalizeSoon();
+            }
 
             // Update frame complete listener
             if (sample % 32 == 0 || System.currentTimeMillis() > updateTime + 1000) {
@@ -356,19 +324,8 @@ public class RenderManagerCl extends Thread implements Renderer {
             }
         }
 
-        // Tell render workers to stop finalizing pixels
-        synchronized (jobManager) {
-            jobManager.count = 0;
-            jobManager.finalize = false;
-            jobManager.notifyAll();
-
-            while (jobManager.count != numThreads) {
-                jobManager.wait();
-            }
-
-            jobManager.preview = false;
-            jobManager.notifyAll();
-        }
+        // Wait for render workers to finish
+        finalizer.stopNow();
 
         // Ensure finalization
         for (int i = 0; i < width; i++) {
@@ -416,11 +373,5 @@ public class RenderManagerCl extends Thread implements Renderer {
         long pixelsPerFrame = (long) canvasWidth * canvasHeight;
         double renderTime = bufferedScene.renderTime / 1000.0;
         return (int) ((bufferedScene.spp * pixelsPerFrame) / renderTime);
-    }
-
-    public class JobManager {
-        public boolean finalize = false;
-        public boolean preview = false;
-        public int count = 0;
     }
 }
