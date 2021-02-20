@@ -1,5 +1,5 @@
 
-![Build](https://ci.wertarbyte.com/job/ChunkyCL/lastBuild/badge/icon?style=flat-square)
+[![Java CI with Gradle](https://github.com/alexhliu/ChunkyClPlugin/actions/workflows/gradle.yml/badge.svg?branch=master)](https://github.com/alexhliu/ChunkyClPlugin/actions/workflows/gradle.yml)
 
 # ChunkyCL
 

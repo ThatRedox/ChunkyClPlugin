@@ -3,6 +3,6 @@
   "author": "alexhliu",
   "main": "chunkycl.ChunkyCl",
   "version": "0.1",
-  "targetVersion": "2.3.0",
+  "targetVersion": "2.4.0",
   "description": "OpenCL rendering for Chunky."
 }
