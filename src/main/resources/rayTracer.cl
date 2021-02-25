@@ -8,7 +8,7 @@ void normalize3(float a[3]);
 void calcSkyRay(float direction[3], float color[3], float e[3], image2d_t skyTexture, float sunPos[3], float sunIntensity, image2d_t textures, int sunIndex);
 void sunIntersect(float direction[3], float color[3], float e[3], float sunPos[3], image2d_t textures, int sunIndex);
 
-void getTextureRay(float color[3], float o[3], float n[3], float e[3], int block, image2d_t textures, image1d_t blockData, image2d_t grassTextures, image2d_t foliageTextures, int bounds);
+void getTextureRay(float color[4], float o[3], float n[3], float e[3], int block, image2d_t textures, image1d_t blockData, image2d_t grassTextures, image2d_t foliageTextures, int bounds);
 int intersect(image2d_t octreeData, int depth, int x, int y, int z, __global const int *transparent, int transparentLength);
 int octreeGet(int x, int y, int z, int bounds, image2d_t treeData);
 int octreeRead(int index, image2d_t treeData);
@@ -110,13 +110,14 @@ __kernel void rayTracer(__global const float *rayPos,
     // Ray bounce data stacks
     float colorStack[3 * 24] = {0};
     float emittanceStack[3 * 24] = {0};
+    int typeStack[24];
 
     // Do the bounces
     for (int bounces = 0; bounces < maxbounces; bounces++)
     {
         float os[3] = {o[0], o[1], o[2]};
         float distance = 0;
-        float color[3];
+        float color[4];
         float e[3] = {0};
         int hit = 0;
 
@@ -187,9 +188,20 @@ __kernel void rayTracer(__global const float *rayPos,
         emittanceStack[bounces*3 + 1] = e[1];
         emittanceStack[bounces*3 + 2] = e[2];
 
-        // Calculate new diffuse reflection ray
-        // TODO: Implement specular reflection
-        diffuseReflect(d, o, n, random);
+        if (*preview) {
+            // No need for ray bounce for preview
+            break;
+        } else if (nextFloat(random) <= color[3]) {
+            // Diffuse reflection
+            diffuseReflect(d, o, n, random);
+            typeStack[bounces] = 0;
+        } else {
+            // Transmission
+            colorStack[bounces*3 + 0] = color[0] * color[3] + (1 - color[3]);
+            colorStack[bounces*3 + 1] = color[1] * color[3] + (1 - color[3]);
+            colorStack[bounces*3 + 2] = color[2] * color[3] + (1 - color[3]);
+            typeStack[bounces] = 1;
+        }
         exitBlock(o, d, junk, &distance);
     }
 
@@ -205,9 +217,20 @@ __kernel void rayTracer(__global const float *rayPos,
         // rendering shading = accumulate over all bounces
         // TODO: implement specular shading
         for (int i = maxbounces - 1; i >= 0; i--) {
-            colorStack[i*3 + 0] *= colorStack[i*3 + 3] + emittanceStack[i*3 + 3];
-            colorStack[i*3 + 1] *= colorStack[i*3 + 4] + emittanceStack[i*3 + 4];
-            colorStack[i*3 + 2] *= colorStack[i*3 + 5] + emittanceStack[i*3 + 5];
+            switch (typeStack[i]) {
+                case 0:
+                    // Diffuse reflection
+                    colorStack[i*3 + 0] *= colorStack[i*3 + 3] + emittanceStack[i*3 + 3];
+                    colorStack[i*3 + 1] *= colorStack[i*3 + 4] + emittanceStack[i*3 + 4];
+                    colorStack[i*3 + 2] *= colorStack[i*3 + 5] + emittanceStack[i*3 + 5];
+                    break;
+                case 1:
+                    // Transmission
+                    colorStack[i*3 + 0] *= colorStack[i*3 + 3];
+                    colorStack[i*3 + 1] *= colorStack[i*3 + 4];
+                    colorStack[i*3 + 2] *= colorStack[i*3 + 5];
+                    break;
+            }
         }
     }
 
@@ -322,10 +345,11 @@ void diffuseReflect(float d[3], float o[3], float n[3], unsigned int *state) {
 }
 
 // Calculate the texture value of a ray
-void getTextureRay(float color[3], float o[3], float n[3], float e[3], int block, image2d_t textures, image1d_t blockData, image2d_t grassTextures, image2d_t foliageTextures, int bounds) {
+void getTextureRay(float color[4], float o[3], float n[3], float e[3], int block, image2d_t textures, image1d_t blockData, image2d_t grassTextures, image2d_t foliageTextures, int bounds) {
     sampler_t imageSampler = CLK_NORMALIZED_COORDS_FALSE |
                              CLK_ADDRESS_CLAMP_TO_EDGE |
                              CLK_FILTER_NEAREST;
+
     // Block data
     int4 blockD = read_imagei(blockData, imageSampler, block);
 
@@ -359,27 +383,13 @@ void getTextureRay(float color[3], float o[3], float n[3], float e[3], int block
     index += 16 * (int) v + (int) u;
 
     // Lookup texture value
-    uint4 texturePixels = read_imageui(textures, imageSampler, (int2) ((index / 4) % 8192, (index / 4) / 8192));
-    unsigned int argb;
-
-    switch (index % 4) {
-        case 0:
-            argb = texturePixels.x;
-            break;
-        case 1:
-            argb = texturePixels.y;
-            break;
-        case 2:
-            argb = texturePixels.z;
-            break;
-        default:
-            argb = texturePixels.w;
-    }
+    unsigned int argb = indexu(textures, index);
 
     // Separate ARGB value
     color[0] = (0xFF & (argb >> 16)) / 256.0;
     color[1] = (0xFF & (argb >> 8 )) / 256.0;
     color[2] = (0xFF & (argb >> 0 )) / 256.0;
+    color[3] = (0xFF & (argb >> 24)) / 256.0;
 
     // Calculate tint
     if (blockD.w != 0) {
