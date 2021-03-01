@@ -2,7 +2,7 @@
 #define OFFSET 0.0001f   // TODO: refine these values?
 
 // General arguments. Remove unnecessary arguments and add extra arguments in <data>:
-// float3 *origin, float3 *direction, float3 *normal, float4 *color, float3 *emittance, float *distance, <data>, unsigned int *random
+// float3 *origin, float3 *direction, float3 *normal, float4 *color, float3 *emittance, float *dist, <data>, unsigned int *random
 // Data should be grouped logically ie. if the octree is passed, (image2d_t) octreeData, (int) depth
 // All mutable vectors should be pointers, even if the current function does not need to modify it
 
@@ -11,17 +11,17 @@ void calcSkyRay(float3 *direction, float4 *color, float3 *emittance, image2d_t s
 void sunIntersect(float3 *direction, float4 *color, float3 *emittance, float3 sunPos, image2d_t textures, int sunIndex);
 
 // Octree calculations
+int octreeIntersect(float3 *origin, float3 *direction, float3 *normal, float4 *color, float3 *emittance, float *dist, int drawDepth, image2d_t octreeData, int depth, __global const int *transparent, int transparentLength, image2d_t textures, image1d_t blockData, image2d_t grassTextures, image2d_t foliageTextures);
 void getTextureRay(float3 *origin, float3 *normal, float4 *color, float3 *emittance, int block, image2d_t textures, image1d_t blockData, image2d_t grassTextures, image2d_t foliageTextures, int depth);
-int octreeIntersect(float3 *origin, image2d_t octreeData, int depth, __global const int *transparent, int transparentLength);
 int octreeGet(float3 *origin, image2d_t octreeData, int depth);
 int octreeInbounds(float3 *origin, int depth);
-void exitBlock(float3 *origin, float3 *direction, float3 *normal, float *distance);
+void exitBlock(float3 *origin, float3 *direction, float3 *normal, float *dist);
 
 // Entity calculations
-int entityIntersect(float3 *origin, float3 *direction, float3 *normal, float4 *color, float3 *emittance, float *distance, image2d_t entityData, image2d_t entityTrigs, image2d_t entityTextures);
-int texturedTriangleIntersect(float3 *origin, float3 *direction, float3 *normal, float4 *color, float3 *emittance, float *distance, int index, image2d_t entityTrigs, image2d_t entityTextures);
+int entityIntersect(float3 *origin, float3 *direction, float3 *normal, float4 *color, float3 *emittance, float *dist, image2d_t entityData, image2d_t entityTrigs, image2d_t entityTextures);
+int texturedTriangleIntersect(float3 *origin, float3 *direction, float3 *normal, float4 *color, float3 *emittance, float *dist, int index, image2d_t entityTrigs, image2d_t entityTextures);
 int aabbIntersect(float3 *origin, float3 *direction, float bounds[6]);
-int aabbIntersectClose(float3 *origin, float3 *direction, float *distance, float bounds[6]);
+int aabbIntersectClose(float3 *origin, float3 *direction, float *dist, float bounds[6]);
 int aabbInside(float3 *origin, float bounds[6]);
 
 // Reflection calculations
@@ -98,18 +98,6 @@ __kernel void rayTracer(__global const float *rayPos,
     // temp array
     float3 temp;
 
-    // Jitter each ray randomly
-    // TODO: Pass the jitter amount as an argument?
-    temp = (float3) (rayDir[gid*3 + 3], rayDir[gid*3 + 4], rayDir[gid*3 + 5]);
-    temp -= direction;
-
-    float jitter = length(temp);
-
-    direction.x += nextFloat(random) * jitter;
-    direction.y += nextFloat(random) * jitter;
-    direction.z += nextFloat(random) * jitter;
-    direction = normalize(direction);
-
     // Cap max bounces at 23 since no dynamic memory allocation
     int maxbounces = *rayDepth;
     if (maxbounces > 23) maxbounces = 23;
@@ -120,66 +108,44 @@ __kernel void rayTracer(__global const float *rayPos,
     int typeStack[24];
 
     // Do the bounces
-    float distance = 0;
-    for (int bounces = 0; bounces < maxbounces; bounces++)
-    {
-        float3 originStart = (float3) (origin.x, origin.y, origin.z);
+    for (int bounces = 0; bounces < maxbounces; bounces++) {
+        float dist = 1000000;
+
+        direction = normalize(direction);
+
         int hit = 0;
         float4 color = (float4) (0, 0, 0, 1);
         float3 emittance = (float3) (0, 0, 0);
 
         // Ray march
-        for (int i = 0; i < *drawDepth; i++) {
-            if (!octreeIntersect(&origin, octreeData, *depth, transparent, *transparentLength))
-                exitBlock(&origin, &direction, &normal, &distance);
-            else {
-                hit = 1;
-                break;
-            }
-
-            if (!octreeInbounds(&origin, *depth))
-                break;
-        }
-
-        // Set color to sky color or texture color
-        if (hit) {
-            int block = octreeGet(&origin, octreeData, *depth);
-            getTextureRay(&origin, &normal, &color, &emittance, block, textures, blockData, grassTextures, foliageTextures, *depth);
-        } else {
-            calcSkyRay(&direction, &color, &emittance, skyTexture, sunPosition, *sunIntensity, textures, *sunIndex);
-        }
+        hit = octreeIntersect(&origin, &direction, &normal, &color, &emittance, &dist, *drawDepth, octreeData, *depth, transparent, *transparentLength, textures, blockData, grassTextures, foliageTextures);
 
         // BVH intersection
         if (*drawEntities) {
-            if (entityIntersect(&origin, &direction, &normal, &color, &emittance, &distance, entityData, entityTrigs, entityTextures)) {
-                hit = 1;
-
-                origin = originStart;
-                origin += direction * distance;
-            }
+            hit = entityIntersect(&origin, &direction, &normal, &color, &emittance, &dist, entityData, entityTrigs, entityTextures) || hit;
         }
 
         // Exit on sky hit
         if (!hit) {
+            calcSkyRay(&direction, &color, &emittance, skyTexture, sunPosition, *sunIntensity, textures, *sunIndex);
+
             float sunScale = pow(*sunIntensity, 2.2f);
 
-            emittanceStack[bounces*3 + 0] = color.x * sunScale;
-            emittanceStack[bounces*3 + 1] = color.y * sunScale;
-            emittanceStack[bounces*3 + 2] = color.z * sunScale;
+            emittanceStack[bounces*3 + 0] = color.x * color.x * sunScale;
+            emittanceStack[bounces*3 + 1] = color.y * color.y * sunScale;
+            emittanceStack[bounces*3 + 2] = color.z * color.z * sunScale;
 
-            emittanceStack[bounces*3 + 3] = color.x * sunScale;
-            emittanceStack[bounces*3 + 4] = color.y * sunScale;
-            emittanceStack[bounces*3 + 5] = color.z * sunScale;
+            colorStack[bounces*3 + 0] = color.x;
+            colorStack[bounces*3 + 1] = color.y;
+            colorStack[bounces*3 + 2] = color.z;
 
-            // Set color stack to sky color
-            for (int i = bounces; i < maxbounces; i++) {
-                colorStack[bounces*3 + 0] = color.x;
-                colorStack[bounces*3 + 1] = color.y;
-                colorStack[bounces*3 + 2] = color.z;
-            }
+            typeStack[bounces] = -1;
 
             break;
         }
+
+        // Update origin
+        origin += direction * dist;
 
         // Add color and emittance to proper stacks
         colorStack[bounces*3 + 0] = color.x;
@@ -204,13 +170,13 @@ __kernel void rayTracer(__global const float *rayPos,
             colorStack[bounces*3 + 2] = color.z * color.w + (1 - color.w);
             typeStack[bounces] = 1;
         }
-        exitBlock(&origin, &direction, &temp, &distance);
+        exitBlock(&origin, &direction, &temp, &dist);
     }
 
     if (*preview) {
         // preview shading = first intersect color * sun&ambient shading
         float shading = dot(normal, (float3) (0.25, 0.866, 0.433));
-        if (shading < 0.3) shading = 0.3;
+        shading = fmax(0.3f, shading);
 
         colorStack[0] *= shading;
         colorStack[1] *= shading;
@@ -220,18 +186,20 @@ __kernel void rayTracer(__global const float *rayPos,
         // TODO: implement specular shading
         for (int i = maxbounces - 1; i >= 0; i--) {
             switch (typeStack[i]) {
-                case 0:
+                case 0: {
                     // Diffuse reflection
                     colorStack[i*3 + 0] *= colorStack[i*3 + 3] + emittanceStack[i*3 + 3];
                     colorStack[i*3 + 1] *= colorStack[i*3 + 4] + emittanceStack[i*3 + 4];
                     colorStack[i*3 + 2] *= colorStack[i*3 + 5] + emittanceStack[i*3 + 5];
                     break;
-                case 1:
+                }
+                case 1: {
                     // Transmission
                     colorStack[i*3 + 0] *= colorStack[i*3 + 3];
                     colorStack[i*3 + 1] *= colorStack[i*3 + 4];
                     colorStack[i*3 + 2] *= colorStack[i*3 + 5];
                     break;
+                }
             }
         }
     }
@@ -258,10 +226,9 @@ float nextFloat(unsigned int *state) {
     return (*state >> 8) / ((float) (1 << 24));
 }
 
-int entityIntersect(float3 *origin, float3 *direction, float3 *normal, float4 *color, float3 *emittance, float *distance, image2d_t entityData, image2d_t entityTrigs, image2d_t entityTextures) {
+int entityIntersect(float3 *origin, float3 *direction, float3 *normal, float4 *color, float3 *emittance, float *dist, image2d_t entityData, image2d_t entityTrigs, image2d_t entityTextures) {
     int hit = 0;
 
-    float tBest = *distance;
     int toVisit = 0;
     int currentNode = 0;
     int nodesToVisit[64];
@@ -273,7 +240,7 @@ int entityIntersect(float3 *origin, float3 *direction, float3 *normal, float4 *c
         float node[8];
         areadf(entityData, currentNode, 8, node);
 
-        if (aabbIntersectClose(origin, direction, &tBest, node+2)) {
+        if (aabbIntersectClose(origin, direction, dist, node+2)) {
             if (node[0] <= 0) {
                 // Is leaf
                 int primIndex = -node[0];
@@ -283,7 +250,7 @@ int entityIntersect(float3 *origin, float3 *direction, float3 *normal, float4 *c
                     int index = primIndex + i * 30;
                     switch ((int) indexf(entityTrigs, index)) {
                         case 0:
-                            if (texturedTriangleIntersect(origin, direction, normal, color, emittance, distance, index, entityTrigs, entityTextures))
+                            if (texturedTriangleIntersect(origin, direction, normal, color, emittance, dist, index, entityTrigs, entityTextures))
                                 hit = 1;
                             break;
                     }
@@ -450,14 +417,37 @@ int octreeGet(float3 *origin, image2d_t octreeData, int depth) {
 }
 
 // Check intersect with octree
-// TODO: check BVH tree and custom block models
-int octreeIntersect(float3 *origin, image2d_t octreeData, int depth, __global const int *transparent, int transparentLength) {
-    int block = octreeGet(origin, octreeData, depth);
+int octreeIntersect(float3 *origin, float3 *direction, float3 *normal, float4 *color, float3 *emittance, float *dist, int drawDepth, image2d_t octreeData, int depth, __global const int *transparent, int transparentLength, image2d_t textures, image1d_t blockData, image2d_t grassTextures, image2d_t foliageTextures) {
+    float3 originMarch = (float3) ((*origin).x, (*origin).y, (*origin).z);
+    float3 normalMarch = (float3) ((*normal).x, (*normal).y, (*normal).z);
+    float t = 0;
 
-    for (int i = 0; i < transparentLength; i++)
-        if (block == transparent[i])
+    for (int i = 0; i < drawDepth; i++) {
+        if (!octreeInbounds(&originMarch, depth)) {
             return 0;
-    return 1;
+        }
+
+        int block = octreeGet(&originMarch, octreeData, depth);
+        int pass = 0;
+        for (int j = 0; j < transparentLength; j++) {
+            if (block == transparent[j]) {
+                pass = 1;
+                break;
+            }
+        }
+
+        if (pass) {
+            exitBlock(&originMarch, direction, &normalMarch, &t);
+        } else {
+            getTextureRay(&originMarch, &normalMarch, color, emittance, block, textures, blockData, grassTextures, foliageTextures, depth);
+
+            *dist = t;
+            (*normal) = normalMarch;
+            return 1;
+        }
+    }
+
+    return 0;
 }
 
 // Check if we are inbounds
@@ -474,7 +464,7 @@ int octreeInbounds(float3 *origin, int depth) {
 }
 
 // Exit the current block. Based on chunky code.
-void exitBlock(float3 *origin, float3 *direction, float3 *normal, float *distance) {
+void exitBlock(float3 *origin, float3 *direction, float3 *normal, float *dist) {
     float tNext = 10000000;
     float3 b = floor(*origin);
 
@@ -523,7 +513,7 @@ void exitBlock(float3 *origin, float3 *direction, float3 *normal, float *distanc
 
     tNext += OFFSET;
     *origin += tNext * (*direction);
-    *distance += tNext;
+    *dist += tNext;
 }
 
 void calcSkyRay(float3 *direction, float4 *color, float3 *emittance, image2d_t skyTexture, float3 sunPos, float sunIntensity, image2d_t textures, int sunIndex) {
@@ -552,6 +542,10 @@ void sunIntersect(float3 *direction, float4 *color, float3 *emittance, float3 su
     sv = cross(sunPos, su);
     sv = normalize(sv);
     su = cross(sv, sunPos);
+
+    if (dot(*direction, sunPos) < 0.5) {
+        return;
+    }
 
     float radius = 0.03;
     float width = radius * 4;
@@ -593,7 +587,7 @@ int aabbIntersect(float3 *origin, float3 *direction, float bounds[6]) {
     return tmin <= tmax+OFFSET && tmin >= 0;
 }
 
-int aabbIntersectClose(float3 *origin, float3 *direction, float *distance, float bounds[6]) {
+int aabbIntersectClose(float3 *origin, float3 *direction, float *dist, float bounds[6]) {
     if (aabbInside(origin, bounds)) return 1;
 
     float3 r = 1 / *direction;
@@ -610,7 +604,7 @@ int aabbIntersectClose(float3 *origin, float3 *direction, float *distance, float
     float tmin = fmax(fmax(fmin(tx1, tx2), fmin(ty1, ty2)), fmin(tz1, tz2));
     float tmax = fmin(fmin(fmax(tx1, tx2), fmax(ty1, ty2)), fmax(tz1, tz2));
 
-    return tmin <= tmax+OFFSET && tmin >= 0 && tmin <= *distance;
+    return tmin <= tmax+OFFSET && tmin >= 0 && tmin <= *dist;
 }
 
 int aabbInside(float3 *origin, float bounds[6]) {
@@ -619,12 +613,12 @@ int aabbInside(float3 *origin, float bounds[6]) {
            (*origin).z >= bounds[4] && (*origin).z <= bounds[5];
 }
 
-int texturedTriangleIntersect(float3 *origin, float3 *direction, float3 *normal, float4 *color, float3 *emittance, float *distance, int index, image2d_t entityTrigs, image2d_t entityTextures) {
+int texturedTriangleIntersect(float3 *origin, float3 *direction, float3 *normal, float4 *color, float3 *emittance, float *dist, int index, image2d_t entityTrigs, image2d_t entityTextures) {
     // Check aabb
     float aabb[6];
     areadf(entityTrigs, index+1, 6, aabb);
 
-    if (!aabbIntersectClose(origin, direction, distance, aabb)) return 0;   // Does not intersect
+    if (!aabbIntersectClose(origin, direction, dist, aabb)) return 0;   // Does not intersect
 
     float3 e1, e2, o, n;
     float2 t1, t2, t3;
@@ -674,7 +668,7 @@ int texturedTriangleIntersect(float3 *origin, float3 *direction, float3 *normal,
 
     float t = dot(e2, qvec) * recip;
 
-    if (t > EPS && t < *distance) {
+    if (t > EPS && t < *dist) {
         float w = 1 - u - v;
         float2 uv = (float2) (t1.x * u + t2.x * v + t3.x * w,
                               t1.y * u + t2.y * v + t3.y * w);
@@ -692,7 +686,7 @@ int texturedTriangleIntersect(float3 *origin, float3 *direction, float3 *normal,
         float emit = tex[2];
 
         if ((0xFF & (argb >> 24)) > 0) {
-            *distance = t;
+            *dist = t;
 
             (*color).x = (0xFF & (argb >> 16)) / 256.0;
             (*color).y = (0xFF & (argb >> 8 )) / 256.0;

@@ -1,6 +1,7 @@
 package chunkycl;
 
 import se.llbit.chunky.PersistentSettings;
+import se.llbit.chunky.main.Chunky;
 import se.llbit.chunky.renderer.*;
 import se.llbit.chunky.renderer.scene.Camera;
 import se.llbit.chunky.renderer.scene.Scene;
@@ -13,6 +14,7 @@ import se.llbit.util.TaskTracker;
 import java.util.*;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.stream.IntStream;
 
 public class RenderManagerCl extends Thread implements Renderer {
     private static final Repaintable EMPTY_CANVAS = () -> {};
@@ -270,19 +272,10 @@ public class RenderManagerCl extends Thread implements Renderer {
         Camera cam = bufferedScene.camera();
         Ray ray = new Ray();
 
-        for (int i = 0; i < width; i++) {
-            for (int j = 0; j < height; j++) {
-                cam.calcViewRay(ray, -halfWidth + i*invHeight, -.5 +  j*invHeight);
-                rayDirs[(j * width + i)*3 + 0] = (float) ray.d.x;
-                rayDirs[(j * width + i)*3 + 1] = (float) ray.d.y;
-                rayDirs[(j * width + i)*3 + 2] = (float) ray.d.z;
-            }
-        }
-
         // Render sky
         intersectCl.generateSky(bufferedScene);
 
-        Vector3 origin = ray.o;
+        Vector3 origin = cam.getPosition();
         origin.x -= bufferedScene.getOrigin().x;
         origin.y -= bufferedScene.getOrigin().y;
         origin.z -= bufferedScene.getOrigin().z;
@@ -296,6 +289,19 @@ public class RenderManagerCl extends Thread implements Renderer {
         finalizer.finalizeSoon();
 
         for (int sample = bufferedScene.spp; sample < targetSpp; sample++) {
+            // Generate ray directions
+            int seed = random.nextInt();
+            Chunky.getCommonThreads().submit(() -> IntStream.range(0, width).parallel().forEach(i -> {
+                Random jitters = new Random(seed + i);
+                Ray ray1 = new Ray();
+                for (int j = 0; j < height; j++) {
+                    cam.calcViewRay(ray1, -halfWidth + (i + jitters.nextFloat())*invHeight, -0.5 + (j + jitters.nextFloat())*invHeight);
+                    rayDirs[(j * width + i)*3 + 0] = (float) ray1.d.x;
+                    rayDirs[(j * width + i)*3 + 1] = (float) ray1.d.y;
+                    rayDirs[(j * width + i)*3 + 2] = (float) ray1.d.z;
+                }
+            })).join();
+
             // Do the rendering
             float[] rendermap = intersectCl.rayTrace(rayDirs, origin, random, bufferedScene.getRayDepth(), false, bufferedScene, drawDepth, drawEntities);
 
