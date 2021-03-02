@@ -245,7 +245,7 @@ public class RenderManagerCl extends Thread implements Renderer {
         double[] samples = bufferedScene.getSampleBuffer();
 
         // Do the rendering
-        float[] depthmap = intersectCl.rayTrace(rayDirs, origin, random, 1, true, bufferedScene, drawDepth, drawEntities);
+        float[] depthmap = intersectCl.rayTrace(origin, rayDirs, new float[rayDirs.length], random, 1, true, bufferedScene, drawDepth, drawEntities);
 
         for (int i = 0; i < depthmap.length; i++) {
             samples[i] = depthmap[i];
@@ -268,9 +268,9 @@ public class RenderManagerCl extends Thread implements Renderer {
         double invHeight = 1.0 / height;
 
         float[] rayDirs = new float[width * height * 3];
+        float[] jitterDirs = new float[rayDirs.length];
 
         Camera cam = bufferedScene.camera();
-        Ray ray = new Ray();
 
         // Render sky
         intersectCl.generateSky(bufferedScene);
@@ -288,22 +288,34 @@ public class RenderManagerCl extends Thread implements Renderer {
         // Tell the render workers to continuously finalize all pixels
         finalizer.finalizeSoon();
 
+        // Generate ray directions
+        Chunky.getCommonThreads().submit(() -> IntStream.range(0, width).parallel().forEach(i -> {
+            Ray ray = new Ray();
+            for (int j = 0; j < height; j++) {
+                int offset = (j * width + i) * 3;
+                cam.calcViewRay(ray, -halfWidth + i*invHeight, -0.5 + j*invHeight);
+                rayDirs[offset + 0] = (float) ray.d.x;
+                rayDirs[offset + 1] = (float) ray.d.y;
+                rayDirs[offset + 2] = (float) ray.d.z;
+            }
+        })).join();
+
+        // Generate jitter lengths
+        Chunky.getCommonThreads().submit(() -> IntStream.range(0, width).parallel().forEach(i -> {
+            Ray ray = new Ray();
+            for (int j = 0; j < height; j++) {
+                int offset = (j * width + i) * 3;
+                cam.calcViewRay(ray, -halfWidth + (i+1)*invHeight, -0.5 + (j+1)*invHeight);
+                jitterDirs[offset + 0] = (float) ray.d.x - rayDirs[offset + 0];
+                jitterDirs[offset + 1] = (float) ray.d.y - rayDirs[offset + 1];
+                jitterDirs[offset + 2] = (float) ray.d.z - rayDirs[offset + 2];
+            }
+        })).join();
+
         for (int sample = bufferedScene.spp; sample < targetSpp; sample++) {
-            // Generate ray directions
-            int seed = random.nextInt();
-            Chunky.getCommonThreads().submit(() -> IntStream.range(0, width).parallel().forEach(i -> {
-                Random jitters = new Random(seed + i);
-                Ray ray1 = new Ray();
-                for (int j = 0; j < height; j++) {
-                    cam.calcViewRay(ray1, -halfWidth + (i + jitters.nextFloat())*invHeight, -0.5 + (j + jitters.nextFloat())*invHeight);
-                    rayDirs[(j * width + i)*3 + 0] = (float) ray1.d.x;
-                    rayDirs[(j * width + i)*3 + 1] = (float) ray1.d.y;
-                    rayDirs[(j * width + i)*3 + 2] = (float) ray1.d.z;
-                }
-            })).join();
 
             // Do the rendering
-            float[] rendermap = intersectCl.rayTrace(rayDirs, origin, random, bufferedScene.getRayDepth(), false, bufferedScene, drawDepth, drawEntities);
+            float[] rendermap = intersectCl.rayTrace(origin, rayDirs, jitterDirs, random, bufferedScene.getRayDepth(), false, bufferedScene, drawDepth, drawEntities);
 
             // Update the output buffer
             for (int i = 0; i < rendermap.length; i++) {

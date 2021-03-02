@@ -48,6 +48,7 @@ float nextFloat(unsigned int *state);
 // Ray tracer entrypoint
 __kernel void rayTracer(__global const float *rayPos,
                         __global const float *rayDir,
+                        __global const float *rayJitter,
                         __global const int *depth,
                         image2d_t octreeData,
                         __global const int *voxelLength,
@@ -83,11 +84,11 @@ __kernel void rayTracer(__global const float *rayPos,
     float3 origin = (float3) (rayPos[0], rayPos[1], rayPos[2]);
 
     // Ray direction
-    float3 direction = (float3) (
-            rayDir[gid*3 + 0],
-            rayDir[gid*3 + 1],
-            rayDir[gid*3 + 2]
-    );
+    float3 direction = normalize((float3) (
+            rayDir[gid*3 + 0] + nextFloat(random)*rayJitter[gid*3 + 0],
+            rayDir[gid*3 + 1] + nextFloat(random)*rayJitter[gid*3 + 1],
+            rayDir[gid*3 + 2] + nextFloat(random)*rayJitter[gid*3 + 2]
+    ));
 
     // Ray normal
     float3 normal = (float3) (0, 0, 0);

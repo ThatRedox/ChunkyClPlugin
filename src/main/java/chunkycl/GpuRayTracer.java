@@ -573,7 +573,7 @@ public class GpuRayTracer {
                 Pointer.to(skyImage), 0, null, null);
     }
 
-    public float[] rayTrace(float[] rayDirs, Vector3 origin, Random random, int rayDepth, boolean preview, Scene scene, int drawDepth, boolean drawEntities) {
+    public float[] rayTrace(Vector3 origin, float[] rayDirs, float[] rayJitter, Random random, int rayDepth, boolean preview, Scene scene, int drawDepth, boolean drawEntities) {
         // Load if necessary
         if (octreeData == null) {
             load(scene, null);
@@ -619,7 +619,9 @@ public class GpuRayTracer {
                 Sizeof.cl_int, Pointer.to(new int[] {drawEntities ? 1 : 0}), null);
 
         // Batching arguments
-        cl_mem clNormCoords = clCreateBuffer(context,
+        cl_mem clRayDirs = clCreateBuffer(context,
+                CL_MEM_READ_ONLY, (long) Sizeof.cl_float * batchSize * 3, null, null);
+        cl_mem clRayJitter = clCreateBuffer(context,
                 CL_MEM_READ_ONLY, (long) Sizeof.cl_float * batchSize * 3, null, null);
         cl_mem clSeed = clCreateBuffer(context,
                 CL_MEM_READ_ONLY, Sizeof.cl_int, null, null);
@@ -627,30 +629,12 @@ public class GpuRayTracer {
                 (long) Sizeof.cl_float * batchSize * 3, null, null);
 
         // Set the arguments
-        clSetKernelArg(kernel, 0, Sizeof.cl_mem, Pointer.to(clRayPos));
-        clSetKernelArg(kernel, 1, Sizeof.cl_mem, Pointer.to(clNormCoords));
-        clSetKernelArg(kernel, 2, Sizeof.cl_mem, Pointer.to(octreeDepth));
-        clSetKernelArg(kernel, 3, Sizeof.cl_mem, Pointer.to(octreeData));
-        clSetKernelArg(kernel, 4, Sizeof.cl_mem, Pointer.to(voxelLength));
-        clSetKernelArg(kernel, 5, Sizeof.cl_mem, Pointer.to(transparentArray));
-        clSetKernelArg(kernel, 6, Sizeof.cl_mem, Pointer.to(transparentLength));
-        clSetKernelArg(kernel, 7, Sizeof.cl_mem, Pointer.to(blockTextures));
-        clSetKernelArg(kernel, 8, Sizeof.cl_mem, Pointer.to(blockData));
-        clSetKernelArg(kernel, 9, Sizeof.cl_mem, Pointer.to(clSeed));
-        clSetKernelArg(kernel, 10, Sizeof.cl_mem, Pointer.to(clRayDepth));
-        clSetKernelArg(kernel, 11, Sizeof.cl_mem, Pointer.to(clPreview));
-        clSetKernelArg(kernel, 12, Sizeof.cl_mem, Pointer.to(clSunPos));
-        clSetKernelArg(kernel, 13, Sizeof.cl_mem, Pointer.to(sunIndex));
-        clSetKernelArg(kernel, 14, Sizeof.cl_mem, Pointer.to(clSunIntensity));
-        clSetKernelArg(kernel, 15, Sizeof.cl_mem, Pointer.to(skyTexture));
-        clSetKernelArg(kernel, 16, Sizeof.cl_mem, Pointer.to(grassTextures));
-        clSetKernelArg(kernel, 17, Sizeof.cl_mem, Pointer.to(foliageTextures));
-        clSetKernelArg(kernel, 18, Sizeof.cl_mem, Pointer.to(entityData));
-        clSetKernelArg(kernel, 19, Sizeof.cl_mem, Pointer.to(entityTrigs));
-        clSetKernelArg(kernel, 20, Sizeof.cl_mem, Pointer.to(bvhTextures));
-        clSetKernelArg(kernel, 21, Sizeof.cl_mem, Pointer.to(clDrawEntities));
-        clSetKernelArg(kernel, 22, Sizeof.cl_mem, Pointer.to(clDrawDepth));
-        clSetKernelArg(kernel, 23, Sizeof.cl_mem, Pointer.to(clRayRes));
+        cl_mem[] arguments = {clRayPos, clRayDirs, clRayJitter, octreeDepth, octreeData, voxelLength, transparentArray, transparentLength,
+                blockTextures, blockData, clSeed, clRayDepth, clPreview, clSunPos, sunIndex, clSunIntensity, skyTexture, grassTextures, foliageTextures,
+                entityData, entityTrigs, bvhTextures, clDrawEntities, clDrawDepth, clRayRes};
+        for (int i = 0; i < arguments.length; i++) {
+            clSetKernelArg(kernel, i, Sizeof.cl_mem, Pointer.to(arguments[i]));
+        }
 
         // Work size = rays
         long[] global_work_size = new long[]{batchSize};
@@ -662,8 +646,11 @@ public class GpuRayTracer {
 
             // Copy batch onto GPU
             // TODO: Mess with non-blocking copy
-            clEnqueueWriteBuffer(commandQueue, clNormCoords, CL_TRUE, 0, (long) Sizeof.cl_float * batchLength,
+            clEnqueueWriteBuffer(commandQueue, clRayDirs, CL_TRUE, 0, (long) Sizeof.cl_float * batchLength,
                     Pointer.to(rayDirs).withByteOffset(Sizeof.cl_float * index),
+                    0, null, null);
+            clEnqueueWriteBuffer(commandQueue, clRayJitter, CL_TRUE, 0, (long) Sizeof.cl_float * batchLength,
+                    Pointer.to(rayJitter).withByteOffset(Sizeof.cl_float * index),
                     0, null, null);
             clEnqueueWriteBuffer(commandQueue, clSeed, CL_TRUE, 0, Sizeof.cl_int,
                     Pointer.to(new int[] {random.nextInt()}), 0, null, null);
@@ -685,14 +672,8 @@ public class GpuRayTracer {
         }
 
         // Clean up
-        clReleaseMemObject(clRayPos);
-        clReleaseMemObject(clNormCoords);
-        clReleaseMemObject(clRayRes);
-        clReleaseMemObject(clSeed);
-        clReleaseMemObject(clRayDepth);
-        clReleaseMemObject(clPreview);
-        clReleaseMemObject(clSunIntensity);
-        clReleaseMemObject(clDrawDepth);
+        cl_mem[] releases = {clRayPos, clRayDepth, clSunPos, clPreview, clSunIntensity, clDrawDepth, clDrawEntities, clRayDirs, clRayJitter, clSeed, clRayRes};
+        Arrays.stream(releases).forEach(CL::clReleaseMemObject);
 
         return rayRes;
     }
