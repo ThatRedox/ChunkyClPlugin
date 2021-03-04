@@ -169,9 +169,18 @@ __kernel void rayTracer(__global const float *rayPos,
             colorStack[bounces*3 + 0] = color.x * color.w + (1 - color.w);
             colorStack[bounces*3 + 1] = color.y * color.w + (1 - color.w);
             colorStack[bounces*3 + 2] = color.z * color.w + (1 - color.w);
+
+            emittanceStack[bounces*3 + 0] = color.x * color.w + (1 - color.w);
+            emittanceStack[bounces*3 + 1] = color.y * color.w + (1 - color.w);
+            emittanceStack[bounces*3 + 2] = color.z * color.w + (1 - color.w);
+
             typeStack[bounces] = 1;
+
+            // Transmit through block
+            exitBlock(&origin, &direction, &normal, &dist);
         }
-        exitBlock(&origin, &direction, &temp, &dist);
+
+        origin += OFFSET * direction;
     }
 
     if (*preview) {
@@ -199,6 +208,11 @@ __kernel void rayTracer(__global const float *rayPos,
                     colorStack[i*3 + 0] *= colorStack[i*3 + 3];
                     colorStack[i*3 + 1] *= colorStack[i*3 + 4];
                     colorStack[i*3 + 2] *= colorStack[i*3 + 5];
+
+                    emittanceStack[i*3 + 0] *= emittanceStack[i*3 + 3];
+                    emittanceStack[i*3 + 1] *= emittanceStack[i*3 + 4];
+                    emittanceStack[i*3 + 2] *= emittanceStack[i*3 + 5];
+
                     break;
                 }
             }
@@ -355,10 +369,10 @@ void getTextureRay(float3 *origin, float3 *normal, float4 *color, float3 *emitta
     unsigned int argb = indexu(textures, index);
 
     // Separate ARGB value
-    (*color).x = (0xFF & (argb >> 16)) / 256.0;
-    (*color).y = (0xFF & (argb >> 8 )) / 256.0;
-    (*color).z = (0xFF & (argb >> 0 )) / 256.0;
-    (*color).w = (0xFF & (argb >> 24)) / 256.0;
+    (*color).x = (0xFF & (argb >> 16)) / 255.0;
+    (*color).y = (0xFF & (argb >> 8 )) / 255.0;
+    (*color).z = (0xFF & (argb >> 0 )) / 255.0;
+    (*color).w = (0xFF & (argb >> 24)) / 255.0;
 
     // Calculate tint
     if (blockD.w != 0) {
@@ -424,11 +438,13 @@ int octreeIntersect(float3 *origin, float3 *direction, float3 *normal, float4 *c
     float t = 0;
 
     for (int i = 0; i < drawDepth; i++) {
-        if (!octreeInbounds(&originMarch, depth)) {
+        float3 originTest = originMarch + OFFSET * (*direction);
+
+        if (!octreeInbounds(&originTest, depth)) {
             return 0;
         }
 
-        int block = octreeGet(&originMarch, octreeData, depth);
+        int block = octreeGet(&originTest, octreeData, depth);
         int pass = 0;
         for (int j = 0; j < transparentLength; j++) {
             if (block == transparent[j]) {
@@ -440,7 +456,7 @@ int octreeIntersect(float3 *origin, float3 *direction, float3 *normal, float4 *c
         if (pass) {
             exitBlock(&originMarch, direction, &normalMarch, &t);
         } else {
-            getTextureRay(&originMarch, &normalMarch, color, emittance, block, textures, blockData, grassTextures, foliageTextures, depth);
+            getTextureRay(&originTest, &normalMarch, color, emittance, block, textures, blockData, grassTextures, foliageTextures, depth);
 
             *dist = t;
             (*normal) = normalMarch;
@@ -466,6 +482,10 @@ int octreeInbounds(float3 *origin, int depth) {
 
 // Exit the current block. Based on chunky code.
 void exitBlock(float3 *origin, float3 *direction, float3 *normal, float *dist) {
+    // Advance to be into block
+    *dist += OFFSET;
+    (*origin) += OFFSET * (*direction);
+
     float tNext = 10000000;
     float3 b = floor(*origin);
 
@@ -512,7 +532,6 @@ void exitBlock(float3 *origin, float3 *direction, float3 *normal, float *dist) {
         }
     }
 
-    tNext += OFFSET;
     *origin += tNext * (*direction);
     *dist += tNext;
 }
