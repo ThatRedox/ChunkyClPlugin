@@ -1,5 +1,6 @@
+[![Stable](https://github.com/alexhliu/ChunkyClPlugin/actions/workflows/stable.yml/badge.svg)](https://github.com/alexhliu/ChunkyClPlugin/actions/workflows/stable.yml)
+[![Development](https://github.com/alexhliu/ChunkyClPlugin/actions/workflows/development.yml/badge.svg)](https://github.com/alexhliu/ChunkyClPlugin/actions/workflows/development.yml)
 
-[![Java CI with Gradle](https://github.com/alexhliu/ChunkyClPlugin/actions/workflows/gradle.yml/badge.svg?branch=master)](https://github.com/alexhliu/ChunkyClPlugin/actions/workflows/gradle.yml)
 
 # ChunkyCL
 
@@ -7,19 +8,22 @@ ChunkyCL is a plugin to the Minecraft Pathtracer [Chunky](https://github.com/chu
 It is currently a work in progress and does not support many features such as non-cube blocks and biome tinting. The core renderer itself is still under development
 so render results may change drastically between versions.
 
+## Downloads
+* [Latest mostly stable build](https://nightly.link/alexhliu/ChunkyClPlugin/workflows/stable/stable/ChunkyClPlugin.zip)
+* [Latest deveopment build](https://nightly.link/alexhliu/ChunkyClPlugin/workflows/development/master/ChunkyClPlugin.zip)
+
 ## Installation
 
-### Note: The latest version requires at least snapshot `2.4.0-77-g55a3c929`
-Download the [latest plugin build](https://ci.wertarbyte.com/job/ChunkyCL/lastSuccessfulBuild/artifact/ChunkyCL.jar). In the Chunky Launcher, expand `Advanced Settings` and click on `Manage plugins`. In the `Plugin Manger` window click on `Add` and select the `.jar` file in the extracted
-zip file. Click on `Save` and start Chunky as usual.
+### Note: The latest version requires at least snapshot `2.4.0-85-gbcef6ebc`
+Download the latest plugin build and extract it. In the Chunky Launcher, expand `Advanced Settings` and click on `Manage plugins`. In the `Plugin Manger` window click on `Add` and select the `.jar` file in the extracted zip file. Click on `Save` and start Chunky as usual.
 
-To download the latest snapshot, open `Advanced Settings` in the Chunky Launcher and enable `Download Snapshots`. Then click on the `Check for update` button.
+To download the latest Chunky snapshot, open `Advanced Settings` in the Chunky Launcher and enable `Download Snapshots`. Then click on the `Check for update` button.
 
 ### Performance
 
 Rough performance with a RTX 2070 is around 10 times that of the traditional CPU renderer as of 2021-02-02.
 
-Decreasing `Render threads` or `CPU utilization` may improve GPU performance.
+Decreasing `Render threads` or `CPU utilization` may improve GPU performance. A good starting point is 1 `render thread` at 100% `CPU utilization`. In addition, if you don't want/need to render entities, disable the `Enable entities` checkbox.
 
 ## Compatibility
 
