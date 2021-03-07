@@ -13,8 +13,6 @@ void sunIntersect(float3 *direction, float4 *color, float3 *emittance, float3 su
 // Octree calculations
 int octreeIntersect(float3 *origin, float3 *direction, float3 *normal, float4 *color, float3 *emittance, float *dist, int drawDepth, image2d_t octreeData, int depth, __global const int *transparent, int transparentLength, image2d_t textures, image1d_t blockData, image2d_t grassTextures, image2d_t foliageTextures);
 void getTextureRay(float3 *origin, float3 *normal, float4 *color, float3 *emittance, int block, image2d_t textures, image1d_t blockData, image2d_t grassTextures, image2d_t foliageTextures, int depth);
-int octreeGet(float3 *origin, image2d_t octreeData, int depth);
-int octreeInbounds(float3 *origin, int depth);
 void exitBlock(float3 *origin, float3 *direction, float3 *normal, float *dist);
 
 // Entity calculations
@@ -407,77 +405,121 @@ void getTextureRay(float3 *origin, float3 *normal, float4 *color, float3 *emitta
     (*emittance).z = (*color).z * (*color).z * (blockD.y / 256.0);
 }
 
-// Get the value of a location in the octree
-int octreeGet(float3 *origin, image2d_t octreeData, int depth) {
-    int nodeIndex = 0;
-    int level = depth;
-
-    int x = (*origin).x;
-    int y = (*origin).y;
-    int z = (*origin).z;
-
-    int data = indexi(octreeData, nodeIndex);
-    while (data > 0) {
-        level -= 1;
-
-        int lx = 1 & (x >> level);
-        int ly = 1 & (y >> level);
-        int lz = 1 & (z >> level);
-
-        nodeIndex = data + ((lx << 2) | (ly << 1) | lz);
-        data = indexi(octreeData, nodeIndex);
-    }
-
-    return -data;
-}
-
 // Check intersect with octree
 int octreeIntersect(float3 *origin, float3 *direction, float3 *normal, float4 *color, float3 *emittance, float *dist, int drawDepth, image2d_t octreeData, int depth, __global const int *transparent, int transparentLength, image2d_t textures, image1d_t blockData, image2d_t grassTextures, image2d_t foliageTextures) {
-    float3 originMarch = (float3) ((*origin).x, (*origin).y, (*origin).z);
     float3 normalMarch = (float3) ((*normal).x, (*normal).y, (*normal).z);
-    float t = 0;
+    float distMarch = 0;
+
+    float3 invD = 1/ (*direction);
+    float3 offsetD = -(*origin) * invD;
 
     for (int i = 0; i < drawDepth; i++) {
-        float3 originTest = originMarch + OFFSET * (*direction);
+        float3 pos = floor((*origin) + (*direction) * (distMarch + OFFSET));
 
-        if (!octreeInbounds(&originTest, depth)) {
+        int x = pos.x;
+        int y = pos.y;
+        int z = pos.z;
+
+        // Check inbounds
+        int lx = x >> depth;
+        int ly = y >> depth;
+        int lz = z >> depth;
+
+        if (lx != 0 || ly != 0 || lz != 0)
             return 0;
-        }
 
-        int block = octreeGet(&originTest, octreeData, depth);
+        // Read with depth
+        int nodeIndex = 0;
+        int level = depth;
+        int data = indexi(octreeData, nodeIndex);
+        while (data > 0) {
+            level --;
+            lx = 1 & (x >> level);
+            ly = 1 & (y >> level);
+            lz = 1 & (z >> level);
+
+            nodeIndex = data + ((lx << 2) | (ly << 1) | lz);
+            data = indexi(octreeData, nodeIndex);
+        }
+        data = -data;
+
+        lx = x >> level;
+        ly = y >> level;
+        lz = z >> level;
+
+        // Test intersection
         int pass = 0;
         for (int j = 0; j < transparentLength; j++) {
-            if (block == transparent[j]) {
+            if (data == transparent[j]) {
                 pass = 1;
                 break;
             }
         }
 
-        if (pass) {
-            exitBlock(&originMarch, direction, &normalMarch, &t);
-        } else {
-            getTextureRay(&originTest, &normalMarch, color, emittance, block, textures, blockData, grassTextures, foliageTextures, depth);
+        // Get block data if there is an intersect
+        if (!pass) {
+            float3 originTest = (*origin) + (*direction) * (distMarch + OFFSET);
+            getTextureRay(&originTest, &normalMarch, color, emittance, data, textures, blockData, grassTextures, foliageTextures, depth);
 
-            *dist = t;
+            *dist = distMarch;
             (*normal) = normalMarch;
             return 1;
         }
+
+        // Exit current leaf
+        int nx = 0, ny = 0, nz = 0;
+        float tNear = 1000000;
+
+        float t = (lx << level) * invD.x + offsetD.x;
+        if (t > distMarch + EPS) {
+            tNear = t;
+            nx = 1;
+        }
+
+        t = ((lx + 1) << level) * invD.x + offsetD.x;
+        if (t < tNear && t > distMarch + EPS) {
+            tNear = t;
+            nx = -1;
+        }
+
+        t = (ly << level) * invD.y + offsetD.y;
+        if (t < tNear && t > distMarch + EPS) {
+            tNear = t;
+            ny = 1;
+            nx = 0;
+        }
+
+        t = ((ly + 1) << level) * invD.y + offsetD.y;
+        if (t < tNear && t > distMarch + EPS) {
+            tNear = t;
+            ny = -1;
+            nx = 0;
+        }
+
+        t = (lz << level) * invD.z + offsetD.z;
+        if (t < tNear && t > distMarch + EPS) {
+            tNear = t;
+            nz = 1;
+            ny = 0;
+            nx = 0;
+        }
+
+        t = ((lz + 1) << level) * invD.z + offsetD.z;
+        if (t < tNear && t > distMarch + EPS) {
+            tNear = t;
+            nz = -1;
+            ny = 0;
+            nx = 0;
+        }
+
+        normalMarch.x = nx;
+        normalMarch.y = ny;
+        normalMarch.z = nz;
+
+        distMarch = tNear;
     }
 
     return 0;
-}
-
-// Check if we are inbounds
-int octreeInbounds(float3 *origin, int depth) {
-    int x = (*origin).x;
-    int y = (*origin).y;
-    int z = (*origin).z;
-
-    int lx = x >> depth;
-    int ly = y >> depth;
-    int lz = z >> depth;
-
-    return lx == 0 && ly == 0 && lz == 0;
 }
 
 // Exit the current block. Based on chunky code.
