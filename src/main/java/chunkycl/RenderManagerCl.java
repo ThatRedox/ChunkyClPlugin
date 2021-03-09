@@ -333,8 +333,6 @@ public class RenderManagerCl extends Thread implements Renderer {
 
         double[] samples = bufferedScene.getSampleBuffer();
 
-        long updateTime = System.currentTimeMillis();
-
         // Tell the render workers to continuously finalize all pixels
         if (shouldFinalize) {
             finalizer.finalizeSoon();
@@ -343,6 +341,14 @@ public class RenderManagerCl extends Thread implements Renderer {
         while (bufferedScene.spp < bufferedScene.getTargetSpp()) {
             // Start time
             long frameStart = System.currentTimeMillis();
+
+            // Check if render was canceled
+            if (mode == RenderMode.PAUSED || sceneProvider.pollSceneStateChange()) {
+                finalizer.finalizeOnce();
+                bufferedScene.swapBuffers();
+                canvas.repaint();
+                return;
+            }
 
             // Do the rendering
             float[] rendermap = intersectCl.rayTrace(origin, rayDirs, jitterDirs, random, bufferedScene.getRayDepth(), false, bufferedScene, drawDepth, drawEntities);
@@ -367,18 +373,7 @@ public class RenderManagerCl extends Thread implements Renderer {
             }
 
             // Update frame complete listener
-            if (bufferedScene.spp % 32 == 0 || System.currentTimeMillis() > updateTime + 1000) {
-                frameCompleteListener.accept(bufferedScene, bufferedScene.spp);
-                updateTime = System.currentTimeMillis();
-            }
-
-            // Check if render was canceled
-            if (mode == RenderMode.PAUSED || sceneProvider.pollSceneStateChange()) {
-                finalizer.finalizeOnce();
-                bufferedScene.swapBuffers();
-                canvas.repaint();
-                return;
-            }
+            frameCompleteListener.accept(bufferedScene, bufferedScene.spp);
         }
 
         // Ensure finalization
