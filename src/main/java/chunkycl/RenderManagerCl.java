@@ -12,6 +12,7 @@ import se.llbit.math.Vector3;
 import se.llbit.util.TaskTracker;
 
 import java.util.*;
+import java.util.concurrent.ForkJoinTask;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.stream.IntStream;
@@ -53,6 +54,8 @@ public class RenderManagerCl extends Thread implements Renderer {
 
     public RenderManagerCl(RenderContext context, boolean headless) {
         super("Render Manager");
+
+        this.setPriority(Thread.MAX_PRIORITY);
 
         numThreads = context.numRenderThreads();
         cpuLoad = PersistentSettings.getCPULoad();
@@ -333,6 +336,12 @@ public class RenderManagerCl extends Thread implements Renderer {
 
         double[] samples = bufferedScene.getSampleBuffer();
 
+        // Create ray tracing cache
+        GpuRayTracer.RayTraceCache cache = intersectCl.createCache(rayDirs, jitterDirs);
+
+        // Merging task, let it run while the GPU is busy
+        ForkJoinTask mergeTask = null;
+
         // Tell the render workers to continuously finalize all pixels
         if (shouldFinalize) {
             finalizer.finalizeSoon();
@@ -347,15 +356,19 @@ public class RenderManagerCl extends Thread implements Renderer {
                 finalizer.finalizeOnce();
                 bufferedScene.swapBuffers();
                 canvas.repaint();
+                cache.release();
                 return;
             }
 
             // Do the rendering
-            float[] rendermap = intersectCl.rayTrace(origin, rayDirs, jitterDirs, random, bufferedScene.getRayDepth(), false, bufferedScene, drawDepth, drawEntities);
+            float[] rendermap = intersectCl.rayTrace(origin, random, bufferedScene.getRayDepth(), false, bufferedScene, drawDepth, drawEntities, cache);
+
+            if (mergeTask != null) mergeTask.join();
 
             // Update the output buffer
-            Chunky.getCommonThreads().submit(() -> Arrays.parallelSetAll(samples, i ->
-                    (samples[i] * bufferedScene.spp + rendermap[i]) / (bufferedScene.spp + 1))).join();
+            int sppF = bufferedScene.spp;
+            mergeTask = Chunky.getCommonThreads().submit(() -> Arrays.parallelSetAll(samples, i ->
+                    (samples[i] * sppF + rendermap[i]) / (sppF + 1)));
 
             // Update render bar
             synchronized (bufferedScene) {
@@ -376,12 +389,17 @@ public class RenderManagerCl extends Thread implements Renderer {
             frameCompleteListener.accept(bufferedScene, bufferedScene.spp);
         }
 
+        if (mergeTask != null) mergeTask.join();
+
         // Ensure finalization
         finalizer.finalizeOnce();
 
         // Update the screen
         bufferedScene.swapBuffers();
         canvas.repaint();
+
+        // Release the GPU memory objects
+        cache.release();
 
         // Inform render is complete
         renderCompleteListener.accept(bufferedScene.renderTime, samplesPerSecond());
