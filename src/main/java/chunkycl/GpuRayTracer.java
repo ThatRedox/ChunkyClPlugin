@@ -15,6 +15,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.*;
 
+import se.llbit.chunky.PersistentSettings;
 import se.llbit.chunky.block.Block;
 import se.llbit.chunky.chunk.BlockPalette;
 import se.llbit.chunky.renderer.scene.*;
@@ -51,11 +52,8 @@ public class GpuRayTracer {
     private cl_context context;
     private cl_command_queue commandQueue;
 
-    private int[] version;
-
-    public final long workgroupSize;
-
-    public final int batchSize = 2<<20;
+    public final int[] version;
+    public final cl_device_id[] devices;
 
     private final String[] grassBlocks = new String[]{"minecraft:grass_block", "minecraft:grass",
             "minecraft:tall_grass", "minecraft:fern", "minecraft:sugarcane"};
@@ -68,12 +66,13 @@ public class GpuRayTracer {
 
     private static String programSource;
 
+    private static GpuRayTracer tracer = null;
+
     @SuppressWarnings("deprecation")
-    GpuRayTracer() {
+    private GpuRayTracer() {
         // The platform, device type and device number
-        final int platformIndex = 0;
         final long deviceType = CL_DEVICE_TYPE_ALL;
-        final int deviceIndex = 0;
+        final int deviceIndex = PersistentSettings.settings.getInt("clDevice", 0);
 
         // Load program source
         InputStream programStream = GpuRayTracer.class.getClassLoader().getResourceAsStream("rayTracer.cl");
@@ -89,39 +88,41 @@ public class GpuRayTracer {
         clGetPlatformIDs(0, null, numPlatformsArray);
         int numPlatforms = numPlatformsArray[0];
 
-        // Obtain a platform ID
+        // Obtain all platform IDs
         cl_platform_id[] platforms = new cl_platform_id[numPlatforms];
         clGetPlatformIDs(platforms.length, platforms, null);
-        cl_platform_id platform = platforms[platformIndex];
 
-        // Initialize the context properties
-        cl_context_properties contextProperties = new cl_context_properties();
-        contextProperties.addProperty(CL_CONTEXT_PLATFORM, platform);
+        // Get list of all devices
+        ArrayList<cl_device_id> devices = new ArrayList<>();
 
-        // Obtain the number of devices for the platform
-        int[] numDevicesArray = new int[1];
-        clGetDeviceIDs(platform, deviceType, 0, null, numDevicesArray);
-        int numDevices = numDevicesArray[0];
+        for (cl_platform_id platform : platforms) {
+            // Obtain the number of devices for the platform
+            int[] numDevicesArray = new int[1];
+            clGetDeviceIDs(platform, deviceType, 0, null, numDevicesArray);
+            int numDevices = numDevicesArray[0];
 
-        // Obtain a device ID
-        cl_device_id[] devices = new cl_device_id[numDevices];
-        clGetDeviceIDs(platform, deviceType, numDevices, devices, null);
-        cl_device_id device = devices[deviceIndex];
+            // Obtain a device ID
+            cl_device_id[] platformDevices = new cl_device_id[numDevices];
+            clGetDeviceIDs(platform, deviceType, numDevices, platformDevices, null);
+            devices.addAll(Arrays.asList(platformDevices));
+        }
 
         // Print out all connected devices
+        this.devices = devices.toArray(new cl_device_id[0]);
         System.out.println("OpenCL Devices:");
-        for (int i = 0; i < numDevices; i++) {
-            System.out.println("  [" + i  + "] " + getString(devices[i], CL_DEVICE_NAME));
+        for (int i = 0; i < devices.size(); i++) {
+            System.out.println("  [" + i  + "] " + getString(devices.get(i), CL_DEVICE_NAME));
         }
 
         // Print out selected device
+        cl_device_id device = devices.get(deviceIndex);
         System.out.println("\nUsing: " + getString(device, CL_DEVICE_NAME));
 
-        workgroupSize = getSizes(device, CL_DEVICE_MAX_WORK_GROUP_SIZE, 1)[0];
+        // Initialize the context properties
+        cl_context_properties contextProperties = new cl_context_properties();
 
         // Create a context for the selected device
-        context = clCreateContext(
-                contextProperties, 1, new cl_device_id[]{device},
+        context = clCreateContext( contextProperties, 1, new cl_device_id[]{device},
                 null, null, null);
 
         // Create a command-queue for the selected device
@@ -187,6 +188,17 @@ public class GpuRayTracer {
 
         skyTexture = clCreateImage(context, CL_MEM_READ_ONLY,
                 format, desc, null, null);
+    }
+
+    public static GpuRayTracer getTracer() {
+        if (tracer == null) {
+            synchronized (GpuRayTracer.class) {
+                if (tracer == null) {
+                    tracer = new GpuRayTracer();
+                }
+            }
+        }
+        return tracer;
     }
 
     @SuppressWarnings("unchecked")
@@ -824,8 +836,14 @@ public class GpuRayTracer {
         array.add((float) box.zmax);
     }
 
-    /** Get a string from OpenCL */
-    private static String getString(cl_device_id device, int paramName)
+    /** Get a string from OpenCL
+     * Based on code from https://github.com/gpu/JOCLSamples/
+     * List of available parameter names: https://www.khronos.org/registry/OpenCL/sdk/1.2/docs/man/xhtml/clGetDeviceInfo.html
+     *
+     * @param device Device to query
+     * @param paramName Parameter to query
+     */
+    public static String getString(cl_device_id device, int paramName)
     {
         // Obtain the length of the string that will be queried
         long[] size = new long[1];
@@ -839,9 +857,15 @@ public class GpuRayTracer {
         return new String(buffer, 0, buffer.length-1);
     }
 
-    /** get a long(array) from OpenCL */
-    static long[] getSizes(cl_device_id device, int paramName, int numValues)
-    {
+    /** Get a long(array) from OpenCL
+     * Based on code from https://github.com/gpu/JOCLSamples/
+     * List of available parameter names: https://www.khronos.org/registry/OpenCL/sdk/1.2/docs/man/xhtml/clGetDeviceInfo.html
+     *
+     * @param device Device to query
+     * @param paramName Parameter to query
+     * @param numValues Number of values to query
+     */
+    public static long[] getSizes(cl_device_id device, int paramName, int numValues) {
         // The size of the returned data has to depend on
         // the size of a size_t, which is handled here
         ByteBuffer buffer = ByteBuffer.allocate(
@@ -849,20 +873,30 @@ public class GpuRayTracer {
         clGetDeviceInfo(device, paramName, Sizeof.size_t * numValues,
                 Pointer.to(buffer), null);
         long values[] = new long[numValues];
-        if (Sizeof.size_t == 4)
-        {
-            for (int i=0; i<numValues; i++)
-            {
+        if (Sizeof.size_t == 4) {
+            for (int i=0; i<numValues; i++) {
                 values[i] = buffer.getInt(i * Sizeof.size_t);
             }
         }
-        else
-        {
-            for (int i=0; i<numValues; i++)
-            {
+        else {
+            for (int i=0; i<numValues; i++) {
                 values[i] = buffer.getLong(i * Sizeof.size_t);
             }
         }
+        return values;
+    }
+
+    /** Get an integer(array) from OpenCL
+     * Based on code from https://github.com/gpu/JOCLSamples/
+     * List of available parameter names: https://www.khronos.org/registry/OpenCL/sdk/1.2/docs/man/xhtml/clGetDeviceInfo.html
+     *
+     * @param device Device to query
+     * @param paramName Parameter to query
+     * @param numValues Number of values to query
+     */
+    public static int[] getInts(cl_device_id device, int paramName, int numValues) {
+        int[] values = new int[numValues];
+        clGetDeviceInfo(device, paramName, Sizeof.cl_int * numValues, Pointer.to(values), null);
         return values;
     }
 }

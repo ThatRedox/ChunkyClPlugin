@@ -50,7 +50,7 @@ public class RenderManagerCl extends Thread implements Renderer {
     private int drawDepth = 256;
     private boolean drawEntities = true;
 
-    public static final GpuRayTracer intersectCl = new GpuRayTracer();
+    public static final GpuRayTracer intersectCl = GpuRayTracer.getTracer();
 
     public RenderManagerCl(RenderContext context, boolean headless) {
         super("Render Manager");
@@ -351,6 +351,14 @@ public class RenderManagerCl extends Thread implements Renderer {
             // Start time
             long frameStart = System.currentTimeMillis();
 
+            // Update stuff
+            sceneProvider.withSceneProtected(scene -> {
+                synchronized (bufferedScene) {
+                    bufferedScene.copyTransients(scene);
+                    updateRenderState(scene);
+                }
+            });
+
             // Check if render was canceled
             if (mode == RenderMode.PAUSED || sceneProvider.pollSceneStateChange()) {
                 finalizer.finalizeOnce();
@@ -363,12 +371,18 @@ public class RenderManagerCl extends Thread implements Renderer {
             // Do the rendering
             float[] rendermap = intersectCl.rayTrace(origin, random, bufferedScene.getRayDepth(), false, bufferedScene, drawDepth, drawEntities, cache);
 
-            if (mergeTask != null) mergeTask.join();
+            if (mergeTask != null && !mergeTask.isDone()) mergeTask.join();
 
             // Update the output buffer
             int sppF = bufferedScene.spp;
             mergeTask = Chunky.getCommonThreads().submit(() -> Arrays.parallelSetAll(samples, i ->
                     (samples[i] * sppF + rendermap[i]) / (sppF + 1)));
+
+            // Finalize if necessary
+            if (snapshotControl.saveSnapshot(bufferedScene, sppF+1)) {
+                mergeTask.join();
+                finalizer.finalizeOnce();
+            }
 
             // Update render bar
             synchronized (bufferedScene) {
