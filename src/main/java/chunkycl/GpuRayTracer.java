@@ -806,12 +806,12 @@ public class GpuRayTracer {
                 trigs.add((float) triangle.n.x);    // 16
                 trigs.add((float) triangle.n.y);
                 trigs.add((float) triangle.n.z);
-                trigs.add((float) triangle.t1.x);   // 19
-                trigs.add((float) triangle.t1.y);
-                trigs.add((float) triangle.t2.x);   // 21
-                trigs.add((float) triangle.t2.y);
-                trigs.add((float) triangle.t3.x);   // 23
-                trigs.add((float) triangle.t3.y);
+                trigs.add((float) reflectTriangleDouble(triangle, "t2u"));   // 19
+                trigs.add((float) reflectTriangleDouble(triangle, "t2v"));
+                trigs.add((float) reflectTriangleDouble(triangle, "t3u"));   // 21
+                trigs.add((float) reflectTriangleDouble(triangle, "t3v"));
+                trigs.add((float) reflectTriangleDouble(triangle, "t1u"));   // 23
+                trigs.add((float) reflectTriangleDouble(triangle, "t1v"));
                 trigs.add(triangle.doubleSided ? 1 : 0);    // 25
                 trigs.add((float) triangle.material.getTexture(0).getWidth());  // 26
                 trigs.add((float) triangle.material.getTexture(0).getHeight()); // 27
@@ -898,5 +898,16 @@ public class GpuRayTracer {
         int[] values = new int[numValues];
         clGetDeviceInfo(device, paramName, Sizeof.cl_int * numValues, Pointer.to(values), null);
         return values;
+    }
+
+    private static double reflectTriangleDouble(TexturedTriangle triangle, String field) {
+        try {
+            Field f = triangle.getClass().getDeclaredField(field);
+            f.setAccessible(true);
+            return (double) f.get(triangle);
+        } catch (NoSuchFieldException | IllegalAccessException e) {
+            Log.error(e);
+            return 0;
+        }
     }
 }
