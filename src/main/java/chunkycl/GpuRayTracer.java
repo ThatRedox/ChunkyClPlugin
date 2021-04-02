@@ -806,12 +806,12 @@ public class GpuRayTracer {
                 trigs.add((float) triangle.n.x);    // 16
                 trigs.add((float) triangle.n.y);
                 trigs.add((float) triangle.n.z);
-                trigs.add((float) reflectTriangleDouble(triangle, "t2u"));   // 19
-                trigs.add((float) reflectTriangleDouble(triangle, "t2v"));
-                trigs.add((float) reflectTriangleDouble(triangle, "t3u"));   // 21
-                trigs.add((float) reflectTriangleDouble(triangle, "t3v"));
-                trigs.add((float) reflectTriangleDouble(triangle, "t1u"));   // 23
+                trigs.add((float) reflectTriangleDouble(triangle, "t1u"));   // 19
                 trigs.add((float) reflectTriangleDouble(triangle, "t1v"));
+                trigs.add((float) reflectTriangleDouble(triangle, "t2u"));   // 21
+                trigs.add((float) reflectTriangleDouble(triangle, "t2v"));
+                trigs.add((float) reflectTriangleDouble(triangle, "t3u"));   // 23
+                trigs.add((float) reflectTriangleDouble(triangle, "t3v"));
                 trigs.add(triangle.doubleSided ? 1 : 0);    // 25
                 trigs.add((float) triangle.material.getTexture(0).getWidth());  // 26
                 trigs.add((float) triangle.material.getTexture(0).getHeight()); // 27

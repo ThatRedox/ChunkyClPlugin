@@ -10,11 +10,13 @@ so render results may change drastically between versions.
 
 ## Downloads
 * [Latest mostly stable build](https://nightly.link/alexhliu/ChunkyClPlugin/workflows/stable/stable/ChunkyClPlugin.zip)
-* [Latest deveopment build](https://nightly.link/alexhliu/ChunkyClPlugin/workflows/development/master/ChunkyClPlugin.zip)
+* [Latest development build](https://nightly.link/alexhliu/ChunkyClPlugin/workflows/development/master/ChunkyClPlugin.zip)
+
+<sub><sup>Note: Even if the build is failing, the link will link to the latest successful build. This will work with some older snapshots of Chunky.</sup></sub>
 
 ## Installation
 
-### Note: The latest version requires at least snapshot `2.4.0-85-gbcef6ebc`
+### Note: The latest version requires at least snapshot `2.4.0-115-g1f552686`
 Download the latest plugin build and extract it. In the Chunky Launcher, expand `Advanced Settings` and click on `Manage plugins`. In the `Plugin Manger` window click on `Add` and select the `.jar` file in the extracted zip file. Click on `Save` and start Chunky as usual.
 
 To download the latest Chunky snapshot, open `Advanced Settings` in the Chunky Launcher and enable `Download Snapshots`. Then click on the `Check for update` button.
