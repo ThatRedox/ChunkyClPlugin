@@ -430,7 +430,7 @@ int octreeIntersect(float3 *origin, float3 *direction, float3 *normal, float4 *c
     float3 offsetD = -(*origin) * invD;
 
     for (int i = 0; i < drawDepth; i++) {
-        float3 pos = floor((*origin) + (*direction) * (distMarch + OFFSET));
+        float3 pos = floor((*origin) + (*direction) * distMarch);
 
         int x = pos.x;
         int y = pos.y;
@@ -477,9 +477,11 @@ int octreeIntersect(float3 *origin, float3 *direction, float3 *normal, float4 *c
             float3 originTest = (*origin) + (*direction) * (distMarch + OFFSET);
             getTextureRay(&originTest, &normalMarch, color, emittance, data, textures, blockData, grassTextures, foliageTextures, depth);
 
-            *dist = distMarch;
-            (*normal) = normalMarch;
-            return 1;
+            if ((*color).w > EPS) {
+                *dist = distMarch;
+                (*normal) = normalMarch;
+                return 1;
+            }
         }
 
         // Exit current leaf
@@ -532,7 +534,7 @@ int octreeIntersect(float3 *origin, float3 *direction, float3 *normal, float4 *c
         normalMarch.y = ny;
         normalMarch.z = nz;
 
-        distMarch = tNear;
+        distMarch = tNear + OFFSET;
     }
 
     return 0;
