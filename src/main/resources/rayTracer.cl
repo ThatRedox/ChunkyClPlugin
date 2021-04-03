@@ -19,6 +19,7 @@ void exitBlock(float3 *origin, float3 *direction, float3 *normal, float *dist);
 int entityIntersect(float3 *origin, float3 *direction, float3 *normal, float4 *color, float3 *emittance, float *dist, image2d_t entityData, image2d_t entityTrigs, image2d_t entityTextures);
 int texturedTriangleIntersect(float3 *origin, float3 *direction, float3 *normal, float4 *color, float3 *emittance, float *dist, int index, image2d_t entityTrigs, image2d_t entityTextures);
 int aabbIntersect(float3 *origin, float3 *direction, float bounds[6]);
+float aabbIntersectDist(float3 *origin, float3 *direction, float bounds[6]);
 int aabbIntersectClose(float3 *origin, float3 *direction, float *dist, float bounds[6]);
 int aabbInside(float3 *origin, float bounds[6]);
 
@@ -245,39 +246,54 @@ int entityIntersect(float3 *origin, float3 *direction, float3 *normal, float4 *c
     int toVisit = 0;
     int currentNode = 0;
     int nodesToVisit[64];
+    float node[8];
 
     while (true) {
         // Each node is structured in:
         // <Sibling / Trig index>, <num primitives>, <6 * bounds>
         // Bounds array can be accessed with (node + 2)
-        float node[8];
         areadf(entityData, currentNode, 8, node);
 
-        if (aabbIntersectClose(origin, direction, dist, node+2)) {
-            if (node[0] <= 0) {
-                // Is leaf
-                int primIndex = -node[0];
-                int numPrim = node[1];
+        if (node[0] <= 0) {
+            // Is leaf
+            int primIndex = -node[0];
+            int numPrim = node[1];
 
-                for (int i = 0; i < numPrim; i++) {
-                    int index = primIndex + i * 30;
-                    switch ((int) indexf(entityTrigs, index)) {
-                        case 0:
-                            if (texturedTriangleIntersect(origin, direction, normal, color, emittance, dist, index, entityTrigs, entityTextures))
-                                hit = 1;
-                            break;
-                    }
+            for (int i = 0; i < numPrim; i++) {
+                int index = primIndex + i * 30;
+                switch ((int) indexf(entityTrigs, index)) {
+                    case 0:
+                        if (texturedTriangleIntersect(origin, direction, normal, color, emittance, dist, index, entityTrigs, entityTextures))
+                            hit = 1;
+                        break;
                 }
-
-                if (toVisit == 0) break;
-                currentNode = nodesToVisit[--toVisit];
-            } else {
-                nodesToVisit[toVisit++] = node[0];
-                currentNode = currentNode+8;
             }
-        } else {
+
             if (toVisit == 0) break;
             currentNode = nodesToVisit[--toVisit];
+        } else {
+            int offset = node[0];
+            areadf(entityData, currentNode+8, 8, node);
+            float t1 = aabbIntersectDist(origin, direction, node+2);
+            areadf(entityData, offset, 8, node);
+            float t2 = aabbIntersectDist(origin, direction, node+2);
+
+            if (t1 == -1 || t1 > *dist) {
+                if (t2 == -1 || t2 > *dist) {
+                    if (toVisit == 0) break;
+                    currentNode = nodesToVisit[--toVisit];
+                } else {
+                    currentNode = offset;
+                }
+            } else if (t2 == -1 || t2 > *dist) {
+                currentNode += 8;
+            } else if (t1 < t2) {
+                nodesToVisit[toVisit++] = offset;
+                currentNode += 8;
+            } else {
+                nodesToVisit[toVisit++] = currentNode+8;
+                currentNode = offset;
+            }
         }
     }
 
@@ -647,6 +663,27 @@ int aabbIntersect(float3 *origin, float3 *direction, float bounds[6]) {
     float tmax = fmin(fmin(fmax(tx1, tx2), fmax(ty1, ty2)), fmax(tz1, tz2));
 
     return tmin <= tmax+OFFSET && tmin >= 0;
+}
+
+float aabbIntersectDist(float3 *origin, float3 *direction, float bounds[6]) {
+    if (aabbInside(origin, bounds)) return 0;
+
+
+    float3 r = 1 / *direction;
+
+    float tx1 = (bounds[0] - (*origin).x) * r.x;
+    float tx2 = (bounds[1] - (*origin).x) * r.x;
+
+    float ty1 = (bounds[2] - (*origin).y) * r.y;
+    float ty2 = (bounds[3] - (*origin).y) * r.y;
+
+    float tz1 = (bounds[4] - (*origin).z) * r.z;
+    float tz2 = (bounds[5] - (*origin).z) * r.z;
+
+    float tmin = fmax(fmax(fmin(tx1, tx2), fmin(ty1, ty2)), fmin(tz1, tz2));
+    float tmax = fmin(fmin(fmax(tx1, tx2), fmax(ty1, ty2)), fmax(tz1, tz2));
+
+    return tmin <= tmax + OFFSET && tmin >= 0 ? tmin : -1;
 }
 
 int aabbIntersectClose(float3 *origin, float3 *direction, float *dist, float bounds[6]) {
