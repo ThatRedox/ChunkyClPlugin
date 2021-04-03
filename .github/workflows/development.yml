@@ -1,8 +1,10 @@
-name: Java CI with Gradle
+name: Development
 
 on:
   push:
-    branches: [ master ]
+    branches-ignore:
+      # Stable is not development!
+      - stable
   workflow_dispatch:
 
 jobs:

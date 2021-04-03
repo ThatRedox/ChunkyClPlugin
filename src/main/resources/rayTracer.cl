@@ -14,14 +14,13 @@ void randomSunDirection(float3 *direction, float3 sunPos, unsigned int *random);
 // Octree calculations
 int octreeIntersect(float3 *origin, float3 *direction, float3 *normal, float4 *color, float3 *emittance, float *dist, int drawDepth, image2d_t octreeData, int depth, __global const int *transparent, int transparentLength, image2d_t textures, image1d_t blockData, image2d_t grassTextures, image2d_t foliageTextures);
 void getTextureRay(float3 *origin, float3 *normal, float4 *color, float3 *emittance, int block, image2d_t textures, image1d_t blockData, image2d_t grassTextures, image2d_t foliageTextures, int depth);
-int octreeGet(float3 *origin, image2d_t octreeData, int depth);
-int octreeInbounds(float3 *origin, int depth);
 void exitBlock(float3 *origin, float3 *direction, float3 *normal, float *dist);
 
 // Entity calculations
 int entityIntersect(float3 *origin, float3 *direction, float3 *normal, float4 *color, float3 *emittance, float *dist, image2d_t entityData, image2d_t entityTrigs, image2d_t entityTextures);
 int texturedTriangleIntersect(float3 *origin, float3 *direction, float3 *normal, float4 *color, float3 *emittance, float *dist, int index, image2d_t entityTrigs, image2d_t entityTextures);
 int aabbIntersect(float3 *origin, float3 *direction, float bounds[6]);
+float aabbIntersectDist(float3 *origin, float3 *direction, float bounds[6]);
 int aabbIntersectClose(float3 *origin, float3 *direction, float *dist, float bounds[6]);
 int aabbInside(float3 *origin, float bounds[6]);
 
@@ -49,6 +48,7 @@ float nextFloat(unsigned int *state);
 // Ray tracer entrypoint
 __kernel void rayTracer(__global const float *rayPos,
                         __global const float *rayDir,
+                        __global const float *rayJitter,
                         __global const int *depth,
                         image2d_t octreeData,
                         __global const int *voxelLength,
@@ -84,11 +84,11 @@ __kernel void rayTracer(__global const float *rayPos,
     float3 origin = (float3) (rayPos[0], rayPos[1], rayPos[2]);
 
     // Ray direction
-    float3 direction = (float3) (
-            rayDir[gid*3 + 0],
-            rayDir[gid*3 + 1],
-            rayDir[gid*3 + 2]
-    );
+    float3 direction = normalize((float3) (
+            rayDir[gid*3 + 0] + nextFloat(random)*rayJitter[gid*3 + 0],
+            rayDir[gid*3 + 1] + nextFloat(random)*rayJitter[gid*3 + 1],
+            rayDir[gid*3 + 2] + nextFloat(random)*rayJitter[gid*3 + 2]
+    ));
 
     // Ray normal
     float3 normal = (float3) (0, 0, 0);
@@ -186,9 +186,18 @@ __kernel void rayTracer(__global const float *rayPos,
             colorStack[bounces*3 + 0] = color.x * color.w + (1 - color.w);
             colorStack[bounces*3 + 1] = color.y * color.w + (1 - color.w);
             colorStack[bounces*3 + 2] = color.z * color.w + (1 - color.w);
+
+            emittanceStack[bounces*3 + 0] = color.x * color.w + (1 - color.w);
+            emittanceStack[bounces*3 + 1] = color.y * color.w + (1 - color.w);
+            emittanceStack[bounces*3 + 2] = color.z * color.w + (1 - color.w);
+
             typeStack[bounces] = 1;
+
+            // Transmit through block
+            exitBlock(&origin, &direction, &normal, &dist);
         }
-        exitBlock(&origin, &direction, &temp, &dist);
+
+        origin += OFFSET * direction;
     }
 
     if (*preview) {
@@ -216,6 +225,11 @@ __kernel void rayTracer(__global const float *rayPos,
                     colorStack[i*3 + 0] *= colorStack[i*3 + 3];
                     colorStack[i*3 + 1] *= colorStack[i*3 + 4];
                     colorStack[i*3 + 2] *= colorStack[i*3 + 5];
+
+                    emittanceStack[i*3 + 0] *= emittanceStack[i*3 + 3];
+                    emittanceStack[i*3 + 1] *= emittanceStack[i*3 + 4];
+                    emittanceStack[i*3 + 2] *= emittanceStack[i*3 + 5];
+
                     break;
                 }
             }
@@ -276,39 +290,54 @@ int entityIntersect(float3 *origin, float3 *direction, float3 *normal, float4 *c
     int toVisit = 0;
     int currentNode = 0;
     int nodesToVisit[64];
+    float node[8];
 
     while (true) {
         // Each node is structured in:
         // <Sibling / Trig index>, <num primitives>, <6 * bounds>
         // Bounds array can be accessed with (node + 2)
-        float node[8];
         areadf(entityData, currentNode, 8, node);
 
-        if (aabbIntersectClose(origin, direction, dist, node+2)) {
-            if (node[0] <= 0) {
-                // Is leaf
-                int primIndex = -node[0];
-                int numPrim = node[1];
+        if (node[0] <= 0) {
+            // Is leaf
+            int primIndex = -node[0];
+            int numPrim = node[1];
 
-                for (int i = 0; i < numPrim; i++) {
-                    int index = primIndex + i * 30;
-                    switch ((int) indexf(entityTrigs, index)) {
-                        case 0:
-                            if (texturedTriangleIntersect(origin, direction, normal, color, emittance, dist, index, entityTrigs, entityTextures))
-                                hit = 1;
-                            break;
-                    }
+            for (int i = 0; i < numPrim; i++) {
+                int index = primIndex + i * 30;
+                switch ((int) indexf(entityTrigs, index)) {
+                    case 0:
+                        if (texturedTriangleIntersect(origin, direction, normal, color, emittance, dist, index, entityTrigs, entityTextures))
+                            hit = 1;
+                        break;
                 }
-
-                if (toVisit == 0) break;
-                currentNode = nodesToVisit[--toVisit];
-            } else {
-                nodesToVisit[toVisit++] = node[0];
-                currentNode = currentNode+8;
             }
-        } else {
+
             if (toVisit == 0) break;
             currentNode = nodesToVisit[--toVisit];
+        } else {
+            int offset = node[0];
+            areadf(entityData, currentNode+8, 8, node);
+            float t1 = aabbIntersectDist(origin, direction, node+2);
+            areadf(entityData, offset, 8, node);
+            float t2 = aabbIntersectDist(origin, direction, node+2);
+
+            if (t1 == -1 || t1 > *dist) {
+                if (t2 == -1 || t2 > *dist) {
+                    if (toVisit == 0) break;
+                    currentNode = nodesToVisit[--toVisit];
+                } else {
+                    currentNode = offset;
+                }
+            } else if (t2 == -1 || t2 > *dist) {
+                currentNode += 8;
+            } else if (t1 < t2) {
+                nodesToVisit[toVisit++] = offset;
+                currentNode += 8;
+            } else {
+                nodesToVisit[toVisit++] = currentNode+8;
+                currentNode = offset;
+            }
         }
     }
 
@@ -398,10 +427,10 @@ void getTextureRay(float3 *origin, float3 *normal, float4 *color, float3 *emitta
     unsigned int argb = indexu(textures, index);
 
     // Separate ARGB value
-    (*color).x = (0xFF & (argb >> 16)) / 256.0;
-    (*color).y = (0xFF & (argb >> 8 )) / 256.0;
-    (*color).z = (0xFF & (argb >> 0 )) / 256.0;
-    (*color).w = (0xFF & (argb >> 24)) / 256.0;
+    (*color).x = (0xFF & (argb >> 16)) / 255.0;
+    (*color).y = (0xFF & (argb >> 8 )) / 255.0;
+    (*color).z = (0xFF & (argb >> 0 )) / 255.0;
+    (*color).w = (0xFF & (argb >> 24)) / 255.0;
 
     // Calculate tint
     if (blockD.w != 0) {
@@ -436,79 +465,131 @@ void getTextureRay(float3 *origin, float3 *normal, float4 *color, float3 *emitta
     (*emittance).z = (*color).z * (*color).z * (blockD.y / 256.0);
 }
 
-// Get the value of a location in the octree
-int octreeGet(float3 *origin, image2d_t octreeData, int depth) {
-    int nodeIndex = 0;
-    int level = depth;
-
-    int x = (*origin).x;
-    int y = (*origin).y;
-    int z = (*origin).z;
-
-    int data = indexi(octreeData, nodeIndex);
-    while (data > 0) {
-        level -= 1;
-
-        int lx = 1 & (x >> level);
-        int ly = 1 & (y >> level);
-        int lz = 1 & (z >> level);
-
-        nodeIndex = data + ((lx << 2) | (ly << 1) | lz);
-        data = indexi(octreeData, nodeIndex);
-    }
-
-    return -data;
-}
-
 // Check intersect with octree
 int octreeIntersect(float3 *origin, float3 *direction, float3 *normal, float4 *color, float3 *emittance, float *dist, int drawDepth, image2d_t octreeData, int depth, __global const int *transparent, int transparentLength, image2d_t textures, image1d_t blockData, image2d_t grassTextures, image2d_t foliageTextures) {
-    float3 originMarch = (float3) ((*origin).x, (*origin).y, (*origin).z);
     float3 normalMarch = (float3) ((*normal).x, (*normal).y, (*normal).z);
-    float t = 0;
+    float distMarch = 0;
+
+    float3 invD = 1/ (*direction);
+    float3 offsetD = -(*origin) * invD;
 
     for (int i = 0; i < drawDepth; i++) {
-        if (!octreeInbounds(&originMarch, depth)) {
-            return 0;
-        }
+        float3 pos = floor((*origin) + (*direction) * distMarch);
 
-        int block = octreeGet(&originMarch, octreeData, depth);
+        int x = pos.x;
+        int y = pos.y;
+        int z = pos.z;
+
+        // Check inbounds
+        int lx = x >> depth;
+        int ly = y >> depth;
+        int lz = z >> depth;
+
+        if (lx != 0 || ly != 0 || lz != 0)
+            return 0;
+
+        // Read with depth
+        int nodeIndex = 0;
+        int level = depth;
+        int data = indexi(octreeData, nodeIndex);
+        while (data > 0) {
+            level --;
+            lx = 1 & (x >> level);
+            ly = 1 & (y >> level);
+            lz = 1 & (z >> level);
+
+            nodeIndex = data + ((lx << 2) | (ly << 1) | lz);
+            data = indexi(octreeData, nodeIndex);
+        }
+        data = -data;
+
+        lx = x >> level;
+        ly = y >> level;
+        lz = z >> level;
+
+        // Test intersection
         int pass = 0;
         for (int j = 0; j < transparentLength; j++) {
-            if (block == transparent[j]) {
+            if (data == transparent[j]) {
                 pass = 1;
                 break;
             }
         }
 
-        if (pass) {
-            exitBlock(&originMarch, direction, &normalMarch, &t);
-        } else {
-            getTextureRay(&originMarch, &normalMarch, color, emittance, block, textures, blockData, grassTextures, foliageTextures, depth);
+        // Get block data if there is an intersect
+        if (!pass) {
+            float3 originTest = (*origin) + (*direction) * (distMarch + OFFSET);
+            getTextureRay(&originTest, &normalMarch, color, emittance, data, textures, blockData, grassTextures, foliageTextures, depth);
 
-            *dist = t;
-            (*normal) = normalMarch;
-            return 1;
+            if ((*color).w > EPS) {
+                *dist = distMarch;
+                (*normal) = normalMarch;
+                return 1;
+            }
         }
+
+        // Exit current leaf
+        int nx = 0, ny = 0, nz = 0;
+        float tNear = 1000000;
+
+        float t = (lx << level) * invD.x + offsetD.x;
+        if (t > distMarch + EPS) {
+            tNear = t;
+            nx = 1;
+        }
+
+        t = ((lx + 1) << level) * invD.x + offsetD.x;
+        if (t < tNear && t > distMarch + EPS) {
+            tNear = t;
+            nx = -1;
+        }
+
+        t = (ly << level) * invD.y + offsetD.y;
+        if (t < tNear && t > distMarch + EPS) {
+            tNear = t;
+            ny = 1;
+            nx = 0;
+        }
+
+        t = ((ly + 1) << level) * invD.y + offsetD.y;
+        if (t < tNear && t > distMarch + EPS) {
+            tNear = t;
+            ny = -1;
+            nx = 0;
+        }
+
+        t = (lz << level) * invD.z + offsetD.z;
+        if (t < tNear && t > distMarch + EPS) {
+            tNear = t;
+            nz = 1;
+            ny = 0;
+            nx = 0;
+        }
+
+        t = ((lz + 1) << level) * invD.z + offsetD.z;
+        if (t < tNear && t > distMarch + EPS) {
+            tNear = t;
+            nz = -1;
+            ny = 0;
+            nx = 0;
+        }
+
+        normalMarch.x = nx;
+        normalMarch.y = ny;
+        normalMarch.z = nz;
+
+        distMarch = tNear + OFFSET;
     }
 
     return 0;
 }
 
-// Check if we are inbounds
-int octreeInbounds(float3 *origin, int depth) {
-    int x = (*origin).x;
-    int y = (*origin).y;
-    int z = (*origin).z;
-
-    int lx = x >> depth;
-    int ly = y >> depth;
-    int lz = z >> depth;
-
-    return lx == 0 && ly == 0 && lz == 0;
-}
-
 // Exit the current block. Based on chunky code.
 void exitBlock(float3 *origin, float3 *direction, float3 *normal, float *dist) {
+    // Advance to be into block
+    *dist += OFFSET;
+    (*origin) += OFFSET * (*direction);
+
     float tNext = 10000000;
     float3 b = floor(*origin);
 
@@ -555,7 +636,6 @@ void exitBlock(float3 *origin, float3 *direction, float3 *normal, float *dist) {
         }
     }
 
-    tNext += OFFSET;
     *origin += tNext * (*direction);
     *dist += tNext;
 }
@@ -629,6 +709,27 @@ int aabbIntersect(float3 *origin, float3 *direction, float bounds[6]) {
     float tmax = fmin(fmin(fmax(tx1, tx2), fmax(ty1, ty2)), fmax(tz1, tz2));
 
     return tmin <= tmax+OFFSET && tmin >= 0;
+}
+
+float aabbIntersectDist(float3 *origin, float3 *direction, float bounds[6]) {
+    if (aabbInside(origin, bounds)) return 0;
+
+
+    float3 r = 1 / *direction;
+
+    float tx1 = (bounds[0] - (*origin).x) * r.x;
+    float tx2 = (bounds[1] - (*origin).x) * r.x;
+
+    float ty1 = (bounds[2] - (*origin).y) * r.y;
+    float ty2 = (bounds[3] - (*origin).y) * r.y;
+
+    float tz1 = (bounds[4] - (*origin).z) * r.z;
+    float tz2 = (bounds[5] - (*origin).z) * r.z;
+
+    float tmin = fmax(fmax(fmin(tx1, tx2), fmin(ty1, ty2)), fmin(tz1, tz2));
+    float tmax = fmin(fmin(fmax(tx1, tx2), fmax(ty1, ty2)), fmax(tz1, tz2));
+
+    return tmin <= tmax + OFFSET && tmin >= 0 ? tmin : -1;
 }
 
 int aabbIntersectClose(float3 *origin, float3 *direction, float *dist, float bounds[6]) {
