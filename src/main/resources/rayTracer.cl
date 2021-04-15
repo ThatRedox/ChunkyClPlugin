@@ -9,6 +9,7 @@
 // Sky calculations
 void calcSkyRay(float3 *direction, float4 *color, float3 *emittance, image2d_t skyTexture, float3 sunPos, float sunIntensity, image2d_t textures, int sunIndex);
 void sunIntersect(float3 *direction, float4 *color, float3 *emittance, float3 sunPos, image2d_t textures, int sunIndex);
+void randomSunDirection(float3 *direction, float3 sunPos, unsigned int *random);
 
 // Octree calculations
 int octreeIntersect(float3 *origin, float3 *direction, float3 *normal, float4 *color, float3 *emittance, float *dist, int drawDepth, image2d_t octreeData, int depth, __global const int *transparent, int transparentLength, image2d_t textures, image1d_t blockData, image2d_t grassTextures, image2d_t foliageTextures);
@@ -105,6 +106,7 @@ __kernel void rayTracer(__global const float *rayPos,
     // Ray bounce data stacks
     float colorStack[3 * 24] = {0};
     float emittanceStack[3 * 24] = {0};
+    float directLightStack[3 * 24] = {0};
     int typeStack[24];
 
     // Do the bounces
@@ -119,6 +121,7 @@ __kernel void rayTracer(__global const float *rayPos,
 
         // Ray march
         hit = octreeIntersect(&origin, &direction, &normal, &color, &emittance, &dist, *drawDepth, octreeData, *depth, transparent, *transparentLength, textures, blockData, grassTextures, foliageTextures);
+        dist -= OFFSET;
 
         // BVH intersection
         if (*drawEntities) {
@@ -160,6 +163,21 @@ __kernel void rayTracer(__global const float *rayPos,
             // No need for ray bounce for preview
             break;
         } else if (nextFloat(random) <= color.w) {
+            // Sun sample
+            float3 marchOrigin = (float3) (origin.x, origin.y, origin.z);
+            float mult = fabs(dot(direction, normal));
+            dist = 1000000;
+            randomSunDirection(&direction, sunPosition, random);
+            marchOrigin += 4 * OFFSET * direction;
+            if (!octreeIntersect(&marchOrigin, &direction, &temp, &color, &emittance, &dist, *drawDepth, octreeData, *depth, transparent, *transparentLength, textures, blockData, grassTextures, foliageTextures) &&
+                !entityIntersect(&marchOrigin, &direction, &temp, &color, &emittance, &dist, entityData, entityTrigs, entityTextures)) {
+                // Unoccluded path
+                calcSkyRay(&direction, &color, &emittance, skyTexture, sunPosition, *sunIntensity, textures, *sunIndex);
+                directLightStack[bounces*3 + 0] = color.x * color.x * mult;
+                directLightStack[bounces*3 + 1] = color.y * color.y * mult;
+                directLightStack[bounces*3 + 2] = color.z * color.z * mult;
+            }
+
             // Diffuse reflection
             diffuseReflect(&direction, &normal, random);
             typeStack[bounces] = 0;
@@ -197,9 +215,9 @@ __kernel void rayTracer(__global const float *rayPos,
             switch (typeStack[i]) {
                 case 0: {
                     // Diffuse reflection
-                    colorStack[i*3 + 0] *= colorStack[i*3 + 3] + emittanceStack[i*3 + 3];
-                    colorStack[i*3 + 1] *= colorStack[i*3 + 4] + emittanceStack[i*3 + 4];
-                    colorStack[i*3 + 2] *= colorStack[i*3 + 5] + emittanceStack[i*3 + 5];
+                    colorStack[i*3 + 0] *= colorStack[i*3 + 3] + emittanceStack[i*3 + 3] + directLightStack[i*3 + 0];
+                    colorStack[i*3 + 1] *= colorStack[i*3 + 4] + emittanceStack[i*3 + 4] + directLightStack[i*3 + 1];
+                    colorStack[i*3 + 2] *= colorStack[i*3 + 5] + emittanceStack[i*3 + 5] + directLightStack[i*3 + 2];
                     break;
                 }
                 case 1: {
@@ -238,6 +256,32 @@ float nextFloat(unsigned int *state) {
     xorshift(state);
 
     return (*state >> 8) / ((float) (1 << 24));
+}
+
+void randomSunDirection(float3 *direction, float3 sunPos, unsigned int *random) {
+    float x1 = nextFloat(random);
+    float x2 = nextFloat(random);
+    float cos_a = 1 - x1 + x1 * cos(0.03);
+    float sin_a = sqrt(1 - cos_a*cos_a);
+    float phi = 2 * M_PI * x2;
+
+    float3 w = (float3) (sunPos.x, sunPos.y, sunPos.z);
+    float3 u;
+    float3 v;
+
+    if (fabs(w.x) > 0.1) {
+        u = (float3) (0, 1, 0);
+    } else {
+        u = (float3) (1, 0, 0);
+    }
+    v = normalize(cross(w, u));
+    u = cross(v, w);
+
+    u *= cos(phi) * sin_a;
+    v *= sin(phi) * sin_a;
+    w *= cos_a;
+
+    *direction = normalize(u + v + w);
 }
 
 int entityIntersect(float3 *origin, float3 *direction, float3 *normal, float4 *color, float3 *emittance, float *dist, image2d_t entityData, image2d_t entityTrigs, image2d_t entityTextures) {
