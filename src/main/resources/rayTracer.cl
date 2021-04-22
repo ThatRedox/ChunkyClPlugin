@@ -173,9 +173,9 @@ __kernel void rayTracer(__global const float *rayPos,
                 !entityIntersect(&marchOrigin, &direction, &temp, &color, &emittance, &dist, entityData, entityTrigs, entityTextures)) {
                 // Unoccluded path
                 calcSkyRay(&direction, &color, &emittance, skyTexture, sunPosition, *sunIntensity, textures, *sunIndex);
-                directLightStack[bounces*3 + 0] = color.x * color.x * mult;
-                directLightStack[bounces*3 + 1] = color.y * color.y * mult;
-                directLightStack[bounces*3 + 2] = color.z * color.z * mult;
+                directLightStack[bounces*3 + 0] += mult;
+                directLightStack[bounces*3 + 1] += mult;
+                directLightStack[bounces*3 + 2] += mult;
             }
 
             // Diffuse reflection
@@ -212,12 +212,13 @@ __kernel void rayTracer(__global const float *rayPos,
         // rendering shading = accumulate over all bounces
         // TODO: implement specular shading
         for (int i = maxbounces - 1; i >= 0; i--) {
+            float emittance = i == 0 && (emittanceStack[i*3 + 0] > EPS || emittanceStack[i*3 + 1] > EPS || emittanceStack[i*3 + 2] > EPS) ? 1 : 0;
             switch (typeStack[i]) {
                 case 0: {
                     // Diffuse reflection
-                    colorStack[i*3 + 0] *= colorStack[i*3 + 3] + emittanceStack[i*3 + 3] + directLightStack[i*3 + 0];
-                    colorStack[i*3 + 1] *= colorStack[i*3 + 4] + emittanceStack[i*3 + 4] + directLightStack[i*3 + 1];
-                    colorStack[i*3 + 2] *= colorStack[i*3 + 5] + emittanceStack[i*3 + 5] + directLightStack[i*3 + 2];
+                    colorStack[i*3 + 0] *= emittance + colorStack[i*3 + 3] + emittanceStack[i*3 + 3] + directLightStack[i*3 + 0];
+                    colorStack[i*3 + 1] *= emittance + colorStack[i*3 + 4] + emittanceStack[i*3 + 4] + directLightStack[i*3 + 1];
+                    colorStack[i*3 + 2] *= emittance + colorStack[i*3 + 5] + emittanceStack[i*3 + 5] + directLightStack[i*3 + 2];
                     break;
                 }
                 case 1: {
@@ -236,9 +237,9 @@ __kernel void rayTracer(__global const float *rayPos,
         }
     }
 
-    res[gid*3 + 0] = colorStack[0] * (emittanceStack[0] + 1);
-    res[gid*3 + 1] = colorStack[1] * (emittanceStack[1] + 1);
-    res[gid*3 + 2] = colorStack[2] * (emittanceStack[2] + 1);
+    res[gid*3 + 0] = colorStack[0];
+    res[gid*3 + 1] = colorStack[1];
+    res[gid*3 + 2] = colorStack[2];
 }
 
 // Xorshift random number generator based on the `xorshift32` presented in
@@ -655,13 +656,13 @@ void calcSkyRay(float3 *direction, float4 *color, float3 *emittance, image2d_t s
 }
 
 void sunIntersect(float3 *direction, float4 *color, float3 *emittance, float3 sunPos, image2d_t textures, int sunIndex) {
-    float3 su = (float3) (0, 0, 0);
+    float3 su;
     float3 sv;
 
     if (fabs(sunPos.x) > 0.1)
-        su.y = 1;
+        su = (float3) (0, 1, 0);
     else
-        su.x = 1;
+        su = (float3) (1, 0, 0);
 
     sv = cross(sunPos, su);
     sv = normalize(sv);

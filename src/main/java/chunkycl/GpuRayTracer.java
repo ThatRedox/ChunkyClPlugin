@@ -18,6 +18,7 @@ import java.util.*;
 import se.llbit.chunky.PersistentSettings;
 import se.llbit.chunky.block.Block;
 import se.llbit.chunky.chunk.BlockPalette;
+import se.llbit.chunky.main.Chunky;
 import se.llbit.chunky.renderer.scene.*;
 import se.llbit.chunky.resources.Texture;
 import se.llbit.chunky.world.Material;
@@ -375,7 +376,7 @@ public class GpuRayTracer {
 
             // Check if block is tinted
             String blockName = blockPalette.get(i).name;
-            if (Arrays.stream(constantTintNames).anyMatch(blockName::equals)) {
+            if (Arrays.asList(constantTintNames).contains(blockName)) {
                 int tintIndex = 0;
                 for (int j = 0; j < constantTintNames.length; j++) {
                     if (constantTintNames[j].equals(blockName)) {
@@ -422,6 +423,13 @@ public class GpuRayTracer {
             }
 
             // x = index, y/256 = emittance, z/256 = specular
+        }
+
+        // Transform textures into linear color space
+        float[] color = new float[4];
+        for (int i = 0; i < blockTexturesArray.length; i++) {
+            ColorUtil.getRGBAComponentsGammaCorrected(blockTexturesArray[i], color);
+            blockTexturesArray[i] = ColorUtil.getArgb(color[0], color[1], color[2], color[3]);
         }
 
         // Add the sun
@@ -682,9 +690,10 @@ public class GpuRayTracer {
 
         Sun sun = scene.sun();
         float[] sunPos = new float[3];
-        sunPos[0] = (float) (FastMath.cos(sun.getAzimuth()) * FastMath.cos(sun.getAltitude()));
+        float sunR = (float) FastMath.abs(FastMath.cos(sun.getAltitude()));
+        sunPos[0] = (float) (FastMath.cos(sun.getAzimuth()) * sunR);
         sunPos[1] = (float) (FastMath.sin(sun.getAltitude()));
-        sunPos[2] = (float) (FastMath.sin(sun.getAzimuth()) * FastMath.cos(sun.getAltitude()));
+        sunPos[2] = (float) (FastMath.sin(sun.getAzimuth()) * sunR);
 
         // Transfer arguments to GPU memory
         cl_mem clRayPos = clCreateBuffer(context,
