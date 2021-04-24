@@ -18,7 +18,6 @@ import java.util.*;
 import se.llbit.chunky.PersistentSettings;
 import se.llbit.chunky.block.Block;
 import se.llbit.chunky.chunk.BlockPalette;
-import se.llbit.chunky.main.Chunky;
 import se.llbit.chunky.renderer.scene.*;
 import se.llbit.chunky.resources.Texture;
 import se.llbit.chunky.world.Material;
@@ -593,7 +592,7 @@ public class GpuRayTracer {
                 Pointer.to(skyImage), 0, null, null);
     }
 
-    public float[] rayTrace(Vector3 origin, float[] rayDirs, float[] rayJitter, Random random, int rayDepth, boolean preview, Scene scene, int drawDepth, boolean drawEntities) {
+    public float[] rayTrace(Vector3 origin, float[] rayDirs, float[] rayJitter, Random random, int rayDepth, boolean preview, Scene scene, int drawDepth, boolean drawEntities, boolean sunSampling) {
         // Load if necessary
         if (octreeData == null) {
             load(scene, null);
@@ -635,6 +634,9 @@ public class GpuRayTracer {
         cl_mem clDrawEntities = clCreateBuffer(context,
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
                 Sizeof.cl_int, Pointer.to(new int[] {drawEntities ? 1 : 0}), null);
+        cl_mem clSunSampling = clCreateBuffer(context,
+                CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+                Sizeof.cl_int, Pointer.to(new int[] {sunSampling ? 1 : 0}), null);
         cl_mem clRayDirs = clCreateBuffer(context,
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
                 (long) Sizeof.cl_float * rayDirs.length, Pointer.to(rayDirs), null);
@@ -650,7 +652,7 @@ public class GpuRayTracer {
         // Set the arguments
         cl_mem[] arguments = {clRayPos, clRayDirs, clRayJitter, octreeDepth, octreeData, voxelLength, transparentArray, transparentLength,
                 blockTextures, blockData, clSeed, clRayDepth, clPreview, clSunPos, sunIndex, clSunIntensity, skyTexture, grassTextures, foliageTextures,
-                entityData, entityTrigs, bvhTextures, clDrawEntities, clDrawDepth, clRayRes};
+                entityData, entityTrigs, bvhTextures, clDrawEntities, clSunSampling, clDrawDepth, clRayRes};
         for (int i = 0; i < arguments.length; i++) {
             clSetKernelArg(kernel, i, Sizeof.cl_mem, Pointer.to(arguments[i]));
         }
@@ -660,21 +662,17 @@ public class GpuRayTracer {
                 null, 0, null, null);
 
         // Get the results
-        try {
-            clEnqueueReadBuffer(commandQueue, clRayRes, CL_TRUE, 0, (long) Sizeof.cl_float * rayRes.length,
-                    Pointer.to(rayRes), 0, null, null);
-        } catch (CLException e) {
-            throw e;
-        }
+        clEnqueueReadBuffer(commandQueue, clRayRes, CL_TRUE, 0, (long) Sizeof.cl_float * rayRes.length,
+                Pointer.to(rayRes), 0, null, null);
 
         // Clean up
-        cl_mem[] releases = {clRayPos, clRayDepth, clSunPos, clPreview, clSunIntensity, clDrawDepth, clDrawEntities, clRayDirs, clRayJitter, clSeed, clRayRes};
+        cl_mem[] releases = {clRayPos, clRayDepth, clSunPos, clPreview, clSunIntensity, clDrawDepth, clDrawEntities, clRayDirs, clRayJitter, clSeed, clRayRes, clSunSampling};
         Arrays.stream(releases).forEach(CL::clReleaseMemObject);
 
         return rayRes;
     }
 
-    public float[] rayTrace(Vector3 origin, Random random, int rayDepth, boolean preview, Scene scene, int drawDepth, boolean drawEntities, RayTraceCache cache) {
+    public float[] rayTrace(Vector3 origin, Random random, int rayDepth, boolean preview, Scene scene, int drawDepth, boolean drawEntities, boolean sunSampling, RayTraceCache cache) {
         // Load if necessary
         if (octreeData == null) {
             load(scene, null);
@@ -717,6 +715,9 @@ public class GpuRayTracer {
         cl_mem clDrawEntities = clCreateBuffer(context,
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
                 Sizeof.cl_int, Pointer.to(new int[] {drawEntities ? 1 : 0}), null);
+        cl_mem clSunSampling = clCreateBuffer(context,
+                CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+                Sizeof.cl_int, Pointer.to(new int[] {sunSampling ? 1 : 0}), null);
         cl_mem clSeed = clCreateBuffer(context,
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
                 Sizeof.cl_int, Pointer.to(new int[]{random.nextInt()}), null);
@@ -724,7 +725,7 @@ public class GpuRayTracer {
         // Set the arguments
         cl_mem[] arguments = {clRayPos, cache.clRayDirs, cache.clRayJitter, octreeDepth, octreeData, voxelLength, transparentArray, transparentLength,
                 blockTextures, blockData, clSeed, clRayDepth, clPreview, clSunPos, sunIndex, clSunIntensity, skyTexture, grassTextures, foliageTextures,
-                entityData, entityTrigs, bvhTextures, clDrawEntities, clDrawDepth, cache.clRayRes};
+                entityData, entityTrigs, bvhTextures, clDrawEntities, clSunSampling, clDrawDepth, cache.clRayRes};
         for (int i = 0; i < arguments.length; i++) {
             clSetKernelArg(kernel, i, Sizeof.cl_mem, Pointer.to(arguments[i]));
         }

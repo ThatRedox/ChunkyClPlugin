@@ -69,6 +69,7 @@ __kernel void rayTracer(__global const float *rayPos,
                         image2d_t entityTrigs,
                         image2d_t entityTextures,
                         __global const int *drawEntities,
+                        __global const int *sunSampling,
                         __global const int *drawDepth,
                         __global float *res)
 {
@@ -164,18 +165,20 @@ __kernel void rayTracer(__global const float *rayPos,
             break;
         } else if (nextFloat(random) <= color.w) {
             // Sun sample
-            float3 marchOrigin = (float3) (origin.x, origin.y, origin.z);
-            float mult = fabs(dot(direction, normal));
-            dist = 1000000;
-            randomSunDirection(&direction, sunPosition, random);
-            marchOrigin += 4 * OFFSET * direction;
-            if (!octreeIntersect(&marchOrigin, &direction, &temp, &color, &emittance, &dist, *drawDepth, octreeData, *depth, transparent, *transparentLength, textures, blockData, grassTextures, foliageTextures) &&
-                !entityIntersect(&marchOrigin, &direction, &temp, &color, &emittance, &dist, entityData, entityTrigs, entityTextures)) {
-                // Unoccluded path
-                calcSkyRay(&direction, &color, &emittance, skyTexture, sunPosition, *sunIntensity, textures, *sunIndex);
-                directLightStack[bounces*3 + 0] += mult;
-                directLightStack[bounces*3 + 1] += mult;
-                directLightStack[bounces*3 + 2] += mult;
+            if (*sunSampling) {
+                float3 marchOrigin = (float3) (origin.x, origin.y, origin.z);
+                float mult = fabs(dot(direction, normal));
+                dist = 1000000;
+                randomSunDirection(&direction, sunPosition, random);
+                marchOrigin += 4 * OFFSET * direction;
+                if (!octreeIntersect(&marchOrigin, &direction, &temp, &color, &emittance, &dist, *drawDepth, octreeData, *depth, transparent, *transparentLength, textures, blockData, grassTextures, foliageTextures) &&
+                    !entityIntersect(&marchOrigin, &direction, &temp, &color, &emittance, &dist, entityData, entityTrigs, entityTextures)) {
+                    // Unoccluded path
+                    calcSkyRay(&direction, &color, &emittance, skyTexture, sunPosition, *sunIntensity, textures, *sunIndex);
+                    directLightStack[bounces*3 + 0] += mult;
+                    directLightStack[bounces*3 + 1] += mult;
+                    directLightStack[bounces*3 + 2] += mult;
+                }
             }
 
             // Diffuse reflection

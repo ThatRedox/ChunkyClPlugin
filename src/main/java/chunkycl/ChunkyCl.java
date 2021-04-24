@@ -33,6 +33,8 @@ public class ChunkyCl implements Plugin {
 
             for (RenderControlsTab tab: transformed) {
                 if (tab instanceof AdvancedTab) {
+                    RenderController controller = chunky.getRenderController();
+
                     IntegerAdjuster drawDepthAdjuster = new IntegerAdjuster();
                     drawDepthAdjuster.setName("Draw depth");
                     drawDepthAdjuster.setTooltip("Maximum GPU draw distance");
@@ -40,18 +42,6 @@ public class ChunkyCl implements Plugin {
                     drawDepthAdjuster.clampMin();
                     drawDepthAdjuster.set(256);
                     drawDepthAdjuster.onValueChange(value -> {
-                        RenderController controller;
-
-                        // Get the render controller through reflection
-                        try {
-                            Field controllerField = tab.getClass().getDeclaredField("controller");
-                            controllerField.setAccessible(true);
-                            controller = (RenderController) controllerField.get(tab);
-                        } catch (NoSuchFieldException | IllegalAccessException e) {
-                            e.printStackTrace();
-                            return;
-                        }
-
                         // Set the draw depth
                         ((RenderManagerCl) controller.getRenderer()).setDrawDepth(value);
 
@@ -66,18 +56,6 @@ public class ChunkyCl implements Plugin {
                     drawEntitiesCheckBox.setTooltip(new Tooltip("Draw entities, disabling may improve performance."));
                     drawEntitiesCheckBox.setSelected(true);
                     drawEntitiesCheckBox.selectedProperty().addListener((observable, oldValue, newValue) -> {
-                        RenderController controller;
-
-                        // Get the render controller through reflection
-                        try {
-                            Field controllerField = tab.getClass().getDeclaredField("controller");
-                            controllerField.setAccessible(true);
-                            controller = (RenderController) controllerField.get(tab);
-                        } catch (NoSuchFieldException | IllegalAccessException e) {
-                            e.printStackTrace();
-                            return;
-                        }
-
                         // Set drawEntities
                         ((RenderManagerCl) controller.getRenderer()).setDrawEntities(newValue);
 
@@ -87,6 +65,20 @@ public class ChunkyCl implements Plugin {
 
                     // Add drawEntities after draw depth
                     ((VBox) ((AdvancedTab) tab).getContent()).getChildren().add(5, drawEntitiesCheckBox);
+
+                    CheckBox sunSamplingCheckBox = new CheckBox("Sun Sampling");
+                    sunSamplingCheckBox.setTooltip(new Tooltip("Toggle sun sampling, enable for outdoor renders."));
+                    sunSamplingCheckBox.setSelected(true);
+                    sunSamplingCheckBox.selectedProperty().addListener((observable, oldValue, newValue) -> {
+                        // Set sunSampling
+                        ((RenderManagerCl) controller.getRenderer()).setSunSampling(newValue);
+
+                        // Force refresh
+                        controller.getSceneManager().getScene().refresh();
+                    });
+
+                    // Add sunSamplingCheckBox after drawEntities
+                    ((VBox) ((AdvancedTab) tab).getContent()).getChildren().add(6, sunSamplingCheckBox);
 
                     Button deviceSelectorButton = new Button("Select OpenCL Device");
                     deviceSelectorButton.setOnMouseClicked(event -> {

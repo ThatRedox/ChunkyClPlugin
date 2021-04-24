@@ -49,6 +49,7 @@ public class RenderManagerCl extends Thread implements Renderer {
 
     private int drawDepth = 256;
     private boolean drawEntities = true;
+    private boolean sunSampling = true;
 
     public static final GpuRayTracer intersectCl = GpuRayTracer.getTracer();
 
@@ -75,6 +76,10 @@ public class RenderManagerCl extends Thread implements Renderer {
 
     public void setDrawEntities(boolean drawEntities) {
         this.drawEntities = drawEntities;
+    }
+
+    public void setSunSampling(boolean sunSampling) {
+        this.sunSampling = sunSampling;
     }
 
     public int getNumThreads() {
@@ -296,7 +301,7 @@ public class RenderManagerCl extends Thread implements Renderer {
         origin.sub(bufferedScene.getOrigin());
 
         // Do the rendering
-        float[] rendermap = intersectCl.rayTrace(origin, rayDirs, new float[rayDirs.length], random, 1, true, bufferedScene, drawDepth, drawEntities);
+        float[] rendermap = intersectCl.rayTrace(origin, rayDirs, new float[rayDirs.length], random, 1, true, bufferedScene, drawDepth, drawEntities, sunSampling);
 
         // Copy the samples over
         double[] samples = bufferedScene.getSampleBuffer();
@@ -369,7 +374,7 @@ public class RenderManagerCl extends Thread implements Renderer {
             }
 
             // Do the rendering
-            float[] rendermap = intersectCl.rayTrace(origin, random, bufferedScene.getRayDepth(), false, bufferedScene, drawDepth, drawEntities, cache);
+            float[] rendermap = intersectCl.rayTrace(origin, random, bufferedScene.getRayDepth(), false, bufferedScene, drawDepth, drawEntities, sunSampling, cache);
 
             if (mergeTask != null && !mergeTask.isDone()) mergeTask.join();
 
