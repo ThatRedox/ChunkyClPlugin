@@ -386,7 +386,6 @@ public class GpuRayTracer {
                 int tintColor = constantTintColors[tintIndex];
 
                 // TODO: Simplify this with existing function?
-                double tA = FastMath.pow((0xFF & (tintColor >>> 24)) / 256.0, Scene.DEFAULT_GAMMA);
                 double tR = FastMath.pow((0xFF & (tintColor >>> 16)) / 256.0, Scene.DEFAULT_GAMMA);
                 double tG = FastMath.pow((0xFF & (tintColor >>> 8)) / 256.0, Scene.DEFAULT_GAMMA);
                 double tB = FastMath.pow((0xFF & tintColor) / 256.0, Scene.DEFAULT_GAMMA);
@@ -400,7 +399,15 @@ public class GpuRayTracer {
                     int bG = 0xFF & (blockColor >>> 8);
                     int bB = 0xFF & blockColor;
 
-                    int color = (int)(bA * tA) << 24 | (int)(bR * tR) << 16 | (int)(bG * tG) << 8 | (int)(bB * tB);
+                    bR *= tR;
+                    bG *= tG;
+                    bB *= tB;
+
+                    bR = (int) (FastMath.pow(bR / 256.0, 1/Scene.DEFAULT_GAMMA) * 256);
+                    bG = (int) (FastMath.pow(bG / 256.0, 1/Scene.DEFAULT_GAMMA) * 256);
+                    bB = (int) (FastMath.pow(bB / 256.0, 1/Scene.DEFAULT_GAMMA) * 256);
+
+                    int color = bA << 24 | (int)(bR * tR) << 16 | (int)(bG * tG) << 8 | (int)(bB * tB);
                     blockTexturesArray[index + j] = color;
                 }
             } else {
