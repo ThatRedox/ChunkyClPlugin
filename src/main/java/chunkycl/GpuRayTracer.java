@@ -18,11 +18,15 @@ import java.util.*;
 import se.llbit.chunky.PersistentSettings;
 import se.llbit.chunky.block.Block;
 import se.llbit.chunky.chunk.BlockPalette;
+import se.llbit.chunky.entity.Entity;
 import se.llbit.chunky.renderer.scene.*;
 import se.llbit.chunky.resources.Texture;
 import se.llbit.chunky.world.Material;
 import se.llbit.log.Log;
 import se.llbit.math.*;
+import se.llbit.math.bvh.BVH;
+import se.llbit.math.bvh.BinaryBVH;
+import se.llbit.math.bvh.SahMaBVH;
 import se.llbit.math.primitive.Primitive;
 import se.llbit.math.primitive.TexturedTriangle;
 import se.llbit.util.TaskTracker;
@@ -222,9 +226,7 @@ public class GpuRayTracer {
             clReleaseMemObject(this.bvhTextures);
         }
 
-        if (renderTask != null) {
-            renderTask.update("Loading Octree into GPU", 4, 0);
-        }
+        renderTask.update("Loading Octree into GPU", 4, 0);
 
         // Obtain octree through reflection
         try {
@@ -272,9 +274,7 @@ public class GpuRayTracer {
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
                 Sizeof.cl_int, Pointer.to(new int[] {treeData.length}), null);
 
-        if (renderTask != null) {
-            renderTask.update("Loading blocks into GPU", 4, 1);
-        }
+        renderTask.update("Loading blocks into GPU", 4, 1);
 
         // Create transparent block table
         List<Integer> transparentList = new LinkedList<>();
@@ -314,9 +314,7 @@ public class GpuRayTracer {
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, Sizeof.cl_int,
                 Pointer.to(new int[] {transparent.length}), null);
 
-        if (renderTask != null) {
-            renderTask.update("Loading Block Textures into GPU", 4, 2);
-        }
+        renderTask.update("Loading Block Textures into GPU", 4, 2);
 
         // Load biome and foliage tinting
         // Fetch the textures with reflection
@@ -420,9 +418,9 @@ public class GpuRayTracer {
             blockIndexesArray[i*4 + 2] = (int) (block.specular * 256);
 
             // Biome tint flag
-            if (Arrays.stream(grassBlocks).anyMatch(blockName::equals)) {
+            if (Arrays.asList(grassBlocks).contains(blockName)) {
                 blockIndexesArray[i*4 + 3] = 1;
-            } else if (Arrays.stream(foliageBlocks).anyMatch(blockName::equals)) {
+            } else if (Arrays.asList(foliageBlocks).contains(blockName)) {
                 blockIndexesArray[i*4 + 3] = 2;
             } else {
                 blockIndexesArray[i*4 + 3] = 0;
@@ -481,55 +479,43 @@ public class GpuRayTracer {
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
                 Sizeof.cl_int, Pointer.to(new int[] {sunIndex}), null);
 
-        if (renderTask != null) {
-            renderTask.update("Loading BVH", 4, 3);
-        }
+        renderTask.update("Loading BVH", 4, 3);
 
-        BVH mainBvh, actorBvh;
-        try {
-            Field mainBvhField = scene.getClass().getDeclaredField("bvh");
-            mainBvhField.setAccessible(true);
-            mainBvh = (BVH) mainBvhField.get(scene);
+        ArrayList<Entity> entities = new ArrayList<>(scene.getEntities());
+        entities.addAll(scene.getActors());
+        Vector3 worldOffset = new Vector3(
+                -scene.getOrigin().x,
+                -scene.getOrigin().y,
+                -scene.getOrigin().z
+        );
 
-            Field actorBvhField = scene.getClass().getDeclaredField("actorBvh");
-            actorBvhField.setAccessible(true);
-            actorBvh = (BVH) actorBvhField.get(scene);
-        } catch (IllegalAccessException | NoSuchFieldException e) {
-            e.printStackTrace();
-            return;
-        }
+        BinaryBVH bvh = (BinaryBVH) BVH.Factory.DEFAULT_IMPLEMENTATION.create(entities, worldOffset, renderTask);
+        entities = null; // Set to null to allow for garbage collection.
 
-        FloatArrayList entityArray = new FloatArrayList();
+        // Pack entities
         FloatArrayList entityTrigs = new FloatArrayList();
         IntArrayList entityTextures = new IntArrayList();
         Map<Material, Integer> materialIndexes = new IdentityHashMap<>();
 
-        entityArray.add(0); // Second child index
-        entityArray.add(0); // 0 primitives
-        packAabb(new AABB(FastMath.min(mainBvh.getRoot().bb.xmin, actorBvh.getRoot().bb.xmin),
-                          FastMath.max(mainBvh.getRoot().bb.xmax, actorBvh.getRoot().bb.xmax),
-                          FastMath.min(mainBvh.getRoot().bb.ymin, actorBvh.getRoot().bb.ymin),
-                          FastMath.max(mainBvh.getRoot().bb.ymax, actorBvh.getRoot().bb.ymax),
-                          FastMath.min(mainBvh.getRoot().bb.zmin, actorBvh.getRoot().bb.zmin),
-                          FastMath.max(mainBvh.getRoot().bb.zmax, actorBvh.getRoot().bb.zmax)), entityArray);
+        for (int i = 0; i < bvh.packed.length; i += 7) {
+            if (bvh.packed[i] <= 0) {
+                int j = -bvh.packed[i];
+                bvh.packed[i] = -entityTrigs.size();
+                entityTrigs.add(bvh.packedPrimitives[j].length);
+                packPrimitives(bvh.packedPrimitives[j], entityTrigs, entityTextures, materialIndexes);
+            }
+        }
 
-        packBvh(mainBvh.getRoot(), entityArray, entityTrigs, entityTextures, materialIndexes);
-        entityArray.set(0, entityArray.size());
-        packBvh(actorBvh.getRoot(), entityArray, entityTrigs, entityTextures, materialIndexes);
-
-        format.image_channel_data_type = CL_FLOAT;
+        format.image_channel_data_type = CL_SIGNED_INT32;
         format.image_channel_order = CL_RGBA;
 
         desc.image_type = CL_MEM_OBJECT_IMAGE2D;
         desc.image_width = 8192;
-        desc.image_height = entityArray.size() / 8192 / 4 + 1;
-
-        float[] entityArrayFloats = new float[(entityArray.size()/8192 + 1) * 8192];
-        entityArray.toArray(entityArrayFloats);
+        desc.image_height = bvh.packed.length / 8192 / 4 + 1;
 
         this.entityData = clCreateImage(context,
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, format, desc,
-                Pointer.to(entityArrayFloats), null);
+                Pointer.to(bvh.packed), null);
 
         desc.image_height = entityTrigs.size() / 8192 / 4 + 1;
         float[] entityTrigsArray = new float[(entityTrigs.size()/8192 + 1) * 8192];
@@ -550,9 +536,7 @@ public class GpuRayTracer {
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, format, desc,
                 Pointer.to(entityTexturesArray), null);
 
-        if (renderTask != null) {
-            renderTask.update("Loading GPU", 4, 4);
-        }
+        renderTask.update("Loading GPU", 4, 4);
     }
 
     /** Generate sky. If mode is true = Nishita, false = Preetham */
@@ -602,7 +586,7 @@ public class GpuRayTracer {
     public float[] rayTrace(Vector3 origin, float[] rayDirs, float[] rayJitter, Random random, int rayDepth, boolean preview, Scene scene, int drawDepth, boolean drawEntities, boolean sunSampling) {
         // Load if necessary
         if (octreeData == null) {
-            load(scene, null);
+            load(scene, TaskTracker.Task.NONE);
         }
 
         // Results array
@@ -669,6 +653,7 @@ public class GpuRayTracer {
                 null, 0, null, null);
 
         // Get the results
+        clFinish(commandQueue);
         clEnqueueReadBuffer(commandQueue, clRayRes, CL_TRUE, 0, (long) Sizeof.cl_float * rayRes.length,
                 Pointer.to(rayRes), 0, null, null);
 
@@ -682,7 +667,7 @@ public class GpuRayTracer {
     public float[] rayTrace(Vector3 origin, Random random, int rayDepth, boolean preview, Scene scene, int drawDepth, boolean drawEntities, boolean sunSampling, RayTraceCache cache) {
         // Load if necessary
         if (octreeData == null) {
-            load(scene, null);
+            load(scene, TaskTracker.Task.NONE);
         }
 
         // Results array
@@ -784,27 +769,6 @@ public class GpuRayTracer {
         }
     }
 
-    private void packBvh(BVH.Node node, FloatArrayList data, FloatArrayList trigs, IntArrayList textures, Map<Material, Integer> indexes) {
-        int index = data.size();
-        data.add(0);    // Next node/primitive location
-        data.add(0);    // Num primitives
-        packAabb(node.bb, data);
-
-        if (node instanceof BVH.Group) {
-            data.set(index + 1, 0);         // No primitives
-            packBvh(((BVH.Group) node).child1, data, trigs, textures, indexes); // First child
-            data.set(index, data.size());   // Second child
-            packBvh(((BVH.Group) node).child2, data, trigs, textures, indexes);
-        } else if (node instanceof  BVH.Leaf) {
-            Primitive[] primitives = node.primitives;
-            data.set(index + 1, primitives.length);
-            data.set(index, -trigs.size()); // Primitives index (*-1) to reduce array lookup
-            packPrimitives(primitives, trigs, textures, indexes);
-        } else if (node == null) {
-            data.set(index, index+8);
-        }
-    }
-
     private void packPrimitives(Primitive[] primitives, FloatArrayList trigs, IntArrayList textures, Map<Material, Integer> indexes) {
         for (Primitive prim : primitives) {
             if (prim instanceof TexturedTriangle) {
@@ -887,9 +851,9 @@ public class GpuRayTracer {
         // the size of a size_t, which is handled here
         ByteBuffer buffer = ByteBuffer.allocate(
                 numValues * Sizeof.size_t).order(ByteOrder.nativeOrder());
-        clGetDeviceInfo(device, paramName, Sizeof.size_t * numValues,
+        clGetDeviceInfo(device, paramName, (long) Sizeof.size_t * numValues,
                 Pointer.to(buffer), null);
-        long values[] = new long[numValues];
+        long[] values = new long[numValues];
         if (Sizeof.size_t == 4) {
             for (int i=0; i<numValues; i++) {
                 values[i] = buffer.getInt(i * Sizeof.size_t);
@@ -913,7 +877,7 @@ public class GpuRayTracer {
      */
     public static int[] getInts(cl_device_id device, int paramName, int numValues) {
         int[] values = new int[numValues];
-        clGetDeviceInfo(device, paramName, Sizeof.cl_int * numValues, Pointer.to(values), null);
+        clGetDeviceInfo(device, paramName, (long) Sizeof.cl_int * numValues, Pointer.to(values), null);
         return values;
     }
 

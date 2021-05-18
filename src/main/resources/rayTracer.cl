@@ -294,18 +294,19 @@ int entityIntersect(float3 *origin, float3 *direction, float3 *normal, float4 *c
     int toVisit = 0;
     int currentNode = 0;
     int nodesToVisit[64];
-    float node[8];
+    int node[7];
 
     while (true) {
         // Each node is structured in:
-        // <Sibling / Trig index>, <num primitives>, <6 * bounds>
-        // Bounds array can be accessed with (node + 2)
-        areadf(entityData, currentNode, 8, node);
+        // <Sibling / Trig index>, <6 * bounds>
+        // Bounds array can be accessed with (node + 1)
+        areadi(entityData, currentNode, 7, node);
 
         if (node[0] <= 0) {
             // Is leaf
             int primIndex = -node[0];
-            int numPrim = node[1];
+            int numPrim = indexf(entityTrigs, primIndex);
+            primIndex += 1;
 
             for (int i = 0; i < numPrim; i++) {
                 int index = primIndex + i * 30;
@@ -321,10 +322,10 @@ int entityIntersect(float3 *origin, float3 *direction, float3 *normal, float4 *c
             currentNode = nodesToVisit[--toVisit];
         } else {
             int offset = node[0];
-            areadf(entityData, currentNode+8, 8, node);
-            float t1 = aabbIntersectDist(origin, direction, node+2);
-            areadf(entityData, offset, 8, node);
-            float t2 = aabbIntersectDist(origin, direction, node+2);
+            areadi(entityData, currentNode+7, 7, node);
+            float t1 = aabbIntersectDist(origin, direction, (float*)(node+1));
+            areadi(entityData, offset, 7, node);
+            float t2 = aabbIntersectDist(origin, direction, (float*)(node+1));
 
             if (t1 == -1 || t1 > *dist) {
                 if (t2 == -1 || t2 > *dist) {
@@ -334,12 +335,12 @@ int entityIntersect(float3 *origin, float3 *direction, float3 *normal, float4 *c
                     currentNode = offset;
                 }
             } else if (t2 == -1 || t2 > *dist) {
-                currentNode += 8;
+                currentNode += 7;
             } else if (t1 < t2) {
                 nodesToVisit[toVisit++] = offset;
-                currentNode += 8;
+                currentNode += 7;
             } else {
-                nodesToVisit[toVisit++] = currentNode+8;
+                nodesToVisit[toVisit++] = currentNode+7;
                 currentNode = offset;
             }
         }
