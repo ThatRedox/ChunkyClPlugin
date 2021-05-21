@@ -16,7 +16,7 @@ so render results may change drastically between versions.
 
 ## Installation
 
-### Note: The latest version requires at least snapshot `2.4.0-115-g1f552686`
+### Note: The latest version requires at least snapshot `2.4.0-157-g30c7e879`
 Download the latest plugin build and extract it. In the Chunky Launcher, expand `Advanced Settings` and click on `Manage plugins`. In the `Plugin Manger` window click on `Add` and select the `.jar` file in the extracted zip file. Click on `Save` and start Chunky as usual.
 
 ![image](https://user-images.githubusercontent.com/42661490/116319916-28ef2580-a76c-11eb-9f93-86d444a349fd.png)

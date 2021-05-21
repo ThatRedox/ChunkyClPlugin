@@ -7,6 +7,7 @@ import javafx.scene.layout.VBox;
 import se.llbit.chunky.Plugin;
 import se.llbit.chunky.main.Chunky;
 import se.llbit.chunky.main.ChunkyOptions;
+import se.llbit.chunky.renderer.DefaultRenderManager;
 import se.llbit.chunky.renderer.RenderController;
 import se.llbit.chunky.ui.ChunkyFx;
 import se.llbit.chunky.ui.IntegerAdjuster;
@@ -23,8 +24,9 @@ import java.util.List;
  */
 public class ChunkyCl implements Plugin {
     @Override public void attach(Chunky chunky) {
-        // Change to GPU renderer
-        chunky.setRendererFactory(RenderManagerCl::new);
+        // Add GPU renderers
+        Chunky.addRenderer(new OpenClRenderer());
+        Chunky.addPreviewRenderer(new OpenClPreviewRenderer());
 
         RenderControlsTabTransformer prev = chunky.getRenderControlsTabTransformer();
         chunky.setRenderControlsTabTransformer(tabs -> {
@@ -43,7 +45,10 @@ public class ChunkyCl implements Plugin {
                     drawDepthAdjuster.set(256);
                     drawDepthAdjuster.onValueChange(value -> {
                         // Set the draw depth
-                        ((RenderManagerCl) controller.getRenderer()).setDrawDepth(value);
+                        controller.getRenderManager().getRenderers().forEach(renderer -> {
+                            if (renderer instanceof AbstractOpenClRenderer)
+                                ((AbstractOpenClRenderer) renderer).drawDepth = value;
+                        });
 
                         // Force refresh
                         controller.getSceneManager().getScene().refresh();
@@ -57,7 +62,10 @@ public class ChunkyCl implements Plugin {
                     drawEntitiesCheckBox.setSelected(true);
                     drawEntitiesCheckBox.selectedProperty().addListener((observable, oldValue, newValue) -> {
                         // Set drawEntities
-                        ((RenderManagerCl) controller.getRenderer()).setDrawEntities(newValue);
+                        controller.getRenderManager().getRenderers().forEach(renderer -> {
+                            if (renderer instanceof AbstractOpenClRenderer)
+                                ((AbstractOpenClRenderer) renderer).drawEntities = newValue;
+                        });
 
                         // Force refresh
                         controller.getSceneManager().getScene().refresh();
@@ -71,7 +79,10 @@ public class ChunkyCl implements Plugin {
                     sunSamplingCheckBox.setSelected(true);
                     sunSamplingCheckBox.selectedProperty().addListener((observable, oldValue, newValue) -> {
                         // Set sunSampling
-                        ((RenderManagerCl) controller.getRenderer()).setSunSampling(newValue);
+                        controller.getRenderManager().getRenderers().forEach(renderer -> {
+                            if (renderer instanceof AbstractOpenClRenderer)
+                                ((AbstractOpenClRenderer) renderer).sunSampling = newValue;
+                        });
 
                         // Force refresh
                         controller.getSceneManager().getScene().refresh();
