@@ -4,7 +4,7 @@
 
 # ChunkyCL
 
-ChunkyCL is a plugin to the Minecraft Pathtracer [Chunky](https://github.com/chunky-dev/chunky) which harnesses the power of the GPU with OpenCL 1.2+ to accelerate rendering.
+ChunkyCL is a plugin to the Minecraft Path-tracer [Chunky](https://github.com/chunky-dev/chunky) which harnesses the power of the GPU with OpenCL 1.2+ to accelerate rendering.
 It is currently a work in progress and does not support many features such as non-cube blocks and biome tinting. The core renderer itself is still under development
 so render results may change drastically between versions.
 
@@ -17,7 +17,7 @@ so render results may change drastically between versions.
 ## Installation
 
 ### Note: The latest version requires at least snapshot `2.4.0-157-g30c7e879`
-Download the latest plugin build and extract it. In the Chunky Launcher, expand `Advanced Settings` and click on `Manage plugins`. In the `Plugin Manger` window click on `Add` and select the `.jar` file in the extracted zip file. Click on `Save` and start Chunky as usual.
+Download the latest plugin build and extract it. In the Chunky Launcher, expand `Advanced Settings` and click on `Manage plugins`. In the `Plugin Manager` window click on `Add` and select the `.jar` file in the extracted zip file. Click on `Save` and start Chunky as usual.
 
 ![image](https://user-images.githubusercontent.com/42661490/116319916-28ef2580-a76c-11eb-9f93-86d444a349fd.png)
 
@@ -33,4 +33,4 @@ Decreasing `Render threads` or `CPU utilization` may improve GPU performance. A 
 
 ## Compatibility
 
-* Not compaitable with the Denoising Plugin.
+* Not compatible with the Denoising Plugin.
