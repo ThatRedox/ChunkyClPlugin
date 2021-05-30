@@ -1,16 +1,6 @@
 apply plugin: 'java'
 apply plugin: 'idea'
 
-jar {
-	manifest {
-		attributes "Main-Class": "chunkycl.ChunkyCl"
-	}
-
-	from {
-		configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
-	}
-}
-
 repositories {
 	mavenLocal()
 	mavenCentral()
@@ -22,11 +12,25 @@ repositories {
 sourceCompatibility = '1.8'
 targetCompatibility = '1.8'
 
+configurations {
+	implementation.extendsFrom(provided)
+}
+
 dependencies {
-	compileOnly 'se.llbit:chunky-core:2.4.0-SNAPSHOT'
-	compileOnly 'org.apache.commons:commons-math3:3.2'
-	compileOnly 'it.unimi.dsi:fastutil:8.4.4'
-	implementation 'org.jocl:jocl:2.0.2'
+	implementation 'se.llbit:chunky-core:2.4.0-SNAPSHOT'
+	implementation 'org.apache.commons:commons-math3:3.2'
+	implementation 'it.unimi.dsi:fastutil:8.4.4'
+	provided 'org.jocl:jocl:2.0.2'
+}
+
+jar {
+	manifest {
+		attributes "Main-Class": "chunkycl.ChunkyCl"
+	}
+
+	from {
+		configurations.provided.collect { it.isDirectory() ? it : zipTree(it) }
+	}
 }
 
 defaultTasks 'jar'
