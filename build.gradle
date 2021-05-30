@@ -14,13 +14,14 @@ targetCompatibility = '1.8'
 
 configurations {
 	implementation.extendsFrom(provided)
+	implementation.extendsFrom(bundled)
 }
 
 dependencies {
-	implementation 'se.llbit:chunky-core:2.4.0-SNAPSHOT'
-	implementation 'org.apache.commons:commons-math3:3.2'
-	implementation 'it.unimi.dsi:fastutil:8.4.4'
-	provided 'org.jocl:jocl:2.0.2'
+	provided 'se.llbit:chunky-core:2.4.0-SNAPSHOT'
+	provided 'org.apache.commons:commons-math3:3.2'
+	provided 'it.unimi.dsi:fastutil:8.4.4'
+	bundled 'org.jocl:jocl:2.0.2'
 }
 
 jar {
@@ -29,7 +30,7 @@ jar {
 	}
 
 	from {
-		configurations.provided.collect { it.isDirectory() ? it : zipTree(it) }
+		configurations.bundled.collect { it.isDirectory() ? it : zipTree(it) }
 	}
 }
 
