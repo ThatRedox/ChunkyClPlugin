@@ -26,7 +26,6 @@ import se.llbit.log.Log;
 import se.llbit.math.*;
 import se.llbit.math.bvh.BVH;
 import se.llbit.math.bvh.BinaryBVH;
-import se.llbit.math.bvh.SahMaBVH;
 import se.llbit.math.primitive.Primitive;
 import se.llbit.math.primitive.TexturedTriangle;
 import se.llbit.util.TaskTracker;
@@ -352,13 +351,13 @@ public class GpuRayTracer {
         // Load all block textures into GPU texture memory
         // Load block texture data directly into an array which is dynamically sized for non-full blocks
         Texture stoneTexture = blockPalette.get(palette.stoneId).getTexture(0);
-        int[] blockTexturesArray = new int[stoneTexture.getData().length * blockPalette.size()];
+        int[] blockTexturesArray = new int[stoneTexture.getBitmap().data.length * blockPalette.size()];
         int[] blockIndexesArray = new int[blockPalette.size() * 4];
         int index = 0;
         for (int i = 0; i < blockPalette.size(); i++) {
             Block block = blockPalette.get(i);
             Texture texture = block.getTexture(0);
-            int[] textureData = texture.getData();
+            int[] textureData = texture.getBitmap().data;
 
             // Resize array if necessary
             if (index + textureData.length > blockTexturesArray.length) {
@@ -437,7 +436,7 @@ public class GpuRayTracer {
         }
 
         // Add the sun
-        int[] textureData = Sun.texture.getData();
+        int[] textureData = Sun.texture.getBitmap().data;
         // Resize array if necessary
         if (index + textureData.length > blockTexturesArray.length) {
             int[] tempCopyArray = new int[blockTexturesArray.length];
@@ -800,7 +799,7 @@ public class GpuRayTracer {
 
                 if (!indexes.containsKey(triangle.material)) {
                     indexes.put(triangle.material, textures.size());
-                    textures.addAll(IntList.of(triangle.material.getTexture(0).getData()));
+                    textures.addAll(IntList.of(triangle.material.getTexture(0).getBitmap().data));
                 }
 
                 trigs.add(indexes.get(triangle.material));  // 29

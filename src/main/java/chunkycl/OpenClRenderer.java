@@ -5,6 +5,7 @@ import se.llbit.chunky.renderer.postprocessing.PixelPostProcessingFilter;
 import se.llbit.chunky.renderer.postprocessing.PostProcessingFilter;
 import se.llbit.chunky.renderer.scene.Scene;
 import se.llbit.math.ColorUtil;
+import se.llbit.math.QuickMath;
 import se.llbit.math.Ray;
 import se.llbit.math.Vector3;
 import se.llbit.util.TaskTracker;
@@ -94,6 +95,7 @@ public class OpenClRenderer extends AbstractOpenClRenderer {
                             for (int j = 0; j < bufferedScene.height; j++) {
                                 pixelFilter.processPixel(bufferedScene.width, bufferedScene.height, buffer,
                                         i, j, exposure, pixelBuffer);
+                                Arrays.setAll(pixelBuffer, a -> QuickMath.clamp(pixelBuffer[a], 0, 1));
                                 bufferedScene.getBackBuffer().setPixel(i, j, ColorUtil.getRGB(pixelBuffer));
                             }
                         });
