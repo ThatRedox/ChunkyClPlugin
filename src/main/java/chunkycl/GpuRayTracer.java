@@ -50,7 +50,8 @@ public class GpuRayTracer {
     private final float[] skyImage = new float[skyTextureResolution * skyTextureResolution * 4];
 
     private cl_program program;
-    private cl_kernel kernel;
+    private cl_kernel pathTracerKernel;
+    private cl_kernel previewKernel;
 
     private cl_context context;
     private cl_command_queue commandQueue;
@@ -177,7 +178,8 @@ public class GpuRayTracer {
         }
 
         // Create the kernel
-        kernel = clCreateKernel(program, "rayTracer", null);
+        pathTracerKernel = clCreateKernel(program, "rayTracer", null);
+        previewKernel = clCreateKernel(program, "previewTracer", null);
 
         // Preallocate sky texture
         cl_image_format format = new cl_image_format();
@@ -582,14 +584,21 @@ public class GpuRayTracer {
                 Pointer.to(skyImage), 0, null, null);
     }
 
-    public float[] rayTrace(Vector3 origin, float[] rayDirs, float[] rayJitter, Random random, int rayDepth, boolean preview, Scene scene, int drawDepth, boolean drawEntities, boolean sunSampling) {
+    public void previewTrace(Vector3 origin, float[] rayDirs, Scene scene, int drawDepth, boolean drawEntities) {
         // Load if necessary
         if (octreeData == null) {
             load(scene, TaskTracker.Task.NONE);
         }
 
-        // Results array
-        float[] rayRes = new float[rayDirs.length];
+        // Trace hilight ray
+        Ray target = new Ray();
+        scene.traceTarget(target);
+        int[] targetPos = new int[3];
+        targetPos[0] = (int) Math.floor(target.o.x + target.d.x * Ray.OFFSET);
+        targetPos[1] = (int) Math.floor(target.o.y + target.d.y * Ray.OFFSET);
+        targetPos[2] = (int) Math.floor(target.o.z + target.d.z * Ray.OFFSET);
+
+        int[] rayRes = scene.getBackBuffer().data;
 
         float[] rayPos = new float[3];
         rayPos[0] = (float) origin.x;
@@ -606,61 +615,54 @@ public class GpuRayTracer {
         cl_mem clRayPos = clCreateBuffer(context,
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
                 (long) Sizeof.cl_float * rayPos.length, Pointer.to(rayPos), null);
-        cl_mem clRayDepth = clCreateBuffer(context,
-                CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-                Sizeof.cl_int, Pointer.to(new int[] {rayDepth}), null);
-        cl_mem clSunPos = clCreateBuffer(context,
-                CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-                Sizeof.cl_float * 3, Pointer.to(sunPos), null);
-        cl_mem clPreview = clCreateBuffer(context,
-                CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-                Sizeof.cl_int, Pointer.to(new int[] {preview ? 1 : 0}), null);
-        cl_mem clSunIntensity = clCreateBuffer(context,
-                CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-                Sizeof.cl_float, Pointer.to(new float[] {(float) sun.getIntensity()}), null);
-        cl_mem clDrawDepth = clCreateBuffer(context,
-                CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-                Sizeof.cl_int, Pointer.to(new int[] {drawDepth}), null);
-        cl_mem clDrawEntities = clCreateBuffer(context,
-                CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-                Sizeof.cl_int, Pointer.to(new int[] {drawEntities ? 1 : 0}), null);
-        cl_mem clSunSampling = clCreateBuffer(context,
-                CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-                Sizeof.cl_int, Pointer.to(new int[] {sunSampling ? 1 : 0}), null);
         cl_mem clRayDirs = clCreateBuffer(context,
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
                 (long) Sizeof.cl_float * rayDirs.length, Pointer.to(rayDirs), null);
-        cl_mem clRayJitter = clCreateBuffer(context,
+        cl_mem clWidth = clCreateBuffer(context,
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-                (long) Sizeof.cl_float * rayJitter.length, Pointer.to(rayJitter), null);
+                Sizeof.cl_int, Pointer.to(new int[] {scene.canvasWidth()}), null);
+        cl_mem clHeight = clCreateBuffer(context,
+                CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+                Sizeof.cl_int, Pointer.to(new int[] {scene.canvasHeight()}), null);
+        cl_mem clTrace = clCreateBuffer(context,
+                CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+                (long) Sizeof.cl_int * targetPos.length, Pointer.to(targetPos), null);
+        cl_mem clDrawDepth = clCreateBuffer(context,
+                CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+                Sizeof.cl_int, Pointer.to(new int[] {drawDepth}), null);
+        cl_mem clSunPos = clCreateBuffer(context,
+                CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+                Sizeof.cl_float * 3, Pointer.to(sunPos), null);
+        cl_mem clSunIntensity = clCreateBuffer(context,
+                CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+                Sizeof.cl_float, Pointer.to(new float[] {(float) sun.getIntensity()}), null);
+        cl_mem clDrawEntities = clCreateBuffer(context,
+                CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+                Sizeof.cl_int, Pointer.to(new int[] {drawEntities ? 1 : 0}), null);
         cl_mem clRayRes = clCreateBuffer(context, CL_MEM_WRITE_ONLY,
                 (long) Sizeof.cl_float * rayRes.length, null, null);
-        cl_mem clSeed = clCreateBuffer(context,
-                CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-                Sizeof.cl_int, Pointer.to(new int[]{random.nextInt()}), null);
 
         // Set the arguments
-        cl_mem[] arguments = {clRayPos, clRayDirs, clRayJitter, octreeDepth, octreeData, voxelLength, transparentArray, transparentLength,
-                blockTextures, blockData, clSeed, clRayDepth, clPreview, clSunPos, sunIndex, clSunIntensity, skyTexture, grassTextures, foliageTextures,
-                entityData, entityTrigs, bvhTextures, clDrawEntities, clSunSampling, clDrawDepth, clRayRes};
+        cl_mem[] arguments = {clRayPos, clRayDirs, clWidth, clHeight, clTrace, octreeDepth, octreeData, voxelLength,
+                transparentArray, transparentLength, blockTextures, blockData, clSunPos, sunIndex, clSunIntensity,
+                skyTexture, grassTextures, foliageTextures, entityData, entityTrigs, bvhTextures, clDrawEntities,
+                clDrawDepth, clRayRes};
         for (int i = 0; i < arguments.length; i++) {
-            clSetKernelArg(kernel, i, Sizeof.cl_mem, Pointer.to(arguments[i]));
+            clSetKernelArg(previewKernel, i, Sizeof.cl_mem, Pointer.to(arguments[i]));
         }
 
         // Execute the program
-        clEnqueueNDRangeKernel(commandQueue, kernel, 1, null, new long[]{rayRes.length/3},
+        clEnqueueNDRangeKernel(commandQueue, previewKernel, 1, null, new long[]{rayRes.length},
                 null, 0, null, null);
 
         // Get the results
         clFinish(commandQueue);
-        clEnqueueReadBuffer(commandQueue, clRayRes, CL_TRUE, 0, (long) Sizeof.cl_float * rayRes.length,
+        clEnqueueReadBuffer(commandQueue, clRayRes, CL_TRUE, 0, (long) Sizeof.cl_int * rayRes.length,
                 Pointer.to(rayRes), 0, null, null);
 
         // Clean up
-        cl_mem[] releases = {clRayPos, clRayDepth, clSunPos, clPreview, clSunIntensity, clDrawDepth, clDrawEntities, clRayDirs, clRayJitter, clSeed, clRayRes, clSunSampling};
+        cl_mem[] releases = {clRayPos, clRayDirs, clWidth, clHeight, clTrace, clDrawDepth, clSunPos, clSunIntensity, clDrawEntities, clRayRes};
         Arrays.stream(releases).forEach(CL::clReleaseMemObject);
-
-        return rayRes;
     }
 
     public float[] rayTrace(Vector3 origin, Random random, int rayDepth, boolean preview, Scene scene, int drawDepth, boolean drawEntities, boolean sunSampling, RayTraceCache cache) {
@@ -718,11 +720,11 @@ public class GpuRayTracer {
                 blockTextures, blockData, clSeed, clRayDepth, clPreview, clSunPos, sunIndex, clSunIntensity, skyTexture, grassTextures, foliageTextures,
                 entityData, entityTrigs, bvhTextures, clDrawEntities, clSunSampling, clDrawDepth, cache.clRayRes};
         for (int i = 0; i < arguments.length; i++) {
-            clSetKernelArg(kernel, i, Sizeof.cl_mem, Pointer.to(arguments[i]));
+            clSetKernelArg(pathTracerKernel, i, Sizeof.cl_mem, Pointer.to(arguments[i]));
         }
 
         // Execute the program
-        clEnqueueNDRangeKernel(commandQueue, kernel, 1, null, new long[]{rayRes.length/3},
+        clEnqueueNDRangeKernel(commandQueue, pathTracerKernel, 1, null, new long[]{rayRes.length/3},
                 null, 0, null, null);
 
         // Get the results

@@ -39,9 +39,8 @@ public class OpenClPreviewRenderer extends AbstractOpenClRenderer {
         Vector3 origin = new Vector3(bufferedScene.camera().getPosition());
         origin.sub(bufferedScene.getOrigin());
 
-        float[] rendermap = rayTracer.rayTrace(origin, rayDirs, new float[rayDirs.length], random, 1, true,
-                bufferedScene, drawDepth, drawEntities, sunSampling);
-        Arrays.setAll(bufferedScene.getSampleBuffer(), i -> rendermap[i]);
+        rayTracer.previewTrace(origin, rayDirs, bufferedScene, drawDepth, drawEntities);
+        manager.redrawScreen();
 
         callback.getAsBoolean();
         renderTask.update("Preview", 1, 1, "");
@@ -49,6 +48,6 @@ public class OpenClPreviewRenderer extends AbstractOpenClRenderer {
 
     @Override
     public boolean autoPostProcess() {
-        return true;
+        return false;
     }
 }

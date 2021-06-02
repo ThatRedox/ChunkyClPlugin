@@ -13,6 +13,7 @@ import java.util.stream.IntStream;
 
 public abstract class AbstractOpenClRenderer implements Renderer {
     public int drawDepth = 256;
+    public int lastReset = 0;
     public boolean drawEntities = true;
     public boolean sunSampling = true;
 
@@ -32,12 +33,16 @@ public abstract class AbstractOpenClRenderer implements Renderer {
     public abstract void render(DefaultRenderManager manager) throws InterruptedException;
 
     @Override
-    public void sceneReset(DefaultRenderManager manager, ResetReason reason) {
-        if (reason.overwriteState())
-            rayTracer.generateSky(manager.bufferedScene);
+    public void sceneReset(DefaultRenderManager manager, ResetReason reason, int resetCount) {
+        if (resetCount != lastReset) {
+            if (reason.overwriteState())
+                rayTracer.generateSky(manager.bufferedScene);
 
-        if (reason == ResetReason.MATERIALS_CHANGED || reason == ResetReason.SCENE_LOADED)
-            rayTracer.load(manager.bufferedScene, manager.getRenderTask());
+            if (reason == ResetReason.MATERIALS_CHANGED || reason == ResetReason.SCENE_LOADED)
+                rayTracer.load(manager.bufferedScene, manager.getRenderTask());
+
+            lastReset = resetCount;
+        }
     }
 
     @Override
