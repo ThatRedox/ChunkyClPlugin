@@ -1,6 +1,7 @@
 package chunkycl;
 
 import se.llbit.chunky.renderer.DefaultRenderManager;
+import se.llbit.chunky.renderer.RenderWorkerPool;
 import se.llbit.chunky.renderer.postprocessing.PixelPostProcessingFilter;
 import se.llbit.chunky.renderer.postprocessing.PostProcessingFilter;
 import se.llbit.chunky.renderer.scene.Scene;
@@ -65,60 +66,30 @@ public class OpenClRenderer extends AbstractOpenClRenderer {
 
         // Create work pools
         int threads = Math.max(manager.pool.threads/2, 1);
-        ForkJoinPool mergePool = new ForkJoinPool(threads);
-        ForkJoinPool finalizePool = new ForkJoinPool(threads);
-
-        // Merge task
-        ForkJoinTask mergeTask = null;
-        ForkJoinTask finalizeTask = null;
+        RenderPoolMerger mergePool = new RenderPoolMerger(manager.pool, threads);
+        RenderPoolFinalizer finalizePool = new RenderPoolFinalizer(manager.pool, threads);
 
         while (bufferedScene.spp < bufferedScene.getTargetSpp()) {
             float[] rendermap = rayTracer.rayTrace(origin, random, bufferedScene.getRayDepth(), false,
                     bufferedScene, drawDepth, drawEntities, sunSampling, cache);
 
             // Finalize
-            if (finalizeTask == null || finalizeTask.isDone()) {
-                if (finalizeTask != null) {
-                    finalizeTask.join();
-                    manager.redrawScreen();
-                }
-
-                finalizeTask = finalizePool.submit(() -> {
-                    PostProcessingFilter filter = bufferedScene.getPostProcessingFilter();
-                    if (filter instanceof PixelPostProcessingFilter) {
-                        PixelPostProcessingFilter pixelFilter =  (PixelPostProcessingFilter) filter;
-
-                        IntStream.range(0, bufferedScene.width).parallel().forEach(i -> {
-                            double[] pixelBuffer = new double[3];
-                            double[] buffer = bufferedScene.getSampleBuffer();
-                            double exposure = bufferedScene.getExposure();
-                            for (int j = 0; j < bufferedScene.height; j++) {
-                                pixelFilter.processPixel(bufferedScene.width, bufferedScene.height, buffer,
-                                        i, j, exposure, pixelBuffer);
-                                Arrays.setAll(pixelBuffer, a -> QuickMath.clamp(pixelBuffer[a], 0, 1));
-                                bufferedScene.getBackBuffer().setPixel(i, j, ColorUtil.getRGB(pixelBuffer));
-                            }
-                        });
-                    } else {
-                        filter.processFrame(bufferedScene.width, bufferedScene.height, bufferedScene.getSampleBuffer(),
-                                bufferedScene.getBackBuffer(), bufferedScene.getExposure(), TaskTracker.Task.NONE);
-                    }
-                });
+            if (finalizePool.isDone()) {
+                manager.redrawScreen();
+                finalizePool.postProcessFrame(bufferedScene);
             }
 
             // Wait for previous merge to finish
-            if (mergeTask != null) mergeTask.join();
+            mergePool.join();
 
             // Merge
-            int sppF = bufferedScene.spp;
-            double sinv = 1.0 / (sppF + 1);
-            mergeTask = mergePool.submit(() -> Arrays.parallelSetAll(samples, i -> (samples[i] * sppF + rendermap[i]) * sinv));
+            mergePool.merge(bufferedScene, rendermap);
 
             bufferedScene.spp += 1;
             if (callback.getAsBoolean()) break;
         }
 
-        if (mergeTask != null) mergeTask.join();
+        mergePool.join();
         bufferedScene.postProcessFrame(TaskTracker.NONE);
         manager.redrawScreen();
         cache.release();
@@ -127,5 +98,93 @@ public class OpenClRenderer extends AbstractOpenClRenderer {
     @Override
     public boolean autoPostProcess() {
         return false;
+    }
+
+    private static class RenderPoolMerger {
+        private RenderWorkerPool.RenderJobFuture[] jobs;
+        private RenderWorkerPool pool;
+
+        public RenderPoolMerger(RenderWorkerPool pool, int threads) {
+            this.pool = pool;
+            this.jobs = new RenderWorkerPool.RenderJobFuture[threads];
+        }
+
+        public void join() throws InterruptedException {
+            for (RenderWorkerPool.RenderJobFuture job : jobs) {
+                if (job != null) job.awaitFinish();
+            }
+        }
+
+        public void merge(Scene scene, float[] renderMap) throws InterruptedException {
+            this.join();
+
+            double[] sampleBuffer = scene.getSampleBuffer();
+            int sppF = scene.spp;
+            double sinv = 1.0 / (sppF + 1);
+
+            for (int i = 0; i < jobs.length; i++) {
+                int finalI = i;
+                int threads = jobs.length;
+                jobs[i] = pool.submit(renderWorker -> {
+                    for (int k = finalI; k < sampleBuffer.length; k += threads)
+                        sampleBuffer[k] = (sampleBuffer[k] * sppF + renderMap[k]) * sinv;
+                });
+            }
+        }
+    }
+
+    private static class RenderPoolFinalizer {
+        private RenderWorkerPool.RenderJobFuture[] jobs;
+        private RenderWorkerPool pool;
+
+        public RenderPoolFinalizer(RenderWorkerPool pool, int threads) {
+            this.pool = pool;
+            this.jobs = new RenderWorkerPool.RenderJobFuture[threads];
+        }
+
+        public boolean isDone() {
+            for (RenderWorkerPool.RenderJobFuture job : jobs) {
+                if (job != null && !job.isDone()) return false;
+            }
+            return true;
+        }
+
+        public void join() throws InterruptedException {
+            for (RenderWorkerPool.RenderJobFuture job : jobs) {
+                if (job != null) job.awaitFinish();
+            }
+        }
+
+        public void postProcessFrame(Scene scene) throws InterruptedException {
+            this.join();
+
+            PostProcessingFilter filter = scene.getPostProcessingFilter();
+            if (filter instanceof PixelPostProcessingFilter) {
+                PixelPostProcessingFilter pixelFilter =  (PixelPostProcessingFilter) filter;
+
+                for (int i = 0; i < jobs.length; i++) {
+                    int finalI = i;
+                    double[] pixelBuffer = new double[3];
+                    double[] buffer = scene.getSampleBuffer();
+                    double exposure = scene.getExposure();
+
+                    jobs[i] = pool.submit(renderWorker -> {
+                        for (int x = 0; x < scene.width; x++) {
+                            for (int y = 0; y < scene.height; y++) {
+                                if ((x + y) % jobs.length == finalI) {
+                                    pixelFilter.processPixel(scene.width, scene.height, buffer,
+                                            x, y, exposure, pixelBuffer);
+                                    Arrays.setAll(pixelBuffer, a -> QuickMath.clamp(pixelBuffer[a] , 0, 1));
+                                    scene.getBackBuffer().setPixel(x, y, ColorUtil.getRGB(pixelBuffer));
+                                }
+                            }
+                        }
+                    });
+                }
+            } else {
+                jobs[0] = pool.submit(renderWorker -> filter.processFrame(scene.width, scene.height,
+                        scene.getSampleBuffer(), scene.getBackBuffer(), scene.getExposure(), TaskTracker.Task.NONE));
+            }
+        }
     }
 }

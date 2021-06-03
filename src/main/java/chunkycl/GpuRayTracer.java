@@ -696,9 +696,6 @@ public class GpuRayTracer {
         cl_mem clSunPos = clCreateBuffer(context,
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
                 Sizeof.cl_float * 3, Pointer.to(sunPos), null);
-        cl_mem clPreview = clCreateBuffer(context,
-                CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-                Sizeof.cl_int, Pointer.to(new int[] {preview ? 1 : 0}), null);
         cl_mem clSunIntensity = clCreateBuffer(context,
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
                 Sizeof.cl_float, Pointer.to(new float[] {(float) sun.getIntensity()}), null);
@@ -717,7 +714,7 @@ public class GpuRayTracer {
 
         // Set the arguments
         cl_mem[] arguments = {clRayPos, cache.clRayDirs, cache.clRayJitter, octreeDepth, octreeData, voxelLength, transparentArray, transparentLength,
-                blockTextures, blockData, clSeed, clRayDepth, clPreview, clSunPos, sunIndex, clSunIntensity, skyTexture, grassTextures, foliageTextures,
+                blockTextures, blockData, clSeed, clRayDepth, clSunPos, sunIndex, clSunIntensity, skyTexture, grassTextures, foliageTextures,
                 entityData, entityTrigs, bvhTextures, clDrawEntities, clSunSampling, clDrawDepth, cache.clRayRes};
         for (int i = 0; i < arguments.length; i++) {
             clSetKernelArg(pathTracerKernel, i, Sizeof.cl_mem, Pointer.to(arguments[i]));
@@ -736,7 +733,7 @@ public class GpuRayTracer {
         }
 
         // Clean up
-        cl_mem[] releases = {clRayPos, clRayDepth, clSunPos, clPreview, clSunIntensity, clDrawDepth, clDrawEntities, clSeed};
+        cl_mem[] releases = {clRayPos, clRayDepth, clSunPos, clSunIntensity, clDrawDepth, clDrawEntities, clSeed};
         Arrays.stream(releases).forEach(CL::clReleaseMemObject);
 
         return rayRes;

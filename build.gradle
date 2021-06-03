@@ -2,36 +2,36 @@ apply plugin: 'java'
 apply plugin: 'idea'
 
 repositories {
-	mavenLocal()
-	mavenCentral()
-	maven {
-		url 'https://repo.lemaik.de/'
-	}
+    mavenLocal()
+    mavenCentral()
+    maven {
+        url 'https://repo.lemaik.de/'
+    }
 }
 
 sourceCompatibility = '1.8'
 targetCompatibility = '1.8'
 
 configurations {
-	implementation.extendsFrom(provided)
-	implementation.extendsFrom(bundled)
+    implementation.extendsFrom(provided)
+    implementation.extendsFrom(bundled)
 }
 
 dependencies {
-	provided 'se.llbit:chunky-core:2.4.0-SNAPSHOT'
-	provided 'org.apache.commons:commons-math3:3.2'
-	provided 'it.unimi.dsi:fastutil:8.4.4'
-	bundled 'org.jocl:jocl:2.0.2'
+    provided 'se.llbit:chunky-core:2.4.0-SNAPSHOT'
+    provided 'org.apache.commons:commons-math3:3.2'
+    provided 'it.unimi.dsi:fastutil:8.4.4'
+    bundled 'org.jocl:jocl:2.0.2'
 }
 
 jar {
-	manifest {
-		attributes "Main-Class": "chunkycl.ChunkyCl"
-	}
+    manifest {
+        attributes "Main-Class": "chunkycl.ChunkyCl"
+    }
 
-	from {
-		configurations.bundled.collect { it.isDirectory() ? it : zipTree(it) }
-	}
+    from {
+        configurations.bundled.collect { it.isDirectory() ? it : zipTree(it) }
+    }
 }
 
 defaultTasks 'jar'
