@@ -1,3 +1,6 @@
+#include "randomness.h"
+#include "imageArrays.h"
+
 #define EPS 0.000005f    // Ray epsilon and exit offset
 #define OFFSET 0.0001f   // TODO: refine these values?
 
@@ -27,23 +30,8 @@ int aabbInside(float3 *origin, float bounds[6]);
 // Reflection calculations
 void diffuseReflect(float3 *direction, float3 *normal, unsigned int *state);
 
-// Texture read functions
-float indexf(image2d_t img, int index);
-int indexi(image2d_t img, int index);
-unsigned int indexu(image2d_t img, int index);
-
-// Texture read array functions
-void areadf(image2d_t img, int index, int length, float output[]);
-void areadi(image2d_t img, int index, int length, int output[]);
-void areadu(image2d_t img, int index, int length, unsigned int output[]);
-
 // Samplers
-const sampler_t indexSampler = CLK_NORMALIZED_COORDS_FALSE | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_NEAREST;
 const sampler_t skySampler =   CLK_NORMALIZED_COORDS_TRUE  | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_LINEAR;
-
-// Randomness
-void xorshift(unsigned int *state);
-float nextFloat(unsigned int *state);
 
 // Ray tracer entrypoint
 __kernel void rayTracer(__global const float *rayPos,
@@ -330,23 +318,6 @@ __kernel void previewTracer(__global const float *rayPos,
     int g = (int) fmax(0.0f, fmin(255.0f, color.y * 255));
     int b = (int) fmax(0.0f, fmin(255.0f, color.z * 255));
     res[gid] = 0xFF000000 | (r << 16) | (g << 8) | (b);
-}
-
-// Xorshift random number generator based on the `xorshift32` presented in
-// https://en.wikipedia.org/w/index.php?title=Xorshift&oldid=1007951001
-void xorshift(unsigned int *state) {
-    *state ^= *state << 13;
-    *state ^= *state >> 17;
-    *state ^= *state << 5;
-    *state *= 0x5DEECE66D;
-}
-
-// Calculate the next float based on the formula on
-// https://docs.oracle.com/javase/8/docs/api/java/util/Random.html#nextFloat--
-float nextFloat(unsigned int *state) {
-    xorshift(state);
-
-    return (*state >> 8) / ((float) (1 << 24));
 }
 
 void randomSunDirection(float3 *direction, float3 sunPos, unsigned int *random) {
@@ -940,83 +911,3 @@ int texturedTriangleIntersect(float3 *origin, float3 *direction, float3 *normal,
     return 0;
 }
 
-float indexf(image2d_t img, int index) {
-    float4 roi = read_imagef(img, indexSampler, (int2) ((index / 4) % 8192, (index / 4) / 8192));
-    switch (index % 4) {
-        case 0: return roi.x;
-        case 1: return roi.y;
-        case 2: return roi.z;
-        default: return roi.w;
-    }
-}
-
-int indexi(image2d_t img, int index) {
-    int4 roi = read_imagei(img, indexSampler, (int2) ((index / 4) % 8192, (index / 4) / 8192));
-    switch (index % 4) {
-        case 0: return roi.x;
-        case 1: return roi.y;
-        case 2: return roi.z;
-        default: return roi.w;
-    }
-}
-
-unsigned int indexu(image2d_t img, int index) {
-    uint4 roi = read_imageui(img, indexSampler, (int2) ((index / 4) % 8192, (index / 4) / 8192));
-    switch (index % 4) {
-        case 0: return roi.x;
-        case 1: return roi.y;
-        case 2: return roi.z;
-        default: return roi.w;
-    }
-}
-
-void areadf(image2d_t img, int index, int length, float output[]) {
-    float4 roi = read_imagef(img, indexSampler, (int2) ((index / 4) % 8192, (index / 4) / 8192));
-    for (int i = 0; i < length; i++) {
-        if ((index + i) % 4 == 0 && i != 0) {
-            index += 4;
-            roi = read_imagef(img, indexSampler, (int2) ((index / 4) % 8192, (index / 4) / 8192));
-        }
-
-        switch ((index + i) % 4) {
-            case 0: output[i] = roi.x; break;
-            case 1: output[i] = roi.y; break;
-            case 2: output[i] = roi.z; break;
-            default: output[i] = roi.w; break;
-        }
-    }
-}
-
-void areadi(image2d_t img, int index, int length, int output[]) {
-    int4 roi = read_imagei(img, indexSampler, (int2) ((index / 4) % 8192, (index / 4) / 8192));
-    for (int i = 0; i < length; i++) {
-        if ((index + i) % 4 == 0 && i != 0) {
-            index += 4;
-            roi = read_imagei(img, indexSampler, (int2) ((index / 4) % 8192, (index / 4) / 8192));
-        }
-
-        switch ((index + i) % 4) {
-            case 0: output[i] = roi.x; break;
-            case 1: output[i] = roi.y; break;
-            case 2: output[i] = roi.z; break;
-            default: output[i] = roi.w; break;
-        }
-    }
-}
-
-void areadu(image2d_t img, int index, int length, unsigned int output[]) {
-    uint4 roi = read_imageui(img, indexSampler, (int2) ((index / 4) % 8192, (index / 4) / 8192));
-    for (int i = 0; i < length; i++) {
-        if ((index + i) % 4 == 0 && i != 0) {
-            index += 4;
-            roi = read_imageui(img, indexSampler, (int2) ((index / 4) % 8192, (index / 4) / 8192));
-        }
-
-        switch ((index + i) % 4) {
-            case 0: output[i] = roi.x; break;
-            case 1: output[i] = roi.y; break;
-            case 2: output[i] = roi.z; break;
-            default: output[i] = roi.w; break;
-        }
-    }
-}

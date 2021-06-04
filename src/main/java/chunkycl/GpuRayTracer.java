@@ -78,12 +78,6 @@ public class GpuRayTracer {
         final long deviceType = CL_DEVICE_TYPE_ALL;
         final int deviceIndex = PersistentSettings.settings.getInt("clDevice", 0);
 
-        // Load program source
-        InputStream programStream = GpuRayTracer.class.getClassLoader().getResourceAsStream("rayTracer.cl");
-        assert programStream != null;
-        Scanner s = new Scanner(programStream).useDelimiter("\\A");
-        programSource = s.hasNext() ? s.next() : "";
-
         // Enable exceptions
         CL.setExceptionsEnabled(true);
 
@@ -153,29 +147,8 @@ public class GpuRayTracer {
             Log.error("OpenCL 1.2+ required.");
         }
 
-        // Create the program
-        program = clCreateProgramWithSource(context, 1, new String[] {programSource},
-                null, null);
-
         // Build the program
-        try {
-            clBuildProgram(program, 0, null, null, null, null);
-        } catch (CLException e) {
-            if (e.getStatus() == CL_BUILD_PROGRAM_FAILURE) {
-                // Obtain the length of the string that will be queried
-                long[] size = new long[1];
-                clGetProgramBuildInfo(program, device, CL_PROGRAM_BUILD_LOG, 0, null, size);
-
-                // Create a buffer of the appropriate size and fill it with the info
-                byte[] buffer = new byte[(int)size[0]];
-                clGetProgramBuildInfo(program, device, CL_PROGRAM_BUILD_LOG, buffer.length, Pointer.to(buffer), null);
-
-                // Create a string from the buffer (excluding the trailing \0 byte)
-                System.err.println(new String(buffer, 0, buffer.length-1));
-            }
-
-            throw e;
-        }
+        program = KernelLoader.loadProgram(context, new cl_device_id[] { device });
 
         // Create the kernel
         pathTracerKernel = clCreateKernel(program, "rayTracer", null);
