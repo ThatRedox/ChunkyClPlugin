@@ -13,9 +13,6 @@ import se.llbit.util.TaskTracker;
 
 import java.util.Arrays;
 import java.util.Random;
-import java.util.concurrent.ForkJoinPool;
-import java.util.concurrent.ForkJoinTask;
-import java.util.stream.IntStream;
 
 public class OpenClRenderer extends AbstractOpenClRenderer {
     @Override
@@ -71,7 +68,7 @@ public class OpenClRenderer extends AbstractOpenClRenderer {
 
         while (bufferedScene.spp < bufferedScene.getTargetSpp()) {
             float[] rendermap = rayTracer.rayTrace(origin, random, bufferedScene.getRayDepth(), false,
-                    bufferedScene, drawDepth, drawEntities, sunSampling, cache);
+                    bufferedScene, drawDepth, drawEntities, bufferedScene.getDirectLight(), cache);
 
             // Finalize
             if (finalizePool.isDone()) {

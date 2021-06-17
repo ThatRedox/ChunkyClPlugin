@@ -67,16 +67,7 @@ public class GpuSelector extends Stage {
         selectButton.setOnMouseClicked(event -> {
             if (!table.getSelectionModel().isEmpty()) {
                 PersistentSettings.settings.setInt("clDevice", table.getSelectionModel().getSelectedItem().index);
-
-                // Save with reflection
-                try {
-                    Method method = PersistentSettings.class.getDeclaredMethod("save");
-                    method.setAccessible(true);
-                    method.invoke(null);
-                } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
-                    Log.warn("Error saving changes", e);
-                }
-
+                PersistentSettings.save();
                 this.close();
             }
         });

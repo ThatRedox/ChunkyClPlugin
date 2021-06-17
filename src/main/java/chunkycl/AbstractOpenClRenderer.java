@@ -12,10 +12,9 @@ import java.util.function.BooleanSupplier;
 import java.util.stream.IntStream;
 
 public abstract class AbstractOpenClRenderer implements Renderer {
-    public int drawDepth = 256;
-    public int lastReset = 0;
-    public boolean drawEntities = true;
-    public boolean sunSampling = true;
+    protected int drawDepth = 256;
+    protected boolean drawEntities = true;
+    protected int lastReset = 0;
 
     protected BooleanSupplier callback = () -> true;
     protected GpuRayTracer rayTracer = GpuRayTracer.getTracer();
