@@ -156,7 +156,7 @@ __kernel void rayTracer(__global const float *rayPos,
                 randomSunDirection(&direction, sunPosition, random);
                 marchOrigin += 4 * OFFSET * direction;
                 if (!octreeIntersect(&marchOrigin, &direction, &temp, &color, &emittance, &dist, *drawDepth, octreeData, *depth, transparent, *transparentLength, textures, blockData, grassTextures, foliageTextures) &&
-                    !entityIntersect(&marchOrigin, &direction, &temp, &color, &emittance, &dist, entityData, entityTrigs, entityTextures)) {
+                    !(*drawEntities ? entityIntersect(&marchOrigin, &direction, &temp, &color, &emittance, &dist, entityData, entityTrigs, entityTextures) : 0)) {
                     // Unoccluded path
                     calcSkyRay(&direction, &color, &emittance, skyTexture, sunPosition, *sunIntensity, textures, *sunIndex);
                     directLightStack[bounces*3 + 0] += mult;
