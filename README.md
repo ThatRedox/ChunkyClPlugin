@@ -25,6 +25,10 @@ To download the latest Chunky snapshot, open `Advanced Settings` in the Chunky L
 
 ![image](https://user-images.githubusercontent.com/42661490/116319834-0e1cb100-a76c-11eb-8842-e72dc2b76854.png)
 
+Select `ChunkyCL` as your renderer for the scene in the `Advanced` tab.
+
+![image](https://user-images.githubusercontent.com/42661490/122492084-fc040580-cf99-11eb-9b08-b166dc25db41.png)
+
 ### Performance
 
 Rough performance with a RTX 2070 is around 10 times that of the traditional CPU renderer as of 2021-02-02.
