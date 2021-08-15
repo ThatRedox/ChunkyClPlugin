@@ -9,8 +9,8 @@ It is currently a work in progress and does not support many features such as no
 so render results may change drastically between versions.
 
 ## Downloads
-* [Latest mostly stable build](https://nightly.link/alexhliu/ChunkyClPlugin/workflows/stable/stable/ChunkyClPlugin.zip)
-* [Latest development build](https://nightly.link/alexhliu/ChunkyClPlugin/workflows/development/master/ChunkyClPlugin.zip)
+* [Latest mostly stable build](https://nightly.link/ThatRedox/ChunkyClPlugin/workflows/stable/stable/ChunkyClPlugin.zip)
+* [Latest development build](https://nightly.link/ThatRedox/ChunkyClPlugin/workflows/development/master/ChunkyClPlugin.zip)
 
 <sub><sup>Note: Even if the build is failing, the link will link to the latest successful build. This will work with some older snapshots of Chunky.</sup></sub>
 
