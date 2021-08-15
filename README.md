@@ -16,7 +16,7 @@ so render results may change drastically between versions.
 
 ## Installation
 
-### Note: The latest version requires at least snapshot `2.4.0-157-g30c7e879`
+### Note: The latest version requires at least snapshot `2.4.0-183-gffad4f42`
 Download the latest plugin build and extract it. In the Chunky Launcher, expand `Advanced Settings` and click on `Manage plugins`. In the `Plugin Manager` window click on `Add` and select the `.jar` file in the extracted zip file. Click on `Save` and start Chunky as usual.
 
 ![image](https://user-images.githubusercontent.com/42661490/116319916-28ef2580-a76c-11eb-9f93-86d444a349fd.png)
@@ -33,7 +33,11 @@ Select `ChunkyCL` as your renderer for the scene in the `Advanced` tab.
 
 Rough performance with a RTX 2070 is around 10 times that of the traditional CPU renderer as of 2021-02-02.
 
-Decreasing `Render threads` or `CPU utilization` may improve GPU performance. A good starting point is 1 `render thread` at 100% `CPU utilization`. In addition, if you don't want/need to render entities, disable the `Enable entities` checkbox.
+Some settings have been added to improve render performance.
+* Indoor scenes should disable sunlight under `Lighting`
+* Draw depth may be adjusted under `Advanced`
+* Draw entities may be unchecked under `Advanced`
+* OpenCL Device selector under `Advanced`
 
 ## Compatibility
 
