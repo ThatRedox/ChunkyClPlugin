@@ -31,7 +31,7 @@ Select `ChunkyCL` as your renderer for the scene in the `Advanced` tab.
 
 ### Performance
 
-Rough performance with a RTX 2070 is around 10 times that of the traditional CPU renderer as of 2021-02-02.
+Rough performance with a RTX 2070 is around 40 times that of the traditional CPU renderer as of 2021-09-06.
 
 Some settings have been added to improve render performance.
 * Indoor scenes should disable sunlight under `Lighting`

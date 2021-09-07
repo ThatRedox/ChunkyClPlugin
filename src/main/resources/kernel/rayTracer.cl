@@ -87,15 +87,11 @@ __kernel void rayTracer(__global const float *rayPos,
     // temp array
     float3 temp;
 
-    // Cap max bounces at 23 since no dynamic memory allocation
     int maxbounces = *rayDepth;
-    if (maxbounces > 23) maxbounces = 23;
 
     // Ray bounce data stacks
-    float colorStack[3 * 24] = {0};
-    float emittanceStack[3 * 24] = {0};
-    float directLightStack[3 * 24] = {0};
-    int typeStack[24];
+    float3 colorAccumulator = (float3)(0, 0, 0);
+    float3 brdfAccumulator = (float3)(1, 1, 1);
 
     // Do the bounces
     for (int bounces = 0; bounces < maxbounces; bounces++) {
@@ -122,32 +118,17 @@ __kernel void rayTracer(__global const float *rayPos,
 
             float sunScale = pow(*sunIntensity, 2.2f);
 
-            emittanceStack[bounces*3 + 0] = color.x * color.x * sunScale;
-            emittanceStack[bounces*3 + 1] = color.y * color.y * sunScale;
-            emittanceStack[bounces*3 + 2] = color.z * color.z * sunScale;
-
-            colorStack[bounces*3 + 0] = color.x;
-            colorStack[bounces*3 + 1] = color.y;
-            colorStack[bounces*3 + 2] = color.z;
-
-            typeStack[bounces] = -1;
-
+            colorAccumulator += brdfAccumulator * (float3) (color.x, color.y, color.z);
             break;
         }
 
         // Update origin
         origin += direction * dist;
 
-        // Add color and emittance to proper stacks
-        colorStack[bounces*3 + 0] = color.x;
-        colorStack[bounces*3 + 1] = color.y;
-        colorStack[bounces*3 + 2] = color.z;
-
-        emittanceStack[bounces*3 + 0] = emittance.x;
-        emittanceStack[bounces*3 + 1] = emittance.y;
-        emittanceStack[bounces*3 + 2] = emittance.z;
-
         if (nextFloat(random) <= color.w) {
+            brdfAccumulator *= (float3) (color.x, color.y, color.z);
+            colorAccumulator += brdfAccumulator * emittance;
+
             // Sun sample
             if (*sunSampling) {
                 float3 marchOrigin = (float3) (origin.x, origin.y, origin.z);
@@ -159,26 +140,15 @@ __kernel void rayTracer(__global const float *rayPos,
                     !(*drawEntities ? entityIntersect(&marchOrigin, &direction, &temp, &color, &emittance, &dist, entityData, entityTrigs, entityTextures) : 0)) {
                     // Unoccluded path
                     calcSkyRay(&direction, &color, &emittance, skyTexture, sunPosition, *sunIntensity, textures, *sunIndex);
-                    directLightStack[bounces*3 + 0] += mult;
-                    directLightStack[bounces*3 + 1] += mult;
-                    directLightStack[bounces*3 + 2] += mult;
+                    colorAccumulator += brdfAccumulator * (float3) (color.x, color.y, color.z) * mult;
                 }
             }
 
             // Diffuse reflection
             diffuseReflect(&direction, &normal, random);
-            typeStack[bounces] = 0;
         } else {
             // Transmission
-            colorStack[bounces*3 + 0] = color.x * color.w + (1 - color.w);
-            colorStack[bounces*3 + 1] = color.y * color.w + (1 - color.w);
-            colorStack[bounces*3 + 2] = color.z * color.w + (1 - color.w);
-
-            emittanceStack[bounces*3 + 0] = color.x * color.w + (1 - color.w);
-            emittanceStack[bounces*3 + 1] = color.y * color.w + (1 - color.w);
-            emittanceStack[bounces*3 + 2] = color.z * color.w + (1 - color.w);
-
-            typeStack[bounces] = 1;
+            brdfAccumulator *= (float3) (color.x, color.y, color.z);
 
             // Transmit through block
             exitBlock(&origin, &direction, &normal, &dist);
@@ -187,35 +157,9 @@ __kernel void rayTracer(__global const float *rayPos,
         origin += OFFSET * direction;
     }
 
-    // TODO: implement specular shading
-    for (int i = maxbounces - 1; i >= 0; i--) {
-        float emittance = i == 0 && (emittanceStack[i*3 + 0] > EPS || emittanceStack[i*3 + 1] > EPS || emittanceStack[i*3 + 2] > EPS) ? 1 : 0;
-        switch (typeStack[i]) {
-            case 0: {
-                // Diffuse reflection
-                colorStack[i*3 + 0] *= emittance + colorStack[i*3 + 3] + emittanceStack[i*3 + 3] + directLightStack[i*3 + 0];
-                colorStack[i*3 + 1] *= emittance + colorStack[i*3 + 4] + emittanceStack[i*3 + 4] + directLightStack[i*3 + 1];
-                colorStack[i*3 + 2] *= emittance + colorStack[i*3 + 5] + emittanceStack[i*3 + 5] + directLightStack[i*3 + 2];
-                break;
-            }
-            case 1: {
-                // Transmission
-                colorStack[i*3 + 0] *= colorStack[i*3 + 3];
-                colorStack[i*3 + 1] *= colorStack[i*3 + 4];
-                colorStack[i*3 + 2] *= colorStack[i*3 + 5];
-
-                emittanceStack[i*3 + 0] *= emittanceStack[i*3 + 3];
-                emittanceStack[i*3 + 1] *= emittanceStack[i*3 + 4];
-                emittanceStack[i*3 + 2] *= emittanceStack[i*3 + 5];
-
-                break;
-            }
-        }
-    }
-
-    res[gid*3 + 0] = colorStack[0];
-    res[gid*3 + 1] = colorStack[1];
-    res[gid*3 + 2] = colorStack[2];
+    res[gid*3 + 0] = colorAccumulator.x;
+    res[gid*3 + 1] = colorAccumulator.y;
+    res[gid*3 + 2] = colorAccumulator.z;
 }
 
 // Preview tracer entrypoint
@@ -714,7 +658,7 @@ void calcSkyRay(float3 *direction, float4 *color, float3 *emittance, image2d_t s
 
     float4 skyColor = read_imagef(skyTexture, skySampler, (float2)(theta, phi));
 
-    *color += skyColor;
+    *color = skyColor * sunIntensity;
 }
 
 void sunIntersect(float3 *direction, float4 *color, float3 *emittance, float3 sunPos, image2d_t textures, int sunIndex) {
