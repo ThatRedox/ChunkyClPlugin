@@ -5,11 +5,11 @@
 #include "constants.h"
 
 typedef struct {
-    __global int* treeData;
+    __global const int* treeData;
     int depth;
 } Octree;
 
-Octree Octree_create(__global int* treeData, int depth) {
+Octree Octree_create(__global const int* treeData, int depth) {
     Octree octree;
     octree.treeData = treeData;
     octree.depth = depth;

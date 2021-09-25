@@ -1,10 +1,13 @@
 #include "octree.h"
 #include "wavefront.h"
+#include "block.h"
+#include "utils.h"
 
 __kernel void render(__global const float *rayPos,
                      __global const float *rayDir,
                      __global const int *octreeDepth,
                      __global const int *octreeData,
+                     __global const int *blockPalette,
                      __global float *res) {
     int gid = get_global_id(0);
 
@@ -18,8 +21,10 @@ __kernel void render(__global const float *rayPos,
     ray->throughput = (float3) (1, 1, 1);
 
     if (Octree_octreeIntersect(&octree, ray, 256)) {
-        float dist = ray->distance;
-        ray->color = (float3) (dist, dist, dist);
+        Block block = Block_get(blockPalette, ray->material);
+        float4 color = colorFromArgb(block.color);
+
+        ray->color = (float3) (color.x, color.y, color.z);
     } else {
         ray->color = (float3) (0, 0, 0);
     }
