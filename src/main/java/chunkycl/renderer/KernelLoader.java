@@ -6,9 +6,8 @@ import org.jocl.*;
 import se.llbit.log.Log;
 
 import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Scanner;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class KernelLoader {
     private KernelLoader() {}
@@ -22,27 +21,47 @@ public class KernelLoader {
         cl_program renderKernel = clCreateProgramWithSource(context, 1, new String[] { kernel }, null, null);
 
         // Search for include headers
-        ArrayList<String> headerFiles = new ArrayList<>();
-        Arrays.stream(kernel.split("\\n")).filter(line -> line.startsWith("#include")).forEach(line -> {
-            String stripped = line.substring("#include".length()).trim();
-            headerFiles.add(stripped.substring(1, stripped.length()-1));
-        });
+        HashMap<String, cl_program> headerFiles = new HashMap<>();
+        readHeaders(kernel, headerFiles);
 
         // Load headers
-        cl_program[] includes = new cl_program[headerFiles.size()];
-        for (int i = 0; i < headerFiles.size(); i++) {
-            String headerFile = readResourceFile("kernel/include/" + headerFiles.get(i));
-            includes[i] = clCreateProgramWithSource(context, 1, new String[] { headerFile }, null, null);
+        boolean newHeaders = true;
+        while (newHeaders) {
+            newHeaders = false;
+            HashMap<String, cl_program> newHeaderFiles = new HashMap<>();
+            for (Map.Entry<String, cl_program> header : headerFiles.entrySet()) {
+                if (header.getValue() == null) {
+                    String headerFile = readResourceFile("kernel/include/" + header.getKey());
+                    header.setValue(clCreateProgramWithSource(context, 1, new String[] {headerFile}, null, null));
+                    readHeaders(headerFile, newHeaderFiles);
+                }
+            }
+
+            for (String header : newHeaderFiles.keySet()) {
+                newHeaders |= headerFiles.putIfAbsent(header, null) == null;
+            }
         }
 
+        String[] includeNames = headerFiles.keySet().toArray(new String[0]);
+        cl_program[] includePrograms = new cl_program[includeNames.length];
+        Arrays.setAll(includePrograms, i -> headerFiles.get(includeNames[i]));
+
         int code = clCompileProgram(renderKernel, devices.length, devices, "",
-                includes.length, includes, headerFiles.toArray(new String[0]), null, null);
+                includePrograms.length, includePrograms, includeNames, null, null);
         if (code != CL_SUCCESS) {
             throw new RuntimeException("Program build failed with error code: " + code);
         }
 
         return clLinkProgram(context, devices.length, devices, "", 1,
                 new cl_program[] { renderKernel }, null, null, null);
+    }
+
+    protected static void readHeaders(String kernel, HashMap<String, cl_program> headerFiles) {
+        Arrays.stream(kernel.split("\\n")).filter(line -> line.startsWith("#include")).forEach(line -> {
+            String stripped = line.substring("#include".length()).trim();
+            String header = stripped.substring(1, stripped.length() - 1);
+            headerFiles.putIfAbsent(header, null);
+        });
     }
 
     protected static String readResourceFile(String file) {

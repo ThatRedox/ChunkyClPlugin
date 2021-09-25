@@ -7,16 +7,16 @@
 typedef struct {
     __global int* treeData;
     int depth;
-} cl_Octree;
+} Octree;
 
-cl_Octree cl_Octree_create(__global int* treeData, int depth) {
-    cl_Octree octree;
+Octree Octree_create(__global int* treeData, int depth) {
+    Octree octree;
     octree.treeData = treeData;
     octree.depth = depth;
     return octree;
 }
 
-bool cl_Octree_octreeIntersect(cl_Octree* octree, wavefront_Ray* ray, int drawDepth) {
+bool Octree_octreeIntersect(Octree* octree, Ray* ray, int drawDepth) {
     float3 normalMarch = (float3) (0, 1, 0);
     float distMarch = 0;
 

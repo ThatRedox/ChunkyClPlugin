@@ -16,6 +16,6 @@ typedef struct {
     int pixelIndex;
 
     int rayDepth;
-} wavefront_Ray;
+} Ray;
 
 #endif
