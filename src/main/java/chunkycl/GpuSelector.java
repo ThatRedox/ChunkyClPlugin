@@ -1,5 +1,6 @@
 package chunkycl;
 
+import chunkycl.renderer.RendererInstance;
 import javafx.beans.property.SimpleDoubleProperty;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
@@ -14,22 +15,17 @@ import javafx.stage.Stage;
 import org.jocl.CL;
 import org.jocl.cl_device_id;
 import se.llbit.chunky.PersistentSettings;
-import se.llbit.log.Log;
-
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.util.Arrays;
 
 public class GpuSelector extends Stage {
-    private Scene scene;
 
     @SuppressWarnings("unchecked")
     public GpuSelector() {
         // Build scene
-        GpuRayTracer tracer = GpuRayTracer.getTracer();
-        ClDevice[] devices = new ClDevice[tracer.devices.length];
+        RendererInstance instance = RendererInstance.get();
+        ClDevice[] devices = new ClDevice[instance.devices.length];
         for (int i = 0; i < devices.length; i++) {
-            devices[i] = new ClDevice(tracer.devices[i], i);
+            devices[i] = new ClDevice(instance.devices[i], i);
         }
 
         TableView<ClDevice> table = new TableView<>();
@@ -75,7 +71,7 @@ public class GpuSelector extends Stage {
 
         box.getChildren().add(buttons);
 
-        scene = new Scene(box);
+        Scene scene = new Scene(box);
 
         // Apply scene
         this.setTitle("Select OpenCL Device");
@@ -88,10 +84,10 @@ public class GpuSelector extends Stage {
         protected final int index;
 
         public ClDevice(cl_device_id device, int index) {
-            long computeSpeed = (long) GpuRayTracer.getInts(device, CL.CL_DEVICE_MAX_CLOCK_FREQUENCY, 1)[0] *
-                                (long) GpuRayTracer.getInts(device, CL.CL_DEVICE_MAX_COMPUTE_UNITS, 1)[0] * 32;
+            long computeSpeed = (long) RendererInstance.getInts(device, CL.CL_DEVICE_MAX_CLOCK_FREQUENCY, 1)[0] *
+                                (long) RendererInstance.getInts(device, CL.CL_DEVICE_MAX_COMPUTE_UNITS, 1)[0] * 32;
 
-            name = GpuRayTracer.getString(device, CL.CL_DEVICE_NAME);
+            name = RendererInstance.getString(device, CL.CL_DEVICE_NAME);
             computeCapacity = computeSpeed/1000.0;  // Approximate GFlops
             this.index = index;
         }

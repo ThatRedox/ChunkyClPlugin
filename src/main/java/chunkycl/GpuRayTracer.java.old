@@ -3,13 +3,13 @@ package chunkycl;
 import static java.lang.Math.PI;
 import static org.jocl.CL.*;
 
+import chunkycl.renderer.KernelLoader;
 import it.unimi.dsi.fastutil.floats.FloatArrayList;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.ints.IntList;
 import org.apache.commons.math3.util.FastMath;
 import org.jocl.*;
 
-import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;

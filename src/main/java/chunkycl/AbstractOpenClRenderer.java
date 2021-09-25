@@ -1,5 +1,6 @@
 package chunkycl;
 
+import chunkycl.renderer.RendererInstance;
 import se.llbit.chunky.main.Chunky;
 import se.llbit.chunky.renderer.DefaultRenderManager;
 import se.llbit.chunky.renderer.Renderer;
@@ -17,7 +18,7 @@ public abstract class AbstractOpenClRenderer implements Renderer {
     protected int lastReset = 0;
 
     protected BooleanSupplier callback = () -> true;
-    protected GpuRayTracer rayTracer = GpuRayTracer.getTracer();
+    protected RendererInstance instance = RendererInstance.get();
 
     @Override
     public abstract String getId();
@@ -32,17 +33,7 @@ public abstract class AbstractOpenClRenderer implements Renderer {
     public abstract void render(DefaultRenderManager manager) throws InterruptedException;
 
     @Override
-    public void sceneReset(DefaultRenderManager manager, ResetReason reason, int resetCount) {
-        if (resetCount != lastReset) {
-            if (reason.overwriteState())
-                rayTracer.generateSky(manager.bufferedScene);
-
-            if (reason == ResetReason.MATERIALS_CHANGED || reason == ResetReason.SCENE_LOADED)
-                rayTracer.load(manager.bufferedScene, manager.getRenderTask());
-
-            lastReset = resetCount;
-        }
-    }
+    public abstract void sceneReset(DefaultRenderManager manager, ResetReason reason, int resetCount);
 
     @Override
     public void setPostRender(BooleanSupplier callback) {
@@ -76,28 +67,28 @@ public abstract class AbstractOpenClRenderer implements Renderer {
         return rayDirs;
     }
 
-    protected float[] generateJitterLengths(float[] rayDirs, Scene bufferedScene) {
-        int width = bufferedScene.canvasWidth();
-        int height = bufferedScene.canvasHeight();
-
-        double halfWidth = width / (2.0 * height);
-        double invHeight = 1.0 / height;
-
-        float[] jitterDirs = new float[width * height * 3];
-
-        Camera cam = bufferedScene.camera();
-
-        Chunky.getCommonThreads().submit(() -> IntStream.range(0, width).parallel().forEach(i -> {
-            Ray ray = new Ray();
-            for (int j = 0; j < height; j++) {
-                int offset = (j * width + i) * 3;
-                cam.calcViewRay(ray, -halfWidth + (i+1)*invHeight, -0.5 + (j+1)*invHeight);
-                jitterDirs[offset + 0] = (float) ray.d.x - rayDirs[offset + 0];
-                jitterDirs[offset + 1] = (float) ray.d.y - rayDirs[offset + 1];
-                jitterDirs[offset + 2] = (float) ray.d.z - rayDirs[offset + 2];
-            }
-        })).join();
-
-        return jitterDirs;
-    }
+//    protected float[] generateJitterLengths(float[] rayDirs, Scene bufferedScene) {
+//        int width = bufferedScene.canvasWidth();
+//        int height = bufferedScene.canvasHeight();
+//
+//        double halfWidth = width / (2.0 * height);
+//        double invHeight = 1.0 / height;
+//
+//        float[] jitterDirs = new float[width * height * 3];
+//
+//        Camera cam = bufferedScene.camera();
+//
+//        Chunky.getCommonThreads().submit(() -> IntStream.range(0, width).parallel().forEach(i -> {
+//            Ray ray = new Ray();
+//            for (int j = 0; j < height; j++) {
+//                int offset = (j * width + i) * 3;
+//                cam.calcViewRay(ray, -halfWidth + (i+1)*invHeight, -0.5 + (j+1)*invHeight);
+//                jitterDirs[offset + 0] = (float) ray.d.x - rayDirs[offset + 0];
+//                jitterDirs[offset + 1] = (float) ray.d.y - rayDirs[offset + 1];
+//                jitterDirs[offset + 2] = (float) ray.d.z - rayDirs[offset + 2];
+//            }
+//        })).join();
+//
+//        return jitterDirs;
+//    }
 }

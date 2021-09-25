@@ -1,8 +1,8 @@
-package chunkycl;
+package chunkycl.renderer;
 
 import static org.jocl.CL.*;
-
 import org.jocl.*;
+
 import se.llbit.log.Log;
 
 import java.io.InputStream;
