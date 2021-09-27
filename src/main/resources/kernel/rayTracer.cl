@@ -8,6 +8,7 @@ __kernel void render(__global const float *rayPos,
                      __global const int *octreeDepth,
                      __global const int *octreeData,
                      __global const int *blockPalette,
+                     image2d_t textureMap,
                      __global float *res) {
     int gid = get_global_id(0);
 
@@ -22,7 +23,7 @@ __kernel void render(__global const float *rayPos,
 
     if (Octree_octreeIntersect(&octree, ray, 256)) {
         Block block = Block_get(blockPalette, ray->material);
-        float4 color = colorFromArgb(block.color);
+        float4 color = Block_getColor(block, ray, textureMap);
 
         ray->color = (float3) (color.x, color.y, color.z);
     } else {

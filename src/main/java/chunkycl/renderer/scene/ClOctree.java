@@ -18,4 +18,9 @@ public class ClOctree {
         octreeDepth = clCreateBuffer(instance.context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
                 Sizeof.cl_int, Pointer.to(new int[] {octree.getDepth()}), null);
     }
+
+    public void release() {
+        clReleaseMemObject(octreeData);
+        clReleaseMemObject(octreeDepth);
+    }
 }

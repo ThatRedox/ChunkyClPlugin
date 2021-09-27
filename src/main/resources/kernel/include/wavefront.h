@@ -7,6 +7,7 @@ typedef struct {
 
     float3 point;
     float3 normal;
+    float2 uv;
 
     float distance;
     int material;

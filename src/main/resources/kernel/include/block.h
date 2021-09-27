@@ -1,6 +1,11 @@
 #ifndef CHUNKYCLPLUGIN_BLOCK_H
 #define CHUNKYCLPLUGIN_BLOCK_H
 
+#include "wavefront.h"
+#include "utils.h"
+#include "imageArrays.h"
+#include "constants.h"
+
 typedef struct {
     unsigned int flags;
     unsigned int textureSize;
@@ -20,6 +25,27 @@ Block Block_get(__global const int* blockPalette, int block) {
     b.normal_emittance = blockPalette[offset + 4];
     b.specular_metalness_roughness = blockPalette[offset+ 5];
     return b;
+}
+
+float4 Block_getColor(Block block, Ray* ray, image2d_t textureMap) {
+    int argbColor;
+
+    if (block.flags & 0b100) {
+        int width = (block.textureSize >> 16) & 0xFFFF;
+        int height = (block.textureSize) & 0xFFFF;
+
+        int x = floor(ray->uv.x * width);
+        int y = floor((1 - ray->uv.y) * height);
+
+        int index = y * width + x;
+        index += block.color;
+
+        argbColor = indexu(textureMap, index);
+    } else {
+        argbColor = block.color;
+    }
+
+    return colorFromArgb(argbColor);
 }
 
 #endif

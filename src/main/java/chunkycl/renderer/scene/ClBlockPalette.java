@@ -1,8 +1,7 @@
 package chunkycl.renderer.scene;
 
-import static org.jocl.CL.*;
-
 import chunkycl.renderer.RendererInstance;
+import static org.jocl.CL.*;
 import org.jocl.*;
 
 import java.util.List;
@@ -13,7 +12,7 @@ import se.llbit.chunky.chunk.BlockPalette;
 public class ClBlockPalette {
     public final cl_mem blocks;
 
-    public ClBlockPalette(BlockPalette palette) {
+    public ClBlockPalette(BlockPalette palette, ClTextureArray texMap) {
         RendererInstance instance = RendererInstance.get();
 
         List<Block> blockPalette = palette.getPalette();
@@ -24,6 +23,7 @@ public class ClBlockPalette {
         for (Block block : blockPalette) {
             int flags = 0;
 
+            int size = (1 << 16) | 1;
             int tint = 0;
             int color = 0;
             int normal_emittance = 0;
@@ -33,14 +33,15 @@ public class ClBlockPalette {
                 // Not invisible
                 flags |= 0x80000000;
 
-                // All attributes will be solid colors for now
-                flags |= 0b000000;
+                // Only block texture is a texture
+                flags |= 0b100;
 
                 // No tint
                 tint = 0;
 
-                // Average color
-                color = block.texture.getAvgColor();
+                // Block texture
+                color = texMap.addTexture(block.texture);
+                size = (block.texture.getWidth() << 16) | block.texture.getHeight();
 
                 // No normal map
                 // Block emittance
@@ -55,7 +56,7 @@ public class ClBlockPalette {
             }
 
             packedBlocks[index++] = flags;
-            packedBlocks[index++] = 0;
+            packedBlocks[index++] = size;
             packedBlocks[index++] = tint;
             packedBlocks[index++] = color;
             packedBlocks[index++] = normal_emittance;
@@ -65,5 +66,9 @@ public class ClBlockPalette {
         blocks = clCreateBuffer(instance.context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
                 (long) Sizeof.cl_uint * packedBlocks.length, Pointer.to(packedBlocks),
                 null);
+    }
+
+    public void release() {
+        clReleaseMemObject(blocks);
     }
 }

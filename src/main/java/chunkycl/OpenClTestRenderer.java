@@ -5,6 +5,7 @@ import static org.jocl.CL.*;
 import chunkycl.renderer.RendererInstance;
 import chunkycl.renderer.scene.ClBlockPalette;
 import chunkycl.renderer.scene.ClCamera;
+import chunkycl.renderer.scene.ClTextureArray;
 import org.jocl.*;
 
 import chunkycl.renderer.scene.ClOctree;
@@ -52,6 +53,8 @@ public class OpenClTestRenderer implements Renderer {
         double[] sampleBuffer = manager.bufferedScene.getSampleBuffer();
         float[] passBuffer = new float[sampleBuffer.length];
 
+        ClTextureArray texMap = new ClTextureArray();
+
         Octree.OctreeImplementation sceneOctree = manager.bufferedScene.getWorldOctree().getImplementation();
         if (sceneOctree instanceof PackedOctree) {
             octree = new ClOctree((PackedOctree) sceneOctree);
@@ -59,7 +62,7 @@ public class OpenClTestRenderer implements Renderer {
             Log.error("Only PackedOctree is supported.");
             return;
         }
-        palette = new ClBlockPalette(manager.bufferedScene.getPalette());
+        palette = new ClBlockPalette(manager.bufferedScene.getPalette(), texMap);
 
         camera = new ClCamera(manager.bufferedScene);
         camera.generate();
@@ -74,7 +77,8 @@ public class OpenClTestRenderer implements Renderer {
         clSetKernelArg(kernel, 2, Sizeof.cl_mem, Pointer.to(octree.octreeDepth));
         clSetKernelArg(kernel, 3, Sizeof.cl_mem, Pointer.to(octree.octreeData));
         clSetKernelArg(kernel, 4, Sizeof.cl_mem, Pointer.to(palette.blocks));
-        clSetKernelArg(kernel, 5, Sizeof.cl_mem, Pointer.to(buffer));
+        clSetKernelArg(kernel, 5, Sizeof.cl_mem, Pointer.to(texMap.get()));
+        clSetKernelArg(kernel, 6, Sizeof.cl_mem, Pointer.to(buffer));
         clEnqueueNDRangeKernel(instance.commandQueue, kernel, 1, null,
                 new long[] {passBuffer.length / 3}, null, 0, null, null);
         clEnqueueReadBuffer(instance.commandQueue, buffer, CL_TRUE, 0,
@@ -84,5 +88,11 @@ public class OpenClTestRenderer implements Renderer {
         Chunky.getCommonThreads().submit(() -> Arrays.parallelSetAll(sampleBuffer, i -> passBuffer[i])).join();
 
         postRender.getAsBoolean();
+
+        texMap.release();
+        octree.release();
+        palette.release();
+        camera.release();
+        clReleaseMemObject(buffer);
     }
 }

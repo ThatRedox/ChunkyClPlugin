@@ -108,6 +108,10 @@ public class ClCamera {
         clEnqueueWriteBuffer(instance.commandQueue, this.rayDir, CL_TRUE, 0,
                 (long) Sizeof.cl_float * rayDirs.length, Pointer.to(rayDirs), 0,
                 null, null);
+    }
 
+    public void release() {
+        clReleaseMemObject(rayPos);
+        clReleaseMemObject(rayDir);
     }
 }

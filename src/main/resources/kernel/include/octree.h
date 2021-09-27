@@ -26,11 +26,11 @@ bool Octree_octreeIntersect(Octree* octree, Ray* ray, int drawDepth) {
     int depth = octree->depth;
 
     for (int i = 0; i < drawDepth; i++) {
-        float3 pos = floor(ray->origin + (ray->direction * distMarch));
+        float3 pos = ray->origin + (ray->direction * distMarch);
 
-        int x = pos.x;
-        int y = pos.y;
-        int z = pos.z;
+        int x = floor(pos.x);
+        int y = floor(pos.y);
+        int z = floor(pos.z);
 
         // Check inbounds
         int lx = x >> depth;
@@ -62,6 +62,21 @@ bool Octree_octreeIntersect(Octree* octree, Ray* ray, int drawDepth) {
         // Get block data if there is an intersection
         if (data != 0) {
             // TODO: implement checking alpha and custom block model
+            float3 bp = floor(pos);
+            if (normalMarch.y != 0) {
+                ray->uv = (float2) (pos.x - bp.x, pos.z - bp.z);
+            } else if (normalMarch.x != 0) {
+                ray->uv = (float2) (pos.z - bp.z, pos.y - bp.y);
+            } else {
+                ray->uv = (float2) (pos.x - bp.x,pos.y - bp.y);
+            }
+            if (normalMarch.x > 0 || normalMarch.z < 0) {
+                ray->uv.x = 1 - ray->uv.x;
+            }
+            if (normalMarch.y > 0) {
+                ray->uv.y = 1 - ray->uv.y;
+            }
+
             ray->point = pos;
             ray->normal = normalMarch;
             ray->distance = distMarch;

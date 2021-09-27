@@ -1,5 +1,6 @@
 package chunkycl;
 
+import chunkycl.renderer.RendererInstance;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.Tooltip;
@@ -22,6 +23,9 @@ import java.util.List;
  */
 public class ChunkyCl implements Plugin {
     @Override public void attach(Chunky chunky) {
+        // Initialize the renderer now for easier debugging
+        RendererInstance.get();
+
         Chunky.addPreviewRenderer(new OpenClTestRenderer());
 //        // Add GPU renderers
 //        Chunky.addRenderer(new OpenClTestRenderer());
