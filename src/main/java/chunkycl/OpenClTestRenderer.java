@@ -3,12 +3,9 @@ package chunkycl;
 import static org.jocl.CL.*;
 
 import chunkycl.renderer.RendererInstance;
-import chunkycl.renderer.scene.ClBlockPalette;
-import chunkycl.renderer.scene.ClCamera;
-import chunkycl.renderer.scene.ClTextureArray;
+import chunkycl.renderer.scene.*;
 import org.jocl.*;
 
-import chunkycl.renderer.scene.ClOctree;
 import se.llbit.chunky.main.Chunky;
 import se.llbit.chunky.renderer.DefaultRenderManager;
 import se.llbit.chunky.renderer.Renderer;
@@ -21,9 +18,6 @@ import java.util.Arrays;
 import java.util.function.BooleanSupplier;
 
 public class OpenClTestRenderer implements Renderer {
-    private ClOctree octree = null;
-    private ClCamera camera = null;
-    private ClBlockPalette palette = null;
 
     private BooleanSupplier postRender = () -> true;
 
@@ -49,11 +43,19 @@ public class OpenClTestRenderer implements Renderer {
 
     @Override
     public void render(DefaultRenderManager manager) throws InterruptedException {
+        ClOctree octree;
+
         RendererInstance instance = RendererInstance.get();
         double[] sampleBuffer = manager.bufferedScene.getSampleBuffer();
         float[] passBuffer = new float[sampleBuffer.length];
 
-        ClTextureArray texMap = new ClTextureArray();
+        ClTextureAtlas.AtlasBuilder atlasBuilder = new ClTextureAtlas.AtlasBuilder();
+        ClBlockPalette.preLoad(manager.bufferedScene.getPalette(), atlasBuilder);
+
+        ClTextureAtlas atlas = atlasBuilder.build();
+        atlasBuilder.release();
+
+        ClBlockPalette palette = new ClBlockPalette(manager.bufferedScene.getPalette(), atlas);
 
         Octree.OctreeImplementation sceneOctree = manager.bufferedScene.getWorldOctree().getImplementation();
         if (sceneOctree instanceof PackedOctree) {
@@ -62,9 +64,8 @@ public class OpenClTestRenderer implements Renderer {
             Log.error("Only PackedOctree is supported.");
             return;
         }
-        palette = new ClBlockPalette(manager.bufferedScene.getPalette(), texMap);
 
-        camera = new ClCamera(manager.bufferedScene);
+        ClCamera camera = new ClCamera(manager.bufferedScene);
         camera.generate();
 
 
@@ -77,7 +78,7 @@ public class OpenClTestRenderer implements Renderer {
         clSetKernelArg(kernel, 2, Sizeof.cl_mem, Pointer.to(octree.octreeDepth));
         clSetKernelArg(kernel, 3, Sizeof.cl_mem, Pointer.to(octree.octreeData));
         clSetKernelArg(kernel, 4, Sizeof.cl_mem, Pointer.to(palette.blocks));
-        clSetKernelArg(kernel, 5, Sizeof.cl_mem, Pointer.to(texMap.get()));
+        clSetKernelArg(kernel, 5, Sizeof.cl_mem, Pointer.to(atlas.texture));
         clSetKernelArg(kernel, 6, Sizeof.cl_mem, Pointer.to(buffer));
         clEnqueueNDRangeKernel(instance.commandQueue, kernel, 1, null,
                 new long[] {passBuffer.length / 3}, null, 0, null, null);
@@ -89,7 +90,7 @@ public class OpenClTestRenderer implements Renderer {
 
         postRender.getAsBoolean();
 
-        texMap.release();
+        atlas.release();
         octree.release();
         palette.release();
         camera.release();

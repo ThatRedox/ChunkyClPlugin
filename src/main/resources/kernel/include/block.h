@@ -3,8 +3,8 @@
 
 #include "wavefront.h"
 #include "utils.h"
-#include "imageArrays.h"
 #include "constants.h"
+#include "textureAtlas.h"
 
 typedef struct {
     unsigned int flags;
@@ -27,25 +27,12 @@ Block Block_get(__global const int* blockPalette, int block) {
     return b;
 }
 
-float4 Block_getColor(Block block, Ray* ray, image2d_t textureMap) {
-    int argbColor;
-
+float4 Block_getColor(Block block, Ray* ray, image2d_array_t atlas) {
     if (block.flags & 0b100) {
-        int width = (block.textureSize >> 16) & 0xFFFF;
-        int height = (block.textureSize) & 0xFFFF;
-
-        int x = floor(ray->uv.x * width);
-        int y = floor((1 - ray->uv.y) * height);
-
-        int index = y * width + x;
-        index += block.color;
-
-        argbColor = indexu(textureMap, index);
+        return Atlas_read_uv(ray->uv.x, ray->uv.y, block.color, block.textureSize, atlas);
     } else {
-        argbColor = block.color;
+        return colorFromArgb(block.color);
     }
-
-    return colorFromArgb(argbColor);
 }
 
 #endif

@@ -12,7 +12,7 @@ import se.llbit.chunky.chunk.BlockPalette;
 public class ClBlockPalette {
     public final cl_mem blocks;
 
-    public ClBlockPalette(BlockPalette palette, ClTextureArray texMap) {
+    public ClBlockPalette(BlockPalette palette, ClTextureAtlas texMap) {
         RendererInstance instance = RendererInstance.get();
 
         List<Block> blockPalette = palette.getPalette();
@@ -40,7 +40,7 @@ public class ClBlockPalette {
                 tint = 0;
 
                 // Block texture
-                color = texMap.addTexture(block.texture);
+                color = texMap.get(block.texture).location;
                 size = (block.texture.getWidth() << 16) | block.texture.getHeight();
 
                 // No normal map
@@ -66,6 +66,16 @@ public class ClBlockPalette {
         blocks = clCreateBuffer(instance.context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
                 (long) Sizeof.cl_uint * packedBlocks.length, Pointer.to(packedBlocks),
                 null);
+    }
+
+    public static void preLoad(BlockPalette palette, ClTextureAtlas.AtlasBuilder builder) {
+        List<Block> blockPalette = palette.getPalette();
+
+        for (Block block : blockPalette) {
+            if (!block.invisible) {
+                builder.addTexture(block.texture);
+            }
+        }
     }
 
     public void release() {
