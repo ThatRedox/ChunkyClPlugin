@@ -13,7 +13,7 @@ unsigned int Random_nextState(unsigned int *state) {
 // Calculate the next float based on the formula on
 // https://docs.oracle.com/javase/8/docs/api/java/util/Random.html#nextFloat--
 float Random_nextFloat(unsigned int *state) {
-    return (nextState(state) >> 8) / ((float) (1 << 24));
+    return (Random_nextState(state) >> 8) / ((float) (1 << 24));
 }
 
 #endif

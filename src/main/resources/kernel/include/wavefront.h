@@ -19,4 +19,13 @@ typedef struct {
     int rayDepth;
 } Ray;
 
+Ray Ray_new() {
+    Ray ray;
+    ray.throughput = (float3) (1, 1, 1);
+    ray.color = (float3) (0, 0, 0);
+    ray.distance = HUGE_VALF;
+    ray.rayDepth = 0;
+    return ray;
+}
+
 #endif

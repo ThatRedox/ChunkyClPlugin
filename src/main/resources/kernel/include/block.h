@@ -15,23 +15,31 @@ typedef struct {
     unsigned int specular_metalness_roughness;
 } Block;
 
-Block Block_get(__global const int* blockPalette, int block) {
+Block Block_get(__global const int *palette, int block) {
     int offset = block * 6;
     Block b;
-    b.flags = blockPalette[offset];
-    b.textureSize = blockPalette[offset + 1];
-    b.tint = blockPalette[offset + 2];
-    b.color = blockPalette[offset + 3];
-    b.normal_emittance = blockPalette[offset + 4];
-    b.specular_metalness_roughness = blockPalette[offset+ 5];
+    b.flags = palette[offset];
+    b.textureSize = palette[offset + 1];
+    b.tint = palette[offset + 2];
+    b.color = palette[offset + 3];
+    b.normal_emittance = palette[offset + 4];
+    b.specular_metalness_roughness = palette[offset+ 5];
     return b;
 }
 
-float4 Block_getColor(Block block, Ray* ray, image2d_array_t atlas) {
-    if (block.flags & 0b100) {
+float4 Block_getColor(Block block, image2d_array_t atlas, Ray* ray) {
+    if (block.flags & 0b100000) {
         return Atlas_read_uv(ray->uv.x, ray->uv.y, block.color, block.textureSize, atlas);
     } else {
         return colorFromArgb(block.color);
+    }
+}
+
+float Block_getEmittance(Block block, image2d_array_t atlas, Ray* ray) {
+    if (block.flags & 0b1000) {
+        return Atlas_read_uv(ray->uv.x, ray->uv.y, block.normal_emittance, block.textureSize, atlas).w;
+    } else {
+        return (block.normal_emittance & 0xFF) / 255.0;
     }
 }
 
