@@ -26,7 +26,7 @@ public class ChunkyCl implements Plugin {
         // Initialize the renderer now for easier debugging
         RendererInstance.get();
 
-        Chunky.addPreviewRenderer(new OpenClTestRenderer());
+        Chunky.addRenderer(new OpenClTestRenderer());
 //        // Add GPU renderers
 //        Chunky.addRenderer(new OpenClTestRenderer());
 //        Chunky.addPreviewRenderer(new OpenClPreviewRenderer());

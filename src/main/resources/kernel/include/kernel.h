@@ -65,7 +65,7 @@ bool nextPath(Ray* ray, __global const int *blockPalette, image2d_array_t textur
     }
     xz = 0;
 
-    ux = xy * ray->normal.x - xz * ray->normal.y;
+    ux = xy * ray->normal.z - xz * ray->normal.y;
     uy = xz * ray->normal.x - xx * ray->normal.z;
     uz = xx * ray->normal.y - xy * ray->normal.x;
 

@@ -34,7 +34,7 @@ public class ClBlockPalette {
                 flags |= 0x80000000;
 
                 // Only block texture is a texture
-                flags |= 0b100;
+                flags |= 0b100000;
 
                 // No tint
                 tint = 0;
@@ -45,7 +45,7 @@ public class ClBlockPalette {
 
                 // No normal map
                 // Block emittance
-                normal_emittance = (int) (block.emittance * 255.0) << 24;
+                normal_emittance = (int) (block.emittance * 255.0);
 
                 // Block specular
                 // Block metalness
