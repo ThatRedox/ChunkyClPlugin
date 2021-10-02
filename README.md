@@ -16,20 +16,16 @@ so render results may change drastically between versions.
 
 ## Installation
 
-### Note: The latest version requires at least snapshot `2.4.0-183-gffad4f42`
+### Note: The latest version requires Chunky `2.4.0`
 Download the latest plugin build and extract it. In the Chunky Launcher, expand `Advanced Settings` and click on `Manage plugins`. In the `Plugin Manager` window click on `Add` and select the `.jar` file in the extracted zip file. Click on `Save` and start Chunky as usual.
 
 ![image](https://user-images.githubusercontent.com/42661490/116319916-28ef2580-a76c-11eb-9f93-86d444a349fd.png)
-
-To download the latest Chunky snapshot, open `Advanced Settings` in the Chunky Launcher and enable `Download Snapshots`. Then click on the `Check for update` button.
-
-![image](https://user-images.githubusercontent.com/42661490/116319834-0e1cb100-a76c-11eb-8842-e72dc2b76854.png)
 
 Select `ChunkyCL` as your renderer for the scene in the `Advanced` tab.
 
 ![image](https://user-images.githubusercontent.com/42661490/122492084-fc040580-cf99-11eb-9b08-b166dc25db41.png)
 
-### Performance
+## Performance
 
 Rough performance with a RTX 2070 is around 40 times that of the traditional CPU renderer as of 2021-09-06.
 
