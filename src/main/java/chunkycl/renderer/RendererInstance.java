@@ -26,6 +26,7 @@ public class RendererInstance {
         return instance;
     }
 
+    @SuppressWarnings("deprecation")
     private RendererInstance() {
         final long deviceType = CL_DEVICE_TYPE_ALL;
         final int deviceIndex = PersistentSettings.settings.getInt("clDevice", 0);
