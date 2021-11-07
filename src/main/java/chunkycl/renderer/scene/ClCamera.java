@@ -12,6 +12,7 @@ import se.llbit.math.Ray;
 
 import java.util.Random;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.locks.Lock;
 import java.util.stream.IntStream;
 
 public class ClCamera {
@@ -37,7 +38,7 @@ public class ClCamera {
                 bufferSize, null, null);
     }
 
-    public void generate() {
+    public void generate(Lock renderLock) {
         float[] rayDirs = new float[width * height * 3];
         float[] rayPos = new float[width * height * 3];
 
@@ -67,6 +68,7 @@ public class ClCamera {
             }
         })).join();
 
+        renderLock.lock();
         RendererInstance instance = RendererInstance.get();
         clEnqueueWriteBuffer(instance.commandQueue, this.rayPos, CL_TRUE, 0,
                 (long) Sizeof.cl_float * rayPos.length, Pointer.to(rayPos), 0,
@@ -74,6 +76,7 @@ public class ClCamera {
         clEnqueueWriteBuffer(instance.commandQueue, this.rayDir, CL_TRUE, 0,
                 (long) Sizeof.cl_float * rayDirs.length, Pointer.to(rayDirs), 0,
                 null, null);
+        renderLock.unlock();
     }
 
     public void generateNoJitter() {

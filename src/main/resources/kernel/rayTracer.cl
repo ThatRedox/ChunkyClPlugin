@@ -11,6 +11,7 @@ __kernel void render(__global const float *rayPos,
                      __global const int *blockPalette,
                      image2d_array_t textureAtlas,
                      __global const int *randomSeed,
+                     __global const int *bufferSpp,
                      __global float *res) {
     int gid = get_global_id(0);
 
@@ -33,5 +34,8 @@ __kernel void render(__global const float *rayPos,
         }
     } while (nextPath(ray, blockPalette, textureAtlas, state, 5, 13.0f));
 
-    vstore3(ray->color, gid, res);
+    int spp = *bufferSpp;
+    float3 bufferColor = vload3(gid, res);
+    bufferColor = (bufferColor * spp + ray->color) / (spp + 1);
+    vstore3(bufferColor, gid, res);
 }
