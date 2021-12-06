@@ -139,7 +139,8 @@ public class OpenClTestRenderer implements Renderer {
                         lastCallback = time;
                         if (postRender.getAsBoolean()) break;
                     }
-                    continue;
+                    if (bufferSppReal < 1024)
+                        continue;
                 }
 
                 bufferMergeTask.join();
