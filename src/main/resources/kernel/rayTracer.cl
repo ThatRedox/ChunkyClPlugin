@@ -6,10 +6,16 @@
 
 __kernel void render(__global const float *rayPos,
                      __global const float *rayDir,
+
                      __global const int *octreeDepth,
                      __global const int *octreeData,
+
                      __global const int *blockPalette,
                      image2d_array_t textureAtlas,
+
+                     image2d_t skyTexture,
+                     __global const float* skyIntensity,
+
                      __global const int *randomSeed,
                      __global const int *bufferSpp,
                      __global float *res) {
@@ -30,6 +36,7 @@ __kernel void render(__global const float *rayPos,
 
     do {
         if (!extend(ray, octree, 256)) {
+            intersectSky(ray, skyTexture, *skyIntensity);
             break;
         }
     } while (nextPath(ray, blockPalette, textureAtlas, state, 5, 13.0f));
