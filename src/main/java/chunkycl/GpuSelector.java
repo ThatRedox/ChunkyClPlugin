@@ -15,6 +15,8 @@ import javafx.stage.Stage;
 import org.jocl.CL;
 import org.jocl.cl_device_id;
 import se.llbit.chunky.PersistentSettings;
+import se.llbit.log.Log;
+
 import java.util.Arrays;
 
 public class GpuSelector extends Stage {
@@ -65,6 +67,7 @@ public class GpuSelector extends Stage {
                 PersistentSettings.settings.setInt("clDevice", table.getSelectionModel().getSelectedItem().index);
                 PersistentSettings.save();
                 this.close();
+                Log.warn("Restart Chunky to use the selected device.");
             }
         });
         buttons.getChildren().add(selectButton);

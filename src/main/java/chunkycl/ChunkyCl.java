@@ -31,16 +31,16 @@ public class ChunkyCl implements Plugin {
 //        Chunky.addRenderer(new OpenClTestRenderer());
 //        Chunky.addPreviewRenderer(new OpenClPreviewRenderer());
 //
-//        RenderControlsTabTransformer prev = chunky.getRenderControlsTabTransformer();
-//        chunky.setRenderControlsTabTransformer(tabs -> {
-//            // First, call the previous transformer (this allows other plugins to work).
-//            List<RenderControlsTab> transformed = new ArrayList<>(prev.apply(tabs));
-//
-//            // Get the scene
-//            RenderController controller = chunky.getRenderController();
-//
-//            for (RenderControlsTab tab: transformed) {
-//                if (tab instanceof AdvancedTab) {
+        RenderControlsTabTransformer prev = chunky.getRenderControlsTabTransformer();
+        chunky.setRenderControlsTabTransformer(tabs -> {
+            // First, call the previous transformer (this allows other plugins to work).
+            List<RenderControlsTab> transformed = new ArrayList<>(prev.apply(tabs));
+
+            // Get the scene
+            RenderController controller = chunky.getRenderController();
+
+            for (RenderControlsTab tab: transformed) {
+                if (tab instanceof AdvancedTab) {
 //                    IntegerAdjuster drawDepthAdjuster = new IntegerAdjuster();
 //                    drawDepthAdjuster.setName("Draw depth");
 //                    drawDepthAdjuster.setTooltip("Maximum GPU draw distance");
@@ -87,21 +87,20 @@ public class ChunkyCl implements Plugin {
 //
 //                    // Add drawEntities after draw depth
 //                    ((VBox) ((AdvancedTab) tab).getContent()).getChildren().add(5, drawEntitiesCheckBox);
-//
-//                    Button deviceSelectorButton = new Button("Select OpenCL Device");
-//                    deviceSelectorButton.setOnMouseClicked(event -> {
-//                        GpuSelector selector = new GpuSelector();
-//                        selector.show();
-//                    });
-//
-//                    // Add OpenCL device selector after CPU Utilization
-//                    ((VBox) ((AdvancedTab) tab).getContent()).getChildren().add(2, deviceSelectorButton);
-//                }
-//            }
-//
-//            return transformed;
-//        });
 
+                    Button deviceSelectorButton = new Button("Select OpenCL Device");
+                    deviceSelectorButton.setOnMouseClicked(event -> {
+                        GpuSelector selector = new GpuSelector();
+                        selector.show();
+                    });
+
+                    // Add OpenCL device selector after CPU Utilization
+                    ((VBox) ((AdvancedTab) tab).getContent()).getChildren().add(2, deviceSelectorButton);
+                }
+            }
+
+            return transformed;
+        });
     }
 
     public static void main(String[] args) throws Exception {
