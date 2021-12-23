@@ -28,7 +28,7 @@ Block Block_get(__global const int *palette, int block) {
 }
 
 float4 Block_getColor(Block block, image2d_array_t atlas, Ray* ray) {
-    if (block.flags & 0b100000) {
+    if (block.flags & 0b100) {
         return Atlas_read_uv(ray->uv.x, ray->uv.y, block.color, block.textureSize, atlas);
     } else {
         return colorFromArgb(block.color);
@@ -36,7 +36,7 @@ float4 Block_getColor(Block block, image2d_array_t atlas, Ray* ray) {
 }
 
 float Block_getEmittance(Block block, image2d_array_t atlas, Ray* ray) {
-    if (block.flags & 0b1000) {
+    if (block.flags & 0b010) {
         return Atlas_read_uv(ray->uv.x, ray->uv.y, block.normal_emittance, block.textureSize, atlas).w;
     } else {
         return (block.normal_emittance & 0xFF) / 255.0;
