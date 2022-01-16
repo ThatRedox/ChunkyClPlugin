@@ -42,6 +42,7 @@ typedef struct {
     int material;
 
     float3 normal;
+    float3 point;
 
     float4 color;
     float emittance;

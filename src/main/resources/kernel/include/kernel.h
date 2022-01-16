@@ -13,6 +13,9 @@ bool closestIntersect(IntersectionRecord* record, Octree* octree, BlockPalette* 
     bool hit = false;
     hit |= Octree_octreeIntersect(octree, record, palette, atlas, drawDepth);
 
+    if (hit) {
+        record->point = record->ray->origin + record->ray->direction * (record->distance - OFFSET);
+    }
     return hit;
 }
 
@@ -29,7 +32,7 @@ void intersectSky(Ray* ray, image2d_t skyTexture, float skyIntensity) {
 
 bool nextPath(IntersectionRecord* record, unsigned int *state, int maxDepth, float emitterScale) {
     Ray* ray = record->ray;
-    ray->origin = record->ray->origin + record->ray->direction * (record->distance - OFFSET);
+    ray->origin = record->point;
 
     // Apply ray color
     float3 color = (float3) (record->color.x, record->color.y, record->color.z);
