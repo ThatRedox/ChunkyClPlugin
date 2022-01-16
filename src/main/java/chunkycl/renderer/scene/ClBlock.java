@@ -1,55 +1,67 @@
 package chunkycl.renderer.scene;
 
 import se.llbit.chunky.PersistentSettings;
+import se.llbit.chunky.block.AbstractModelBlock;
 import se.llbit.chunky.block.Block;
-import se.llbit.chunky.renderer.scene.Scene;
+import se.llbit.chunky.model.AABBModel;
+import se.llbit.chunky.model.QuadModel;
+import se.llbit.chunky.model.Tint;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Objects;
 
 public class ClBlock {
-    public boolean invisible;
-    public boolean hasColorTexture;
-    public boolean hasNormalEmittanceTexture;
-    public boolean hasSpecularMetalnessRoughnessTexture;
+    public int modelType;
+    public int modelPointer;
 
-    public int blockTint;
+    public ClBlock(Block block, ClTextureAtlas texMap, ArrayList<ClMaterial> materials) {
+        if (block instanceof AbstractModelBlock) {
+            AbstractModelBlock b = (AbstractModelBlock) block;
+            // TODO: Proper models
+            if (b.getModel() instanceof AABBModel) {
+                AABBModel model = (AABBModel) b.getModel();
+                modelType = 1;
 
-    public int textureSize;
-    public int colorTexture;
-    public int normalEmittanceTexture;
-    public int specularMetalnessRoughnessTexture;
+                modelPointer = materials.size();
+                materials.add(new ClMaterial(block.texture, Tint.NONE, block.emittance, block.specular, block.metalness, block.roughness, texMap));
+            } else if (b.getModel() instanceof QuadModel) {
+                QuadModel model = (QuadModel) b.getModel();
 
-    public ClBlock(Block block, ClTextureAtlas texMap) {
-        this.invisible = block.invisible;
-        this.hasColorTexture = !PersistentSettings.getSingleColorTextures();
-        this.hasNormalEmittanceTexture = false;
-        this.hasSpecularMetalnessRoughnessTexture = false;
-
-        this.blockTint = 0;
-
-        this.textureSize = (block.texture.getWidth() << 16) | block.texture.getHeight();
-        this.colorTexture = this.hasColorTexture ? texMap.get(block.texture).location : block.texture.getAvgColor();
-        this.normalEmittanceTexture = (int) (block.emittance * 255.0);
-        this.specularMetalnessRoughnessTexture = (int) (block.specular * 255.0) |
-                ((int) (block.metalness * 255.0) << 8) |
-                ((int) (block.roughness * 255.0) << 16);
+                modelType = 2;
+                modelPointer = materials.size();
+                materials.add(new ClMaterial(block.texture, Tint.NONE, block.emittance, block.specular, block.metalness, block.roughness, texMap));
+            }
+        } else {
+            modelType = 0;
+            modelPointer = materials.size();
+            materials.add(new ClMaterial(block.texture, null, block.emittance, block.specular, block.metalness, block.roughness, texMap));
+        }
     }
 
     public int[] pack() {
-        int[] packed = new int[6];
-        packed[0] = ((this.invisible ? 0 : 1) << 31) |
-                ((this.hasColorTexture ? 1 : 0) << 2) |
-                ((this.hasNormalEmittanceTexture ? 1 : 0) << 1) |
-                (this.hasSpecularMetalnessRoughnessTexture ? 1 : 0);
-        packed[1] = this.textureSize;
-        packed[2] = this.blockTint;
-        packed[3] = this.colorTexture;
-        packed[4] = this.normalEmittanceTexture;
-        packed[5] = this.specularMetalnessRoughnessTexture;
+        int[] packed = new int[2];
+        packed[0] = modelType;
+        packed[1] = modelPointer;
         return packed;
     }
 
     public static void preLoad(Block block, ClTextureAtlas.AtlasBuilder builder) {
         if (!PersistentSettings.getSingleColorTextures()) {
-            builder.addTexture(block.texture);
+            if (block instanceof AbstractModelBlock) {
+                AbstractModelBlock b = (AbstractModelBlock) block;
+                if (b.getModel() instanceof AABBModel) {
+                    AABBModel model = (AABBModel) b.getModel();
+                    Arrays.stream(model.getTextures()).forEach(t -> Arrays.stream(t).filter(Objects::nonNull).forEach(builder::addTexture));
+                } else if (b.getModel() instanceof QuadModel) {
+                    QuadModel model = (QuadModel) b.getModel();
+                    Arrays.stream(model.getTextures()).forEach(builder::addTexture);
+                }
+                // TODO: Remove once block models are done
+                builder.addTexture(block.texture);
+            } else {
+                builder.addTexture(block.texture);
+            }
         }
     }
 }

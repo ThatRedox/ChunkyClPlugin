@@ -39,20 +39,25 @@ float Block_intersect(Block* block, int3 blockPosition, IntersectionRecord* reco
 }
 
 typedef struct {
-    __global const int* palette;
-//    __global const int* blocks;
+    __global const int* blockPalette;
+    __global const int* materialPalette;
 } BlockPalette;
 
-BlockPalette BlockPalette_new(__global const int* palette) {
+BlockPalette BlockPalette_new(__global const int* blockPalette, __global const int* materialPalette) {
     BlockPalette p;
-    p.palette = palette;
+    p.blockPalette = blockPalette;
+    p.materialPalette = materialPalette;
     return p;
 }
 
 Block BlockPalette_get(BlockPalette* self, int block) {
-    int offset = block * 6;
+    int offset = block * 2;
+    int modelType = self->blockPalette[offset + 0];
+    int modelPointer = self->blockPalette[offset + 1];
+
+    // TODO: Proper models (interpret modelType)
     Block b;
-    b.mat = Material_get(self->palette, offset);
+    b.mat = Material_get(self->materialPalette, modelPointer*6);
     return b;
 }
 
