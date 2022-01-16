@@ -3,3 +3,5 @@
 /.idea/
 /*.iml
 *.log
+/src/main/resources/kernel/.idea/
+/src/main/resources/kernel/cmake-build-debug/

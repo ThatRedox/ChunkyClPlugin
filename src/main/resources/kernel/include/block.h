@@ -1,3 +1,5 @@
+// This includes stuff regarding blocks and block palettes
+
 #ifndef CHUNKYCLPLUGIN_BLOCK_H
 #define CHUNKYCLPLUGIN_BLOCK_H
 
@@ -5,42 +7,53 @@
 #include "utils.h"
 #include "constants.h"
 #include "textureAtlas.h"
+#include "material.h"
+#include "primitives.h"
 
 typedef struct {
-    unsigned int flags;
-    unsigned int textureSize;
-    unsigned int tint;
-    unsigned int color;
-    unsigned int normal_emittance;
-    unsigned int specular_metalness_roughness;
+    Material mat;
 } Block;
 
-Block Block_get(__global const int *palette, int block) {
+float Block_intersect(Block* block, int3 blockPosition, IntersectionRecord* record, float3 origin, float3 direction, float3 invRayDir, image2d_array_t atlas) {
+    float3 normOrigin = (origin - direction * OFFSET) - int3toFloat3(blockPosition);
+    float3 normal;
+    float2 uv;
+
+    // TODO: Implement custom block models
+    AABB box = AABB_new(0, 1, 0, 1, 0, 1);
+    float dist = AABB_full_intersect(&box, normOrigin, origin, invRayDir, &normal, &uv);
+
+    // No intersection
+    if (isnan(dist)) {
+        return NAN;
+    }
+
+    record->normal = normal;
+    Material_sample(&block->mat, atlas, record, uv);
+
+    if (record->color.w < EPS) {
+        return NAN;
+    }
+
+    return dist - OFFSET;
+}
+
+typedef struct {
+    __global const int* palette;
+//    __global const int* blocks;
+} BlockPalette;
+
+BlockPalette BlockPalette_new(__global const int* palette) {
+    BlockPalette p;
+    p.palette = palette;
+    return p;
+}
+
+Block BlockPalette_get(BlockPalette* self, int block) {
     int offset = block * 6;
     Block b;
-    b.flags = palette[offset];
-    b.textureSize = palette[offset + 1];
-    b.tint = palette[offset + 2];
-    b.color = palette[offset + 3];
-    b.normal_emittance = palette[offset + 4];
-    b.specular_metalness_roughness = palette[offset+ 5];
+    b.mat = Material_get(self->palette, offset);
     return b;
-}
-
-float4 Block_getColor(Block block, image2d_array_t atlas, Ray* ray) {
-    if (block.flags & 0b100) {
-        return Atlas_read_uv(ray->uv.x, ray->uv.y, block.color, block.textureSize, atlas);
-    } else {
-        return colorFromArgb(block.color);
-    }
-}
-
-float Block_getEmittance(Block block, image2d_array_t atlas, Ray* ray) {
-    if (block.flags & 0b010) {
-        return Atlas_read_uv(ray->uv.x, ray->uv.y, block.normal_emittance, block.textureSize, atlas).w;
-    } else {
-        return (block.normal_emittance & 0xFF) / 255.0;
-    }
 }
 
 #endif

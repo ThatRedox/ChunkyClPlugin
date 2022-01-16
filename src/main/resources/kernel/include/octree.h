@@ -3,6 +3,9 @@
 
 #include "wavefront.h"
 #include "constants.h"
+#include "primitives.h"
+#include "block.h"
+#include "utils.h"
 
 typedef struct {
     __global const int* treeData;
@@ -16,125 +19,77 @@ Octree Octree_create(__global const int* treeData, int depth) {
     return octree;
 }
 
-bool Octree_octreeIntersect(Octree* octree, Ray* ray, int drawDepth) {
+int Octree_get(Octree* self, int x, int y, int z) {
+    int3 bp = (int3) (x, y, z);
+
+    // Check inbounds
+    int3 lv = bp >> self->depth;
+    if ((lv.x != 0) | (lv.y != 0) | (lv.z != 0))
+        return 0;
+
+    int level = self->depth;
+    int data = self->treeData[0];
+    while (data > 0) {
+        level--;
+        lv = 1 & (bp >> level);
+        data = self->treeData[data + ((lv.x << 2) | (lv.y << 1) | lv.z)];
+    }
+    return -data;
+}
+
+bool Octree_octreeIntersect(Octree* self, IntersectionRecord* record, BlockPalette* palette, image2d_array_t atlas, int drawDepth) {
+    Ray* ray = record->ray;
+
     float3 normalMarch = (float3) (0, 1, 0);
     float distMarch = 0;
 
     float3 invD = 1 / ray->direction;
-    float3 offsetD = -(ray->origin) * invD;
+    float3 offsetD = ray->direction * OFFSET;
 
-    int depth = octree->depth;
+    int depth = self->depth;
 
     for (int i = 0; i < drawDepth; i++) {
-        float3 pos = ray->origin + (ray->direction * distMarch);
+        if (distMarch > record->distance) {
+            // Theres already been a closer intersection!
+            return false;
+        }
 
-        int x = floor(pos.x);
-        int y = floor(pos.y);
-        int z = floor(pos.z);
+        float3 pos = ray->origin + (ray->direction * distMarch);
+        int3 bp = intFloorFloat3(pos + offsetD);
 
         // Check inbounds
-        int lx = x >> depth;
-        int ly = y >> depth;
-        int lz = z >> depth;
-
-        if ((lx != 0) | (ly != 0) | (lz != 0))
+        int3 lv = bp >> depth;
+        if ((lv.x != 0) | (lv.y != 0) | (lv.z != 0))
             return false;
 
-        // Read with depth
-        int nodeIndex = 0;
+        // Read the octree with depth
         int level = depth;
-        int data = octree->treeData[nodeIndex];
+        int data = self->treeData[0];
         while (data > 0) {
             level--;
-            lx = 1 & (x >> level);
-            ly = 1 & (y >> level);
-            lz = 1 & (z >> level);
-
-            nodeIndex = data + ((lx << 2) | (ly << 1) | lz);
-            data = octree->treeData[nodeIndex];
+            lv = 1 & (bp >> level);
+            data = self->treeData[data + ((lv.x << 2) | (lv.y << 1) | lv.z)];
         }
         data = -data;
-
-        lx = x >> level;
-        ly = y >> level;
-        lz = z >> level;
+        lv = bp >> level;
 
         // Get block data if there is an intersection
-        if (data != 0) {
-            // TODO: implement checking alpha and custom block model
-            float3 bp = floor(pos);
-            if (normalMarch.y != 0) {
-                ray->uv = (float2) (pos.x - bp.x, pos.z - bp.z);
-            } else if (normalMarch.x != 0) {
-                ray->uv = (float2) (pos.z - bp.z, pos.y - bp.y);
-            } else {
-                ray->uv = (float2) (pos.x - bp.x,pos.y - bp.y);
-            }
-            if (normalMarch.x > 0 || normalMarch.z < 0) {
-                ray->uv.x = 1 - ray->uv.x;
-            }
-            if (normalMarch.y > 0) {
-                ray->uv.y = 1 - ray->uv.y;
-            }
+        if (data != ray->material) {
+            Block block = BlockPalette_get(palette, data);
+            float dist = Block_intersect(&block, bp, record, pos, ray->direction, invD, atlas);
 
-            ray->point = pos;
-            ray->normal = normalMarch;
-            ray->distance = distMarch;
-            ray->material = data;
-            return true;
+            if (!isnan(dist)) {
+                record->distance = distMarch + dist;
+                record->material = data;
+                return true;
+            }
         }
 
         // Exit the current leaf
-        int nx = 0, ny = 0, nz = 0;
-        float tNear = HUGE_VALF;
-
-        float t = (lx << level) * invD.x + offsetD.x;
-        if (t > distMarch + EPS) {
-            tNear = t;
-            nx = 1;
-        }
-
-        t = ((lx + 1) << level) * invD.x + offsetD.x;
-        if (t < tNear && t > distMarch + EPS) {
-            tNear = t;
-            nx = -1;
-        }
-
-        t = (ly << level) * invD.y + offsetD.y;
-        if (t < tNear && t > distMarch + EPS) {
-            tNear = t;
-            ny = 1;
-            nx = 0;
-        }
-
-        t = ((ly + 1) << level) * invD.y + offsetD.y;
-        if (t < tNear && t > distMarch + EPS) {
-            tNear = t;
-            ny = -1;
-            nx = 0;
-        }
-
-        t = (lz << level) * invD.z + offsetD.z;
-        if (t < tNear && t > distMarch + EPS) {
-            tNear = t;
-            nz = 1;
-            ny = 0;
-            nx = 0;
-        }
-
-        t = ((lz + 1) << level) * invD.z + offsetD.z;
-        if (t < tNear && t > distMarch + EPS) {
-            tNear = t;
-            nz = -1;
-            ny = 0;
-            nx = 0;
-        }
-
-        normalMarch.x = nx;
-        normalMarch.y = ny;
-        normalMarch.z = nz;
-
-        distMarch = tNear + OFFSET;
+        AABB box = AABB_new(lv.x << level, (lv.x + 1) << level,
+                            lv.y << level, (lv.y + 1) << level,
+                            lv.z << level, (lv.z + 1) << level);
+        distMarch += AABB_exit(&box, pos, invD);
     }
 
     return false;

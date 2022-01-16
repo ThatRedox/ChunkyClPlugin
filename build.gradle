@@ -32,6 +32,8 @@ jar {
     from {
         configurations.bundled.collect { it.isDirectory() ? it : zipTree(it) }
     }
+
+    processResources.exclude('**/.idea', '**/cmake-build-debug')
 }
 
 defaultTasks 'jar'

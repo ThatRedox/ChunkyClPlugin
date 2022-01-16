@@ -5,7 +5,8 @@ import org.jocl.*;
 
 import se.llbit.log.Log;
 
-import java.io.InputStream;
+import java.io.*;
+import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -17,7 +18,7 @@ public class KernelLoader {
      */
     public static cl_program loadProgram(cl_context context, cl_device_id[] devices) {
         // Load kernel
-        String kernel = readResourceFile("kernel/rayTracer.cl");
+        String kernel = readResourceFile("kernel/include/rayTracer.cl");
         cl_program renderKernel = clCreateProgramWithSource(context, 1, new String[] { kernel }, null, null);
 
         // Search for include headers
@@ -30,7 +31,7 @@ public class KernelLoader {
             newHeaders = false;
             HashMap<String, cl_program> newHeaderFiles = new HashMap<>();
             for (Map.Entry<String, cl_program> header : headerFiles.entrySet()) {
-                if (header.getValue() == null) {
+                if (header.getValue() == null && header.getKey().endsWith(".h")) {
                     String headerFile = readResourceFile("kernel/include/" + header.getKey());
                     header.setValue(clCreateProgramWithSource(context, 1, new String[] {headerFile}, null, null));
                     readHeaders(headerFile, newHeaderFiles);
@@ -52,8 +53,24 @@ public class KernelLoader {
             throw new RuntimeException("Program build failed with error code: " + code);
         }
 
-        return clLinkProgram(context, devices.length, devices, "", 1,
+        cl_program prog = clLinkProgram(context, devices.length, devices, "", 1,
                 new cl_program[] { renderKernel }, null, null, null);
+
+//        long[] sizes = new long[10];
+//        long[] test = new long[1];
+//        clGetProgramInfo(prog, CL_PROGRAM_BINARY_SIZES, Sizeof.size_t*10L, Pointer.to(sizes), test);
+//
+//        byte[] buffer = new byte[(int) sizes[0]];
+//        Pointer ptr = Pointer.to(buffer);
+//        clGetProgramInfo(prog, CL_PROGRAM_BINARIES, Sizeof.size_t, Pointer.to(ptr), test);
+//        File saveFile = new File(savePath);
+//        try (BufferedOutputStream os = new BufferedOutputStream(new FileOutputStream(saveFile))) {
+//            os.write(buffer);
+//        } catch (IOException e) {
+//            System.out.println("Error Saving CL binary");
+//        }
+
+        return prog;
     }
 
     protected static void readHeaders(String kernel, HashMap<String, cl_program> headerFiles) {

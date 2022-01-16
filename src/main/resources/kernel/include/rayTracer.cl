@@ -1,8 +1,8 @@
 #include "octree.h"
 #include "wavefront.h"
 #include "block.h"
-#include "utils.h"
 #include "kernel.h"
+#include "camera.h"
 
 __kernel void render(__global const float *rayPos,
                      __global const float *rayDir,
@@ -21,28 +21,29 @@ __kernel void render(__global const float *rayPos,
                      __global float *res) {
     int gid = get_global_id(0);
 
+    Pixel pixel = Pixel_new(gid);
+    Ray ray = Ray_new(&pixel);
+    IntersectionRecord record = IntersectionRecord_new(&ray);
+
     Octree octree = Octree_create(octreeData, *octreeDepth);
-    Ray wavefrontRay = Ray_new();
-    Ray* ray = &wavefrontRay;
+    BlockPalette palette = BlockPalette_new(blockPalette);
 
     unsigned int randomState = *randomSeed + gid;
     unsigned int* state = &randomState;
     Random_nextState(state);
 
     // Set camera
-    ray->origin = vload3(gid, rayPos);
-    ray->direction = vload3(gid, rayDir);
-    ray->throughput = (float3) (1, 1, 1);
+    Camera_preGenerated(&ray, rayPos, rayDir);
 
     do {
-        if (!extend(ray, octree, 256)) {
-            intersectSky(ray, skyTexture, *skyIntensity);
+        if (!closestIntersect(&record, &octree, &palette, textureAtlas, 256)) {
+            intersectSky(&ray, skyTexture, *skyIntensity);
             break;
         }
-    } while (nextPath(ray, blockPalette, textureAtlas, state, 5, 13.0f));
+    } while (nextPath(&record, state, 5, 13.0f));
 
     int spp = *bufferSpp;
     float3 bufferColor = vload3(gid, res);
-    bufferColor = (bufferColor * spp + ray->color) / (spp + 1);
+    bufferColor = (bufferColor * spp + pixel.color) / (spp + 1);
     vstore3(bufferColor, gid, res);
 }
