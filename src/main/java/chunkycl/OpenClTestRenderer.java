@@ -114,6 +114,7 @@ public class OpenClTestRenderer implements Renderer {
             clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(palette.blocks));
             clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(palette.materials));
             clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(palette.quadsModels));
+            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(palette.aabbModels));
             clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(atlas.texture));
 
             clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(sky.skyTexture));

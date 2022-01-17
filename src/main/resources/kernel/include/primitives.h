@@ -111,6 +111,104 @@ float AABB_full_intersect(AABB* self, float3 origin, float3 dir, float3 invDir, 
 }
 
 
+#define TEX_AABB_SIZE 13
+
+typedef struct {
+    AABB box;
+    int mn;
+    int me;
+    int ms;
+    int mw;
+    int mt;
+    int mb;
+    int flags;
+} TexturedAABB;
+
+TexturedAABB TexturedAABB_new(__global const int* aabbModels, int index) {
+    __global const int* model = aabbModels + index;
+
+    TexturedAABB b;
+    b.box = AABB_new(
+        as_float(model[0]),
+        as_float(model[1]),
+        as_float(model[2]),
+        as_float(model[3]),
+        as_float(model[4]),
+        as_float(model[5])
+    );
+    b.flags = model[6];
+    b.mn = model[7];
+    b.me = model[8];
+    b.ms = model[9];
+    b.mw = model[10];
+    b.mt = model[11];
+    b.mb = model[12];
+    return b;
+}
+
+float TexturedAABB_intersect(TexturedAABB* self, float distance, float3 origin, float3 dir, float3 invDir, float3* normal, float2* uv, int* material) {
+    float3 normal_temp;
+    float2 uv_temp;
+
+    float dist = AABB_full_intersect(&self->box, origin, dir, invDir, &normal_temp, &uv_temp);
+    if (dist >= distance) {
+        return NAN;
+    }
+    
+    int mat;
+    int flags = 0;
+    if (normal_temp.z == -1) {
+        mat = self->mn;
+        flags = self->flags & (0b1111 << 0);
+    }
+    if (normal_temp.x == 1) {
+        mat = self->me;
+        flags = self->flags & (0b1111 << 4);
+    }
+    if (normal_temp.z == -1) {
+        mat = self->ms;
+        flags = self->flags & (0b1111 << 8);
+    }
+    if (normal_temp.x == -1) {
+        mat = self->mw;
+        flags = self->flags & (0b1111 << 12);
+    }
+    if (normal_temp.y == 1) {
+        mat = self->mt;
+        flags = self->flags & (0b1111 << 16);
+    }
+    if (normal_temp.y == -1) {
+        mat = self->mb;
+        flags = self->flags & (0b1111 << 20);
+    }
+
+    // No hit
+    if (flags & 0b1000) {
+        return NAN;
+    }
+
+    // Flip U
+    if (flags & 0b0100) {
+        uv_temp.x = 1 - uv_temp.x;
+    }
+
+    // Flip V
+    if (flags & 0b0010) {
+        uv_temp.y = 1 - uv_temp.y;
+    }
+
+    // Swap
+    if (flags & 0b0001) {
+        uv_temp = uv_temp.yx;
+    }
+
+    *material = mat;
+    *normal = normal_temp;
+    *uv = uv_temp;
+    return dist;
+}
+
+
 #define QUAD_SIZE 15
 
 typedef struct {

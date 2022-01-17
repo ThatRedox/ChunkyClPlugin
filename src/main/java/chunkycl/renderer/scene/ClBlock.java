@@ -1,5 +1,6 @@
 package chunkycl.renderer.scene;
 
+import chunkycl.renderer.scene.blockmodels.ClAabb;
 import chunkycl.renderer.scene.blockmodels.ClQuad;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.ints.IntList;
@@ -11,6 +12,7 @@ import se.llbit.chunky.model.AABBModel;
 import se.llbit.chunky.model.QuadModel;
 import se.llbit.chunky.model.Tint;
 import se.llbit.chunky.resources.Texture;
+import se.llbit.math.AABB;
 import se.llbit.math.Quad;
 
 import java.util.Arrays;
@@ -21,17 +23,27 @@ public class ClBlock {
     public int modelType;
     public int modelPointer;
 
-    public ClBlock(Block block, ClTextureAtlas texMap, Object2IntMap<ClMaterial> materials, AtomicInteger materialCounter, IntArrayList quadModels) {
+    public ClBlock(Block block, ClTextureAtlas texMap, Object2IntMap<ClMaterial> materials, AtomicInteger materialCounter, IntArrayList quadModels, IntArrayList aabbModels) {
         if (block instanceof AbstractModelBlock) {
             AbstractModelBlock b = (AbstractModelBlock) block;
-            // TODO: Proper models
             if (b.getModel() instanceof AABBModel) {
                 AABBModel model = (AABBModel) b.getModel();
                 modelType = 1;
 
-                modelPointer = ClMaterial.getMaterialPointer(
-                        new ClMaterial(block.texture, Tint.NONE, block.emittance, block.specular, block.metalness, block.roughness, texMap),
-                        materials, materialCounter);
+                modelPointer = aabbModels.size();
+                aabbModels.add(model.getBoxes().length);
+                for (int i = 0; i < model.getBoxes().length; i++) {
+                    AABB box = model.getBoxes()[i];
+                    Texture[] tex = model.getTextures()[i];
+                    Tint[] tint = null;
+                    if (model.getTints() != null) tint = model.getTints()[i];
+                    AABBModel.UVMapping[] map = null;
+                    if (model.getUVMapping() != null) map = model.getUVMapping()[i];
+
+                    ClAabb aabb = new ClAabb(box, tex, tint, map, block.emittance, block.specular, block.metalness, block.roughness,
+                            texMap, materials, materialCounter);
+                    aabbModels.addAll(IntList.of(aabb.pack()));
+                }
             } else if (b.getModel() instanceof QuadModel) {
                 QuadModel model = (QuadModel) b.getModel();
                 modelType = 2;

@@ -4,23 +4,24 @@
 #include "kernel.h"
 #include "camera.h"
 
-__kernel void render(__global const float *rayPos,
-                     __global const float *rayDir,
+__kernel void render(__global const float* rayPos,
+                     __global const float* rayDir,
 
-                     __global const int *octreeDepth,
-                     __global const int *octreeData,
+                     __global const int* octreeDepth,
+                     __global const int* octreeData,
 
-                     __global const int *blockPalette,
-                     __global const int *materialPalette,
-                     __global const int *quadModels,
+                     __global const int* blockPalette,
+                     __global const int* materialPalette,
+                     __global const int* quadModels,
+                     __global const int* aabbModels,
                      image2d_array_t textureAtlas,
 
                      image2d_t skyTexture,
                      __global const float* skyIntensity,
 
-                     __global const int *randomSeed,
-                     __global const int *bufferSpp,
-                     __global float *res) {
+                     __global const int* randomSeed,
+                     __global const int* bufferSpp,
+                     __global float* res) {
     int gid = get_global_id(0);
 
     Pixel pixel = Pixel_new(gid);
@@ -28,7 +29,7 @@ __kernel void render(__global const float *rayPos,
     IntersectionRecord record = IntersectionRecord_new(&ray);
 
     Octree octree = Octree_create(octreeData, *octreeDepth);
-    BlockPalette palette = BlockPalette_new(blockPalette, materialPalette, quadModels);
+    BlockPalette palette = BlockPalette_new(blockPalette, materialPalette, quadModels, aabbModels);
 
     unsigned int randomState = *randomSeed + gid;
     unsigned int* state = &randomState;
