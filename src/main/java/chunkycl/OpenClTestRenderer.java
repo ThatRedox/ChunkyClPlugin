@@ -104,22 +104,24 @@ public class OpenClTestRenderer implements Renderer {
             clEnqueueWriteBuffer(instance.commandQueue, bufferSpp, CL_TRUE, 0, Sizeof.cl_int,
                     Pointer.to(new int[] {bufferSppReal}), 0, null, null);
 
-            clSetKernelArg(kernel, 0, Sizeof.cl_mem, Pointer.to(camera.rayPos));
-            clSetKernelArg(kernel, 1, Sizeof.cl_mem, Pointer.to(camera.rayDir));
+            int argIndex = 0;
+            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(camera.rayPos));
+            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(camera.rayDir));
 
-            clSetKernelArg(kernel, 2, Sizeof.cl_mem, Pointer.to(octree.octreeDepth));
-            clSetKernelArg(kernel, 3, Sizeof.cl_mem, Pointer.to(octree.octreeData));
+            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(octree.octreeDepth));
+            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(octree.octreeData));
 
-            clSetKernelArg(kernel, 4, Sizeof.cl_mem, Pointer.to(palette.blocks));
-            clSetKernelArg(kernel, 5, Sizeof.cl_mem, Pointer.to(palette.materials));
-            clSetKernelArg(kernel, 6, Sizeof.cl_mem, Pointer.to(atlas.texture));
+            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(palette.blocks));
+            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(palette.materials));
+            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(palette.quadsModels));
+            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(atlas.texture));
 
-            clSetKernelArg(kernel, 7, Sizeof.cl_mem, Pointer.to(sky.skyTexture));
-            clSetKernelArg(kernel, 8, Sizeof.cl_mem, Pointer.to(sky.sunIntensity));
+            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(sky.skyTexture));
+            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(sky.sunIntensity));
 
-            clSetKernelArg(kernel, 9, Sizeof.cl_mem, Pointer.to(randomSeed));
-            clSetKernelArg(kernel, 10, Sizeof.cl_mem, Pointer.to(bufferSpp));
-            clSetKernelArg(kernel, 11, Sizeof.cl_mem, Pointer.to(buffer));
+            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(randomSeed));
+            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(bufferSpp));
+            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(buffer));
             clEnqueueNDRangeKernel(instance.commandQueue, kernel, 1, null,
                     new long[] {passBuffer.length / 3}, null, 0, null,
                     renderEvent[0]);

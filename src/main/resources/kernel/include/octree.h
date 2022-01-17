@@ -75,8 +75,7 @@ bool Octree_octreeIntersect(Octree* self, IntersectionRecord* record, BlockPalet
 
         // Get block data if there is an intersection
         if (data != ray->material) {
-            Block block = BlockPalette_get(palette, data);
-            float dist = Block_intersect(&block, bp, record, pos, ray->direction, invD, atlas);
+            float dist = BlockPalette_intersectBlock(palette, data, bp, record, pos, ray->direction, invD, atlas);
 
             if (!isnan(dist)) {
                 record->distance = distMarch + dist;

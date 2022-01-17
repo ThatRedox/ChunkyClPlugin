@@ -16,6 +16,8 @@ float4 Atlas_read_uv(float u, float v, int location, int size, image2d_array_t a
     int width = (size >> 16) & 0xFFFF;
     int height = size & 0xFFFF;
 
+    v = (1 - v);
+
     return Atlas_read_xy((int) (u * width), (int) (v * height), location, atlas);
 }
 

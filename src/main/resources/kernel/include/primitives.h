@@ -2,6 +2,7 @@
 #define CHUNKYCLPLUGIN_PRIMITIVES_H
 
 #include "wavefront.h"
+#include "constants.h"
 
 typedef struct {
     float xmin;
@@ -107,6 +108,65 @@ float AABB_full_intersect(AABB* self, float3 origin, float3 dir, float3 invDir, 
     }
 
     return tmin;
+}
+
+
+#define QUAD_SIZE 15
+
+typedef struct {
+    float3 origin;
+    float3 xv;
+    float3 yv;
+    float4 uv;
+    int material;
+    int flags;
+} Quad;
+
+Quad Quad_new(__global const int* quadModels, int index) {
+    Quad q;
+    q.origin.x = as_float(quadModels[index + 0]);
+    q.origin.y = as_float(quadModels[index + 1]);
+    q.origin.z = as_float(quadModels[index + 2]);
+
+    q.xv.x = as_float(quadModels[index + 3]);
+    q.xv.y = as_float(quadModels[index + 4]);
+    q.xv.z = as_float(quadModels[index + 5]);
+
+    q.yv.x = as_float(quadModels[index + 6]);
+    q.yv.y = as_float(quadModels[index + 7]);
+    q.yv.z = as_float(quadModels[index + 8]);
+
+    q.uv.x = as_float(quadModels[index + 9]);
+    q.uv.y = as_float(quadModels[index + 10]);
+    q.uv.z = as_float(quadModels[index + 11]);
+    q.uv.w = as_float(quadModels[index + 12]);
+
+    q.material = quadModels[index + 13];
+    q.flags = quadModels[index + 14];
+    return q;
+}
+
+float Quad_intersect(Quad* self, float distance, float3 origin, float3 dir, float3* normal, float2* uv) {
+    float3 n = normalize(cross(self->xv, self->yv));
+    
+    float denom = dot(dir, n);
+    if (denom < -EPS) {
+        float t = -(dot(origin, n) - dot(n, self->origin)) / denom;
+        if (t > -EPS && t < distance) {
+            float3 pt = origin + dir*t - self->origin;
+            float u = dot(pt, self->xv) / dot(self->xv, self->xv);
+            float v = dot(pt, self->yv) / dot(self->yv, self->yv);
+
+            if (u >= 0 && u <= 1 && v >= 0 && v <= 1) {
+                *uv = (float2) (u, v);
+                *normal = n;
+
+                return t;
+            }
+        }
+    }
+
+    return NAN;
 }
 
 #endif

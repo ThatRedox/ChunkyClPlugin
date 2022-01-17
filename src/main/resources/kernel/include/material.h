@@ -16,7 +16,8 @@ typedef struct {
     unsigned int specular_metalness_roughness;
 } Material;
 
-Material Material_get(__global const int* data, int index) {
+Material Material_get(__global const int* data, int material) {
+    int index = material * 6;
     Material m;
     m.flags = data[index + 0];
     m.textureSize = data[index + 1];

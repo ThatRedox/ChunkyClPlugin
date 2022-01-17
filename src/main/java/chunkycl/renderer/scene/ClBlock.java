@@ -1,21 +1,27 @@
 package chunkycl.renderer.scene;
 
+import chunkycl.renderer.scene.blockmodels.ClQuad;
+import it.unimi.dsi.fastutil.ints.IntArrayList;
+import it.unimi.dsi.fastutil.ints.IntList;
+import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import se.llbit.chunky.PersistentSettings;
 import se.llbit.chunky.block.AbstractModelBlock;
 import se.llbit.chunky.block.Block;
 import se.llbit.chunky.model.AABBModel;
 import se.llbit.chunky.model.QuadModel;
 import se.llbit.chunky.model.Tint;
+import se.llbit.chunky.resources.Texture;
+import se.llbit.math.Quad;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class ClBlock {
     public int modelType;
     public int modelPointer;
 
-    public ClBlock(Block block, ClTextureAtlas texMap, ArrayList<ClMaterial> materials) {
+    public ClBlock(Block block, ClTextureAtlas texMap, Object2IntMap<ClMaterial> materials, AtomicInteger materialCounter, IntArrayList quadModels) {
         if (block instanceof AbstractModelBlock) {
             AbstractModelBlock b = (AbstractModelBlock) block;
             // TODO: Proper models
@@ -23,19 +29,35 @@ public class ClBlock {
                 AABBModel model = (AABBModel) b.getModel();
                 modelType = 1;
 
-                modelPointer = materials.size();
-                materials.add(new ClMaterial(block.texture, Tint.NONE, block.emittance, block.specular, block.metalness, block.roughness, texMap));
+                modelPointer = ClMaterial.getMaterialPointer(
+                        new ClMaterial(block.texture, Tint.NONE, block.emittance, block.specular, block.metalness, block.roughness, texMap),
+                        materials, materialCounter);
             } else if (b.getModel() instanceof QuadModel) {
                 QuadModel model = (QuadModel) b.getModel();
-
                 modelType = 2;
-                modelPointer = materials.size();
-                materials.add(new ClMaterial(block.texture, Tint.NONE, block.emittance, block.specular, block.metalness, block.roughness, texMap));
+
+                modelPointer = quadModels.size();
+                quadModels.add(model.getQuads().length);
+                for (int i = 0; i < model.getQuads().length; i++) {
+                    Quad quad = model.getQuads()[i];
+                    Texture tex = model.getTextures()[i];
+                    Tint tint = null;
+                    if (model.getTints() != null) {
+                        tint = model.getTints()[i];
+                    }
+
+                    ClQuad q = new ClQuad(quad, tex, tint, block.emittance, block.specular, block.metalness, block.roughness,
+                            texMap, materials, materialCounter);
+                    quadModels.addAll(IntList.of(q.pack()));
+                }
             }
         } else {
             modelType = 0;
             modelPointer = materials.size();
-            materials.add(new ClMaterial(block.texture, null, block.emittance, block.specular, block.metalness, block.roughness, texMap));
+
+            modelPointer = ClMaterial.getMaterialPointer(
+                    new ClMaterial(block.texture, null, block.emittance, block.specular, block.metalness, block.roughness, texMap),
+                    materials, materialCounter);
         }
     }
 

@@ -12,6 +12,7 @@ __kernel void render(__global const float *rayPos,
 
                      __global const int *blockPalette,
                      __global const int *materialPalette,
+                     __global const int *quadModels,
                      image2d_array_t textureAtlas,
 
                      image2d_t skyTexture,
@@ -27,7 +28,7 @@ __kernel void render(__global const float *rayPos,
     IntersectionRecord record = IntersectionRecord_new(&ray);
 
     Octree octree = Octree_create(octreeData, *octreeDepth);
-    BlockPalette palette = BlockPalette_new(blockPalette, materialPalette);
+    BlockPalette palette = BlockPalette_new(blockPalette, materialPalette, quadModels);
 
     unsigned int randomState = *randomSeed + gid;
     unsigned int* state = &randomState;
