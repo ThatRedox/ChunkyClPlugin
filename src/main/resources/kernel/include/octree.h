@@ -88,9 +88,8 @@ bool Octree_octreeIntersect(Octree* self, IntersectionRecord* record, BlockPalet
         AABB box = AABB_new(lv.x << level, (lv.x + 1) << level,
                             lv.y << level, (lv.y + 1) << level,
                             lv.z << level, (lv.z + 1) << level);
-        distMarch += AABB_exit(&box, pos, invD);
+        distMarch += AABB_exit(&box, pos + offsetD, invD) + OFFSET;
     }
-
     return false;
 }
 
