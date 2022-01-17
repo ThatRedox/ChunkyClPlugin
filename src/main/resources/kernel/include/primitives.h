@@ -201,7 +201,7 @@ float TexturedAABB_intersect(TexturedAABB* self, float distance, float3 origin, 
     float2 uv_temp;
 
     float dist = AABB_full_intersect_map_2(&self->box, origin, dir, invDir, &normal_temp, &uv_temp);
-    if (dist >= distance) {
+    if (dist >= distance || dist < -EPS) {
         return NAN;
     }
     
