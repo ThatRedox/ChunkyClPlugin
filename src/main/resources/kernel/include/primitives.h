@@ -110,6 +110,56 @@ float AABB_full_intersect(AABB* self, float3 origin, float3 dir, float3 invDir, 
     return tmin;
 }
 
+// Test for an intersection and calculate the normal and UV.
+// Returns NaN if there was no intersection. Returns the distance if
+// there was an intersection. Uses full block uv mapping.
+float AABB_full_intersect_map_2(AABB* self, float3 origin, float3 dir, float3 invDir, float3* normal, float2* uv) {
+    float3 minVals = (float3) (self->xmin, self->ymin, self->zmin);
+    float3 maxVals = (float3) (self->xmax, self->ymax, self->zmax);
+
+    float3 t1s = (minVals - origin) * invDir;
+    float3 t2s = (maxVals - origin) * invDir;
+
+    float3 tmins = fmin(t1s, t2s);
+    float3 tmaxs = fmax(t1s, t2s);
+
+    float tmin = fmax(tmins.x, fmax(tmins.y, tmins.z));
+    float tmax = fmin(tmaxs.x, fmin(tmaxs.y, tmaxs.z));
+
+    // No intersection
+    if (tmax < tmin) {
+        return NAN;
+    }
+
+    float3 o = origin + tmin * dir;
+    if (t1s.x == tmin) {
+        *uv = (float2) (o.z, o.y);
+        *normal = (float3) (-1, 0, 0);
+    }
+    if (t2s.x == tmin) {
+        *uv = (float2) (1 - o.z, o.y);
+        *normal = (float3) (1, 0, 0);
+    }
+    if (t1s.y == tmin) {
+        *uv = (float2) (o.x, o.z);
+        *normal = (float3) (0, -1, 0);
+    }
+    if (t2s.y == tmin) {
+        *uv = (float2) (o.x, 1 - o.z);
+        *normal = (float3) (0, 1, 0);
+    }
+    if (t1s.z == tmin) {
+        *uv = (float2) (1 - o.x, o.y);
+        *normal = (float3) (0, 0, -1);
+    }
+    if (t2s.z == tmin) {
+        *uv = (float2) (o.x, o.y);
+        *normal = (float3) (0, 0, 1);
+    }
+
+    return tmin;
+}
+
 
 #define TEX_AABB_SIZE 13
 
@@ -150,7 +200,7 @@ float TexturedAABB_intersect(TexturedAABB* self, float distance, float3 origin, 
     float3 normal_temp;
     float2 uv_temp;
 
-    float dist = AABB_full_intersect(&self->box, origin, dir, invDir, &normal_temp, &uv_temp);
+    float dist = AABB_full_intersect_map_2(&self->box, origin, dir, invDir, &normal_temp, &uv_temp);
     if (dist >= distance) {
         return NAN;
     }
@@ -159,27 +209,27 @@ float TexturedAABB_intersect(TexturedAABB* self, float distance, float3 origin, 
     int flags = 0;
     if (normal_temp.z == -1) {
         mat = self->mn;
-        flags = self->flags & (0b1111 << 0);
+        flags = self->flags;
     }
     if (normal_temp.x == 1) {
         mat = self->me;
-        flags = self->flags & (0b1111 << 4);
+        flags = self->flags >> 4;
     }
     if (normal_temp.z == -1) {
         mat = self->ms;
-        flags = self->flags & (0b1111 << 8);
+        flags = self->flags >> 8;
     }
     if (normal_temp.x == -1) {
         mat = self->mw;
-        flags = self->flags & (0b1111 << 12);
+        flags = self->flags >> 12;
     }
     if (normal_temp.y == 1) {
         mat = self->mt;
-        flags = self->flags & (0b1111 << 16);
+        flags = self->flags >> 16;
     }
     if (normal_temp.y == -1) {
         mat = self->mb;
-        flags = self->flags & (0b1111 << 20);
+        flags = self->flags >> 20;
     }
 
     // No hit
