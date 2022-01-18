@@ -96,8 +96,6 @@ public class ClBlock {
                     QuadModel model = (QuadModel) b.getModel();
                     Arrays.stream(model.getTextures()).forEach(builder::addTexture);
                 }
-                // TODO: Remove once block models are done
-                builder.addTexture(block.texture);
             } else {
                 builder.addTexture(block.texture);
             }

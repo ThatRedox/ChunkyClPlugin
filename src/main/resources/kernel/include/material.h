@@ -40,6 +40,18 @@ void Material_sample(Material* self, image2d_array_t atlas, IntersectionRecord* 
         case 0xFF:
             record->color *= colorFromArgb(self->tint);
             break;
+        case 1:
+            // TODO Proper foliage tint
+            record->color *= colorFromArgb(0xFF71A74D);
+            break;
+        case 2:
+            // TODO Proper grass tint
+            record->color *= colorFromArgb(0xFF8EB971);
+            break;
+        case 3:
+            // TODO Proper water tint
+            record->color *= colorFromArgb(0xFF3F76E4);
+            break;
     }
 
     // (Normal) emittance
