@@ -28,7 +28,7 @@ public class ClBlock {
             AbstractModelBlock b = (AbstractModelBlock) block;
             if (b.getModel() instanceof AABBModel) {
                 AABBModel model = (AABBModel) b.getModel();
-                modelType = 1;
+                modelType = 2;
 
                 modelPointer = aabbModels.size();
                 aabbModels.add(model.getBoxes().length);
@@ -46,7 +46,7 @@ public class ClBlock {
                 }
             } else if (b.getModel() instanceof QuadModel) {
                 QuadModel model = (QuadModel) b.getModel();
-                modelType = 2;
+                modelType = 3;
 
                 modelPointer = quadModels.size();
                 quadModels.add(model.getQuads().length);
@@ -64,12 +64,17 @@ public class ClBlock {
                 }
             }
         } else {
-            modelType = 0;
-            modelPointer = materials.size();
+            if (block.invisible) {
+                modelType = 0;
+                modelPointer = 0;
+            } else {
+                modelType = 1;
+                modelPointer = materials.size();
 
-            modelPointer = ClMaterial.getMaterialPointer(
-                    new ClMaterial(block.texture, null, block.emittance, block.specular, block.metalness, block.roughness, texMap),
-                    materials, materialCounter);
+                modelPointer = ClMaterial.getMaterialPointer(
+                        new ClMaterial(block.texture, null, block.emittance, block.specular, block.metalness, block.roughness, texMap),
+                        materials, materialCounter);
+            }
         }
     }
 

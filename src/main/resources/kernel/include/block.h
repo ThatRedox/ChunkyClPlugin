@@ -38,6 +38,9 @@ float BlockPalette_intersectBlock(BlockPalette* self, int block, int3 blockPosit
     switch (modelType) {
         default:
         case 0: {
+            return NAN;
+        }
+        case 1: {
             Material mat = Material_get(self->materialPalette, modelPointer);
 
             AABB box = AABB_new(0, 1, 0, 1, 0, 1);
@@ -57,7 +60,7 @@ float BlockPalette_intersectBlock(BlockPalette* self, int block, int3 blockPosit
 
             return dist - OFFSET;
         }
-        case 1: {
+        case 2: {
             bool hit = false;
             float dist = HUGE_VALF;
             int material;
@@ -85,7 +88,7 @@ float BlockPalette_intersectBlock(BlockPalette* self, int block, int3 blockPosit
                 return NAN;
             }
         }
-        case 2: {
+        case 3: {
             bool hit = false;
             float dist = HUGE_VALF;
 

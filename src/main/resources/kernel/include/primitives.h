@@ -306,7 +306,7 @@ float Quad_intersect(Quad* self, float distance, float3 origin, float3 dir, floa
             float v = dot(pt, self->yv) / dot(self->yv, self->yv);
 
             if (u >= 0 && u <= 1 && v >= 0 && v <= 1) {
-                *uv = (float2) (u, v);
+                *uv = (float2) (self->uv.x + (u * self->uv.y), self->uv.z + (v * self->uv.w));
                 *normal = n;
 
                 return t;
