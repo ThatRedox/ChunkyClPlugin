@@ -35,6 +35,13 @@ void Material_sample(Material* self, image2d_array_t atlas, IntersectionRecord* 
     else
         record->color = colorFromArgb(self->color);
 
+    // Tint
+    switch (self->tint >> 24) {
+        case 0xFF:
+            record->color *= colorFromArgb(self->tint);
+            break;
+    }
+
     // (Normal) emittance
     if (self->flags & 0b010)
         record->emittance = Atlas_read_uv(uv.x, uv.y, self->normal_emittance, self->textureSize, atlas).w;
