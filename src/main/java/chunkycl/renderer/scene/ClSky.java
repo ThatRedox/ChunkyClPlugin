@@ -67,6 +67,11 @@ public class ClSky {
         })).join();
     }
 
+    public void release() {
+        clReleaseMemObject(skyTexture);
+        clReleaseMemObject(sunIntensity);
+    }
+
     private static int getTextureResolution(Scene scene) {
         try {
             Sky sky = scene.sky();

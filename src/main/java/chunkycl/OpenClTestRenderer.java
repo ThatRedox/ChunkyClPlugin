@@ -25,6 +25,13 @@ public class OpenClTestRenderer implements Renderer {
 
     private BooleanSupplier postRender = () -> true;
 
+    private ClTextureAtlas clAtlas;
+    private ClBlockPalette clPalette;
+    private ClOctree clOctree;
+    private ClSky clSky;
+
+    private float[] passBuffer;
+
     @Override
     public String getId() {
         return "ChunkyClTestRenderer";
@@ -51,32 +58,19 @@ public class OpenClTestRenderer implements Renderer {
         cl_event[] renderEvent = new cl_event[1];
         Scene scene = manager.bufferedScene;
 
-        ClOctree octree;
-
         RendererInstance instance = RendererInstance.get();
         double[] sampleBuffer = scene.getSampleBuffer();
-        float[] passBuffer = new float[sampleBuffer.length];
+        if (passBuffer == null || passBuffer.length != sampleBuffer.length) {
+            passBuffer = new float[sampleBuffer.length];
+        }
 
-        ClSky sky = new ClSky(scene);
-
-        ClTextureAtlas.AtlasBuilder atlasBuilder = new ClTextureAtlas.AtlasBuilder();
-        ClBlockPalette.preLoad(scene.getPalette(), atlasBuilder);
-
-        ClTextureAtlas atlas = atlasBuilder.build();
-        atlasBuilder.release();
-
-        ClBlockPalette palette = new ClBlockPalette(scene.getPalette(), atlas);
-
-        Octree.OctreeImplementation sceneOctree = scene.getWorldOctree().getImplementation();
-        if (sceneOctree instanceof PackedOctree) {
-            octree = new ClOctree((PackedOctree) sceneOctree);
-        } else {
-            Log.error("Only PackedOctree is supported.");
-            return;
+        if (clAtlas == null || clPalette == null || clOctree == null || clSky == null) {
+            sceneReset(manager, null, 0);
         }
 
         ClCamera camera = new ClCamera(scene);
         camera.generate(renderLock);
+
         cl_kernel kernel = clCreateKernel(instance.program, "render", null);
         cl_mem buffer = clCreateBuffer(instance.context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR,
                 (long) Sizeof.cl_float * passBuffer.length, Pointer.to(passBuffer), null);
@@ -108,17 +102,17 @@ public class OpenClTestRenderer implements Renderer {
             clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(camera.rayPos));
             clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(camera.rayDir));
 
-            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(octree.octreeDepth));
-            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(octree.octreeData));
+            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(clOctree.octreeDepth));
+            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(clOctree.octreeData));
 
-            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(palette.blocks));
-            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(palette.materials));
-            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(palette.quadsModels));
-            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(palette.aabbModels));
-            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(atlas.texture));
+            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(clPalette.blocks));
+            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(clPalette.materials));
+            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(clPalette.quadsModels));
+            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(clPalette.aabbModels));
+            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(clAtlas.texture));
 
-            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(sky.skyTexture));
-            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(sky.sunIntensity));
+            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(clSky.skyTexture));
+            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(clSky.sunIntensity));
 
             clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(randomSeed));
             clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(bufferSpp));
@@ -173,9 +167,6 @@ public class OpenClTestRenderer implements Renderer {
 
         cameraGenTask.join();
         bufferMergeTask.join();
-        atlas.release();
-        octree.release();
-        palette.release();
         camera.release();
         clReleaseMemObject(buffer);
         clReleaseMemObject(randomSeed);
@@ -189,5 +180,34 @@ public class OpenClTestRenderer implements Renderer {
     @Override
     public boolean autoPostProcess() {
         return false;
+    }
+
+    public void sceneReset(DefaultRenderManager manager, ResetReason reason, int resetCount) {
+        if (reason == null || reason == ResetReason.SCENE_LOADED || reason == ResetReason.MATERIALS_CHANGED) {
+            if (clAtlas != null) clAtlas.release();
+            if (clPalette != null) clPalette.release();
+            if (clOctree != null) clOctree.release();
+
+            Octree.OctreeImplementation sceneOctree = manager.bufferedScene.getWorldOctree().getImplementation();
+            if (sceneOctree instanceof PackedOctree) {
+                clOctree = new ClOctree((PackedOctree) sceneOctree);
+            } else {
+                Log.error("Only PackedOctree is supported.");
+                return;
+            }
+
+            ClTextureAtlas.AtlasBuilder atlasBuilder = new ClTextureAtlas.AtlasBuilder();
+            ClBlockPalette.preLoad(manager.bufferedScene.getPalette(), atlasBuilder);
+
+            clAtlas = atlasBuilder.build();
+            atlasBuilder.release();
+
+            clPalette = new ClBlockPalette(manager.bufferedScene.getPalette(), clAtlas);
+        }
+
+        if (reason == null || reason.overwriteState()) {
+            if (clSky != null) clSky.release();
+            clSky = new ClSky(manager.bufferedScene);
+        }
     }
 }
