@@ -1,8 +1,10 @@
 #include "octree.h"
 #include "wavefront.h"
 #include "block.h"
+#include "material.h"
 #include "kernel.h"
 #include "camera.h"
+#include "bvh.h"
 
 __kernel void render(__global const float* rayPos,
                      __global const float* rayDir,
@@ -10,11 +12,15 @@ __kernel void render(__global const float* rayPos,
                      __global const int* octreeDepth,
                      __global const int* octreeData,
 
-                     __global const int* blockPalette,
-                     __global const int* materialPalette,
+                     __global const int* bPalette,
                      __global const int* quadModels,
                      __global const int* aabbModels,
+
+                     __global const int* bvhData,
+                     __global const int* bvhTrigs,
+
                      image2d_array_t textureAtlas,
+                     __global const int* matPalette,
 
                      image2d_t skyTexture,
                      __global const float* skyIntensity,
@@ -27,9 +33,12 @@ __kernel void render(__global const float* rayPos,
     Pixel pixel = Pixel_new(gid);
     Ray ray = Ray_new(&pixel);
     IntersectionRecord record = IntersectionRecord_new(&ray);
+    MaterialPalette materialPalette = MaterialPalette_new(matPalette);
 
     Octree octree = Octree_create(octreeData, *octreeDepth);
-    BlockPalette palette = BlockPalette_new(blockPalette, materialPalette, quadModels, aabbModels);
+    Bvh bvh = Bvh_new(bvhData, bvhTrigs, &materialPalette);
+
+    BlockPalette blockPalette = BlockPalette_new(bPalette, quadModels, aabbModels, &materialPalette);
 
     unsigned int randomState = *randomSeed + gid;
     unsigned int* state = &randomState;
@@ -39,7 +48,7 @@ __kernel void render(__global const float* rayPos,
     Camera_preGenerated(&ray, rayPos, rayDir);
 
     do {
-        if (!closestIntersect(&record, &octree, &palette, textureAtlas, 256)) {
+        if (!closestIntersect(&record, &octree, &blockPalette, textureAtlas, 256, &bvh)) {
             intersectSky(&ray, skyTexture, *skyIntensity);
             break;
         }

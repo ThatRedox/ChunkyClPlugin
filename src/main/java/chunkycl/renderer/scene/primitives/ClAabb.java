@@ -1,6 +1,7 @@
-package chunkycl.renderer.scene.blockmodels;
+package chunkycl.renderer.scene.primitives;
 
 import chunkycl.renderer.scene.ClMaterial;
+import chunkycl.renderer.scene.ClMaterialPalette;
 import chunkycl.renderer.scene.ClTextureAtlas;
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import se.llbit.chunky.model.AABBModel;
@@ -16,7 +17,7 @@ public class ClAabb {
     public int[] materials = new int[6];
     public int flags = 0;
 
-    public ClAabb(AABB box, Texture[] textures, Tint[] tints, AABBModel.UVMapping[] mappings, float emittance, float specular, float metalness, float roughness, ClTextureAtlas texMap, Object2IntMap<ClMaterial> materials, AtomicInteger materialCounter) {
+    public ClAabb(AABB box, Texture[] textures, Tint[] tints, AABBModel.UVMapping[] mappings, float emittance, float specular, float metalness, float roughness, ClTextureAtlas texMap, ClMaterialPalette.Builder materialBuilder) {
         this.xmin = (float) box.xmin;
         this.xmax = (float) box.xmax;
         this.ymin = (float) box.ymin;
@@ -33,9 +34,8 @@ public class ClAabb {
 
             if (tex != null) {
                 this.flags |= mapping2Flags(map) << (i * 4);
-                this.materials[i] = ClMaterial.getMaterialPointer(
-                        new ClMaterial(tex, tint, emittance, specular, metalness, roughness, texMap),
-                        materials, materialCounter);
+                this.materials[i] = materialBuilder.addMaterial(
+                        new ClMaterial(tex, tint, emittance, specular, metalness, roughness, texMap));
             } else {
                 this.flags |= (0b1000) << (i * 4);
             }

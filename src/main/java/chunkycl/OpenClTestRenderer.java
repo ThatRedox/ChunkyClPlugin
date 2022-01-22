@@ -6,15 +6,22 @@ import chunkycl.renderer.RendererInstance;
 import chunkycl.renderer.scene.*;
 import org.jocl.*;
 
+import se.llbit.chunky.entity.Entity;
 import se.llbit.chunky.main.Chunky;
 import se.llbit.chunky.renderer.*;
-import se.llbit.chunky.renderer.postprocessing.PostProcessingFilter;
 import se.llbit.chunky.renderer.scene.Scene;
 import se.llbit.log.Log;
 import se.llbit.math.Octree;
 import se.llbit.math.PackedOctree;
+import se.llbit.math.Vector3;
+import se.llbit.math.bvh.BVH;
+import se.llbit.math.bvh.BinaryBVH;
+import se.llbit.math.bvh.SahMaBVH;
+import se.llbit.math.primitive.Primitive;
+import se.llbit.util.Mutable;
 import se.llbit.util.TaskTracker;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Random;
 import java.util.concurrent.ForkJoinTask;
@@ -25,6 +32,8 @@ public class OpenClTestRenderer implements Renderer {
 
     private BooleanSupplier postRender = () -> true;
 
+    private ClBvh clBvh;
+    private ClMaterialPalette clMaterials;
     private ClTextureAtlas clAtlas;
     private ClBlockPalette clPalette;
     private ClOctree clOctree;
@@ -106,10 +115,14 @@ public class OpenClTestRenderer implements Renderer {
             clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(clOctree.octreeData));
 
             clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(clPalette.blocks));
-            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(clPalette.materials));
             clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(clPalette.quadsModels));
             clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(clPalette.aabbModels));
+
+            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(clBvh.bvh));
+            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(clBvh.trigs));
+
             clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(clAtlas.texture));
+            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(clMaterials.materials));
 
             clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(clSky.skyTexture));
             clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(clSky.sunIntensity));
@@ -186,7 +199,9 @@ public class OpenClTestRenderer implements Renderer {
         if (reason == null || reason == ResetReason.SCENE_LOADED || reason == ResetReason.MATERIALS_CHANGED) {
             if (clAtlas != null) clAtlas.release();
             if (clPalette != null) clPalette.release();
+            if (clMaterials != null) clMaterials.release();
             if (clOctree != null) clOctree.release();
+            if (clBvh != null) clBvh.release();
 
             Octree.OctreeImplementation sceneOctree = manager.bufferedScene.getWorldOctree().getImplementation();
             if (sceneOctree instanceof PackedOctree) {
@@ -196,18 +211,38 @@ public class OpenClTestRenderer implements Renderer {
                 return;
             }
 
+            BinaryBVH bvh = buildBvh(manager.bufferedScene);
+
+            ClMaterialPalette.Builder materialBuilder = new ClMaterialPalette.Builder();
             ClTextureAtlas.AtlasBuilder atlasBuilder = new ClTextureAtlas.AtlasBuilder();
+
             ClBlockPalette.preLoad(manager.bufferedScene.getPalette(), atlasBuilder);
+            ClBvh.preload(bvh, atlasBuilder);
 
             clAtlas = atlasBuilder.build();
-            atlasBuilder.release();
+            atlasBuilder = null;
 
-            clPalette = new ClBlockPalette(manager.bufferedScene.getPalette(), clAtlas);
+            clPalette = new ClBlockPalette(manager.bufferedScene.getPalette(), clAtlas, materialBuilder);
+            clBvh = new ClBvh(bvh, clAtlas, materialBuilder);
+
+            clMaterials = materialBuilder.build();
+            materialBuilder = null;
         }
 
         if (reason == null || reason.overwriteState()) {
             if (clSky != null) clSky.release();
             clSky = new ClSky(manager.bufferedScene);
         }
+    }
+
+    private static BinaryBVH buildBvh(Scene scene) {
+        ArrayList<Entity> entities = new ArrayList<>();
+        entities.addAll(scene.getEntities());
+        entities.addAll(scene.getActors());
+        Vector3 worldOffset = new Vector3();
+        worldOffset.x = -scene.getOrigin().x;
+        worldOffset.y = -scene.getOrigin().y;
+        worldOffset.z = -scene.getOrigin().z;
+        return (BinaryBVH) BVH.Factory.create("SAH_MA", entities, worldOffset, TaskTracker.Task.NONE);
     }
 }

@@ -4,6 +4,7 @@ import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import se.llbit.chunky.PersistentSettings;
 import se.llbit.chunky.model.Tint;
 import se.llbit.chunky.resources.Texture;
+import se.llbit.chunky.world.Material;
 import se.llbit.log.Log;
 import se.llbit.math.ColorUtil;
 
@@ -11,6 +12,8 @@ import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class ClMaterial {
+    public static final int MATERIAL_SIZE = 6;
+
     public boolean hasColorTexture;
     public boolean hasNormalEmittanceTexture;
     public boolean hasSpecularMetalnessRoughnessTexture;
@@ -21,6 +24,10 @@ public class ClMaterial {
     public int colorTexture;
     public int normalEmittanceTexture;
     public int specularMetalnessRoughnessTexture;
+
+    public ClMaterial(Material material, Tint tint, ClTextureAtlas texMap) {
+        this(material.texture, tint, material.emittance, material.specular, material.metalness, material.roughness, texMap);
+    }
 
     public ClMaterial(Texture texture, Tint tint, float emittance, float specular, float metalness, float roughness, ClTextureAtlas texMap) {
         this.hasColorTexture = !PersistentSettings.getSingleColorTextures();
@@ -71,16 +78,6 @@ public class ClMaterial {
         packed[4] = this.normalEmittanceTexture;
         packed[5] = this.specularMetalnessRoughnessTexture;
         return packed;
-    }
-
-    public static int getMaterialPointer(ClMaterial mat, Object2IntMap<ClMaterial> materials, AtomicInteger materialCounter) {
-        if (materials.containsKey(mat)) {
-            return materials.getInt(mat);
-        } else {
-            int ptr = materialCounter.getAndIncrement();
-            materials.put(mat, ptr);
-            return ptr;
-        }
     }
 
     @Override

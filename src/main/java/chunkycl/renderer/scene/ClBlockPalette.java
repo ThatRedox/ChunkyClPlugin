@@ -5,50 +5,37 @@ import static org.jocl.CL.*;
 
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.ints.IntList;
-import it.unimi.dsi.fastutil.objects.Object2IntMap;
-import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
 import org.jocl.*;
 
-import java.util.Comparator;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import se.llbit.chunky.block.Block;
 import se.llbit.chunky.chunk.BlockPalette;
 
 public class ClBlockPalette {
     public final cl_mem blocks;
-    public final cl_mem materials;
     public final cl_mem quadsModels;
     public final cl_mem aabbModels;
 
-    public ClBlockPalette(BlockPalette palette, ClTextureAtlas texMap) {
+    public ClBlockPalette(BlockPalette palette, ClTextureAtlas texMap, ClMaterialPalette.Builder materialBuilder) {
         RendererInstance instance = RendererInstance.get();
 
         List<Block> blockPalette = palette.getPalette();
         IntArrayList packed = new IntArrayList(blockPalette.size());
-        Object2IntOpenHashMap<ClMaterial> materials = new Object2IntOpenHashMap<>();
-        AtomicInteger materialCounter = new AtomicInteger(0);
         IntArrayList quads = new IntArrayList();
         IntArrayList aabbs = new IntArrayList();
 
         for (Block block : blockPalette) {
-            ClBlock clBlock = new ClBlock(block, texMap, materials, materialCounter, quads, aabbs);
+            ClBlock clBlock = new ClBlock(block, texMap, materialBuilder, quads, aabbs);
             packed.addAll(IntList.of(clBlock.pack()));
         }
+        quads.add(0);
+        aabbs.add(0);
 
         this.blocks = clCreateBuffer(instance.context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
                 (long) Sizeof.cl_uint * packed.size(), Pointer.to(packed.toIntArray()),null);
-
-        packed.clear();
-        materials.object2IntEntrySet().stream().sorted(Comparator.comparingInt(Object2IntMap.Entry::getIntValue))
-                .forEachOrdered(e -> packed.addAll(IntList.of(e.getKey().pack())));
-        this.materials = clCreateBuffer(instance.context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-                (long) Sizeof.cl_uint * packed.size(), Pointer.to(packed.toIntArray()),null);
-
         this.quadsModels = clCreateBuffer(instance.context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
                 (long) Sizeof.cl_uint * quads.size(), Pointer.to(quads.toIntArray()), null);
-
         this.aabbModels = clCreateBuffer(instance.context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
                 (long) Sizeof.cl_uint * aabbs.size(), Pointer.to(aabbs.toIntArray()), null);
     }
@@ -63,7 +50,7 @@ public class ClBlockPalette {
 
     public void release() {
         clReleaseMemObject(blocks);
-        clReleaseMemObject(materials);
         clReleaseMemObject(quadsModels);
+        clReleaseMemObject(aabbModels);
     }
 }

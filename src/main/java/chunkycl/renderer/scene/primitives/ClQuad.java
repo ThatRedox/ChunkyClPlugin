@@ -1,13 +1,11 @@
-package chunkycl.renderer.scene.blockmodels;
+package chunkycl.renderer.scene.primitives;
 
 import chunkycl.renderer.scene.ClMaterial;
+import chunkycl.renderer.scene.ClMaterialPalette;
 import chunkycl.renderer.scene.ClTextureAtlas;
-import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import se.llbit.chunky.model.Tint;
 import se.llbit.chunky.resources.Texture;
 import se.llbit.math.Quad;
-
-import java.util.concurrent.atomic.AtomicInteger;
 
 public class ClQuad {
     public float ox, oy, oz;
@@ -17,7 +15,7 @@ public class ClQuad {
     public int material;
     public int flags;
 
-    public ClQuad(Quad quad, Texture texture, Tint tint, float emittance, float specular, float metalness, float roughness, ClTextureAtlas texMap, Object2IntMap<ClMaterial> materials, AtomicInteger materialCounter) {
+    public ClQuad(Quad quad, Texture texture, Tint tint, float emittance, float specular, float metalness, float roughness, ClTextureAtlas texMap, ClMaterialPalette.Builder materialBuilder) {
         this.ox = (float) quad.o.x;
         this.oy = (float) quad.o.y;
         this.oz = (float) quad.o.z;
@@ -31,9 +29,8 @@ public class ClQuad {
         this.uvy = (float) quad.uv.y;
         this.uvz = (float) quad.uv.z;
         this.uvw = (float) quad.uv.w;
-        this.material = ClMaterial.getMaterialPointer(
-                new ClMaterial(texture, tint, emittance, specular, metalness, roughness, texMap),
-                materials, materialCounter);
+        this.material = materialBuilder.addMaterial(
+                new ClMaterial(texture, tint, emittance, specular, metalness, roughness, texMap));
         this.flags = 0;
         if (quad.doubleSided) {
             this.flags |= 1 << 31;

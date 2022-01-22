@@ -12,17 +12,17 @@
 
 typedef struct {
     __global const int* blockPalette;
-    __global const int* materialPalette;
     __global const int* quadModels;
     __global const int* aabbModels;
+    MaterialPalette* materialPalette;
 } BlockPalette;
 
-BlockPalette BlockPalette_new(__global const int* blockPalette, __global const int* materialPalette, __global const int* quadModels, __global const int* aabbModels) {
+BlockPalette BlockPalette_new(__global const int* blockPalette, __global const int* quadModels, __global const int* aabbModels, MaterialPalette* materialPalette) {
     BlockPalette p;
     p.blockPalette = blockPalette;
-    p.materialPalette = materialPalette;
     p.quadModels = quadModels;
     p.aabbModels = aabbModels;
+    p.materialPalette = materialPalette;
     return p;
 }
 
@@ -52,13 +52,11 @@ float BlockPalette_intersectBlock(BlockPalette* self, int block, int3 blockPosit
             }
 
             record->normal = normal;
-            Material_sample(&mat, atlas, record, uv);
-
-            if (record->color.w < EPS) {
+            if (Material_sample(&mat, atlas, record, uv)) {
+                return dist - OFFSET;
+            } else {
                 return NAN;
             }
-
-            return dist - OFFSET;
         }
         case 2: {
             bool hit = false;
@@ -72,9 +70,7 @@ float BlockPalette_intersectBlock(BlockPalette* self, int block, int3 blockPosit
                 float t = TexturedAABB_intersect(&box, dist, normOrigin, record->ray->direction, invRayDir, &normal, &uv, &material);
                 if (!isnan(t)) {
                     Material mat = Material_get(self->materialPalette, material);
-                    Material_sample(&mat, atlas, record, uv);
-                    
-                    if (record->color.w > EPS) {
+                    if (Material_sample(&mat, atlas, record, uv)) {
                         record->normal = normal;
                         dist = t;
                         hit = true;
@@ -99,9 +95,7 @@ float BlockPalette_intersectBlock(BlockPalette* self, int block, int3 blockPosit
                 float t = Quad_intersect(&q, dist, normOrigin, record->ray->direction, &normal, &uv);
                 if (!isnan(t)) {
                     Material mat = Material_get(self->materialPalette, q.material);
-                    Material_sample(&mat, atlas, record, uv);
-
-                    if (record->color.w > EPS) {
+                    if (Material_sample(&mat, atlas, record, uv)) {
                         record->normal = normal;
                         dist = t;
                         hit = true;

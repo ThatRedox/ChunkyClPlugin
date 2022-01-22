@@ -6,6 +6,17 @@
 #include "wavefront.h"
 #include "textureAtlas.h"
 #include "utils.h"
+#include "constants.h"
+
+typedef struct {
+    __global const int* palette;
+} MaterialPalette;
+
+MaterialPalette MaterialPalette_new(__global const int* palette) {
+    MaterialPalette p;
+    p.palette = palette;
+    return p;
+}
 
 typedef struct {
     unsigned int flags;
@@ -16,24 +27,30 @@ typedef struct {
     unsigned int specular_metalness_roughness;
 } Material;
 
-Material Material_get(__global const int* data, int material) {
-    int index = material * 6;
+Material Material_get(MaterialPalette* self, int material) {
     Material m;
-    m.flags = data[index + 0];
-    m.textureSize = data[index + 1];
-    m.tint = data[index + 2];
-    m.color = data[index + 3];
-    m.normal_emittance = data[index + 4];
-    m.specular_metalness_roughness = data[index + 5];
+    m.flags = self->palette[material + 0];
+    m.textureSize = self->palette[material + 1];
+    m.tint = self->palette[material + 2];
+    m.color = self->palette[material + 3];
+    m.normal_emittance = self->palette[material + 4];
+    m.specular_metalness_roughness = self->palette[material + 5];
     return m;
 }
 
-void Material_sample(Material* self, image2d_array_t atlas, IntersectionRecord* record, float2 uv) {
+bool Material_sample(Material* self, image2d_array_t atlas, IntersectionRecord* record, float2 uv) {
     // Color
+    float4 color;
     if (self->flags & 0b100)
-        record->color = Atlas_read_uv(uv.x, uv.y, self->color, self->textureSize, atlas);
+        color = Atlas_read_uv(uv.x, uv.y, self->color, self->textureSize, atlas);
     else
-        record->color = colorFromArgb(self->color);
+        color = colorFromArgb(self->color);
+    
+    if (color.w > EPS) {
+        record->color = color;
+    } else {
+        return false;
+    }
 
     // Tint
     switch (self->tint >> 24) {
@@ -59,6 +76,8 @@ void Material_sample(Material* self, image2d_array_t atlas, IntersectionRecord* 
         record->emittance = Atlas_read_uv(uv.x, uv.y, self->normal_emittance, self->textureSize, atlas).w;
     else
         record->emittance = (self->normal_emittance & 0xFF) / 255.0;
+    
+    return true;
 }
 
 #endif

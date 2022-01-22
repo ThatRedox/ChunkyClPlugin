@@ -1,7 +1,7 @@
 package chunkycl.renderer.scene;
 
-import chunkycl.renderer.scene.blockmodels.ClAabb;
-import chunkycl.renderer.scene.blockmodels.ClQuad;
+import chunkycl.renderer.scene.primitives.ClAabb;
+import chunkycl.renderer.scene.primitives.ClQuad;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.ints.IntList;
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
@@ -17,13 +17,12 @@ import se.llbit.math.Quad;
 
 import java.util.Arrays;
 import java.util.Objects;
-import java.util.concurrent.atomic.AtomicInteger;
 
 public class ClBlock {
     public int modelType;
     public int modelPointer;
 
-    public ClBlock(Block block, ClTextureAtlas texMap, Object2IntMap<ClMaterial> materials, AtomicInteger materialCounter, IntArrayList quadModels, IntArrayList aabbModels) {
+    public ClBlock(Block block, ClTextureAtlas texMap, ClMaterialPalette.Builder materialBuilder, IntArrayList quadModels, IntArrayList aabbModels) {
         if (block instanceof AbstractModelBlock) {
             AbstractModelBlock b = (AbstractModelBlock) block;
             if (b.getModel() instanceof AABBModel) {
@@ -41,7 +40,7 @@ public class ClBlock {
                     if (model.getUVMapping() != null) map = model.getUVMapping()[i];
 
                     ClAabb aabb = new ClAabb(box, tex, tint, map, block.emittance, block.specular, block.metalness, block.roughness,
-                            texMap, materials, materialCounter);
+                            texMap, materialBuilder);
                     aabbModels.addAll(IntList.of(aabb.pack()));
                 }
             } else if (b.getModel() instanceof QuadModel) {
@@ -59,7 +58,7 @@ public class ClBlock {
                     }
 
                     ClQuad q = new ClQuad(quad, tex, tint, block.emittance, block.specular, block.metalness, block.roughness,
-                            texMap, materials, materialCounter);
+                            texMap, materialBuilder);
                     quadModels.addAll(IntList.of(q.pack()));
                 }
             }
@@ -69,11 +68,9 @@ public class ClBlock {
                 modelPointer = 0;
             } else {
                 modelType = 1;
-                modelPointer = materials.size();
-
-                modelPointer = ClMaterial.getMaterialPointer(
-                        new ClMaterial(block.texture, null, block.emittance, block.specular, block.metalness, block.roughness, texMap),
-                        materials, materialCounter);
+                modelPointer = materialBuilder.addMaterial(new ClMaterial(
+                        block.texture, null, block.emittance, block.specular, block.metalness, block.roughness, texMap
+                ));
             }
         }
     }

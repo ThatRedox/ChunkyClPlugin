@@ -119,11 +119,6 @@ public class ClTextureAtlas {
         public ClTextureAtlas build() {
             return new ClTextureAtlas(textureMap.values().toArray(new AtlasTexture[0]));
         }
-
-        public void release() {
-            textureMap.clear();
-            textureMap = null;
-        }
     }
 
     public static class AtlasTexture implements Comparable<AtlasTexture> {

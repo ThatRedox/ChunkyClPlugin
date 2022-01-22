@@ -317,4 +317,93 @@ float Quad_intersect(Quad* self, float distance, float3 origin, float3 dir, floa
     return NAN;
 }
 
+#define TRIANGLE_SIZE 20
+
+typedef struct {
+    float3 e1;
+    float3 e2;
+    float3 o;
+    float3 n;
+    float2 t1;
+    float2 t2;
+    float2 t3;
+    int material;
+    int flags;
+} Triangle;
+
+Triangle Triangle_new(__global const int* trigModels, int index) {
+    Triangle t;
+    t.e1.x = as_float(trigModels[index + 0]);
+    t.e1.y = as_float(trigModels[index + 1]);
+    t.e1.z = as_float(trigModels[index + 2]);
+
+    t.e2.x = as_float(trigModels[index + 3]);
+    t.e2.y = as_float(trigModels[index + 4]);
+    t.e2.z = as_float(trigModels[index + 5]);
+
+    t.o.x = as_float(trigModels[index + 6]);
+    t.o.y = as_float(trigModels[index + 7]);
+    t.o.z = as_float(trigModels[index + 8]);
+
+    t.n.x = as_float(trigModels[index + 9]);
+    t.n.y = as_float(trigModels[index + 10]);
+    t.n.z = as_float(trigModels[index + 11]);
+
+    t.t1.x = as_float(trigModels[index + 12]);
+    t.t1.y = as_float(trigModels[index + 13]);
+
+    t.t2.x = as_float(trigModels[index + 14]);
+    t.t2.y = as_float(trigModels[index + 15]);
+
+    t.t3.x = as_float(trigModels[index + 16]);
+    t.t3.y = as_float(trigModels[index + 17]);
+
+    t.material = trigModels[index + 18];
+    t.flags = trigModels[index + 19];
+    return t;
+}
+
+float Triangle_intersect(Triangle* self, float distance, float3 origin, float3 dir, float3* normal, float2* uv, int* material) {
+    float3 pvec, qvec, tvec;
+
+    pvec = cross(dir, self->e2);
+    float det = dot(self->e1, pvec);
+    if (self->flags & 1) {
+        if (det > -EPS && det < EPS)
+            return NAN;
+    } else if (det > -EPS) {
+        return NAN;
+    }
+    float recip = 1 / det;
+
+    tvec = origin - self->o;
+
+    float u = dot(tvec, pvec) * recip;
+
+    if (u < 0 || u > 1)
+        return NAN;
+
+    qvec = cross(tvec, self->e1);
+
+    float v = dot(dir, qvec) * recip;
+
+    if (v < 0 || (u+v) > 1)
+        return NAN;
+
+    float t = dot(self->e2, qvec) * recip;
+
+    if (t > EPS && t < distance) {
+        float w = 1 - u - v;
+        *uv = (float2) (
+            self->t1.x * u + self->t2.x * v + self->t3.x * w,
+            self->t1.y * u + self->t2.y * v + self->t3.y * w
+        );
+        *normal = self->n;
+        *material = self->material;
+        return t;
+    }
+
+    return NAN;
+}
+
 #endif

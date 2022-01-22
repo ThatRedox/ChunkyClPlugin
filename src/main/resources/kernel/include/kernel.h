@@ -6,12 +6,14 @@
 #include "block.h"
 #include "constants.h"
 #include "randomness.h"
+#include "bvh.h"
 
 const sampler_t skySampler = CLK_NORMALIZED_COORDS_TRUE  | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_LINEAR;
 
-bool closestIntersect(IntersectionRecord* record, Octree* octree, BlockPalette* palette, image2d_array_t atlas, int drawDepth) {
+bool closestIntersect(IntersectionRecord* record, Octree* octree, BlockPalette* palette, image2d_array_t atlas, int drawDepth, Bvh* bvh) {
     bool hit = false;
     hit |= Octree_octreeIntersect(octree, record, palette, atlas, drawDepth);
+    hit |= Bvh_intersect(bvh, record, atlas);
 
     if (hit) {
         record->point = record->ray->origin + record->ray->direction * (record->distance - OFFSET);
