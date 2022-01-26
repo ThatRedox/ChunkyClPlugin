@@ -20,4 +20,8 @@ float3 int3toFloat3(int3 value) {
     return (float3) (value.x, value.y, value.z);
 }
 
+float3 float4toFloat3(float4 value) {
+    return (float3) (value.x, value.y, value.z);
+}
+
 #endif

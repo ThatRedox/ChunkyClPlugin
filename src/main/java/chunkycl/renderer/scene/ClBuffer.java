@@ -21,12 +21,23 @@ public class ClBuffer {
         this(buffer.toIntArray());
     }
 
+    public static ClBuffer singletonBuffer(int value) {
+        return new ClBuffer(new int[] {value});
+    }
+
     public cl_mem get() {
         if (valid) {
             return buffer;
         } else {
             throw new NullPointerException("Attempted to get invalid buffer.");
         }
+    }
+
+    public void set(int[] values, int offset) {
+        RendererInstance instance = RendererInstance.get();
+        clEnqueueWriteBuffer(instance.commandQueue, this.get(), CL_TRUE, (long) Sizeof.cl_uint * offset,
+                (long) Sizeof.cl_uint * values.length, Pointer.to(values),
+                0, null, null);
     }
 
     public void release() {
