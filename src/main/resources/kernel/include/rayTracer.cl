@@ -5,6 +5,7 @@
 #include "kernel.h"
 #include "camera.h"
 #include "bvh.h"
+#include "sky.h"
 
 __kernel void render(__global const float* rayPos,
                      __global const float* rayDir,
@@ -24,6 +25,7 @@ __kernel void render(__global const float* rayPos,
 
                      image2d_t skyTexture,
                      __global const float* skyIntensity,
+                     __global const int* sunData,
 
                      __global const int* randomSeed,
                      __global const int* bufferSpp,
@@ -40,6 +42,8 @@ __kernel void render(__global const float* rayPos,
 
     BlockPalette blockPalette = BlockPalette_new(bPalette, quadModels, aabbModels, &materialPalette);
 
+    Sun sun = Sun_new(sunData);
+
     unsigned int randomState = *randomSeed + gid;
     unsigned int* state = &randomState;
     Random_nextState(state);
@@ -49,7 +53,7 @@ __kernel void render(__global const float* rayPos,
 
     do {
         if (!closestIntersect(&record, &octree, &blockPalette, textureAtlas, 256, &bvh)) {
-            intersectSky(&ray, skyTexture, *skyIntensity);
+            intersectSky(&record, textureAtlas, &sun, skyTexture, *skyIntensity);
             break;
         }
     } while (nextPath(&record, state, 5, 13.0f));

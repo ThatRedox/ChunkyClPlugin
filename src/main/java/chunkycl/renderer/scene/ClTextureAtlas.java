@@ -195,6 +195,10 @@ public class ClTextureAtlas {
         }
     }
 
+    public static int getSize(Texture texture) {
+        return (texture.getWidth() << 16) | texture.getHeight();
+    }
+
     public void release() {
         clReleaseMemObject(texture);
     }

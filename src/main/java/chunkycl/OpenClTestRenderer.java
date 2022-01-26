@@ -4,12 +4,14 @@ import static org.jocl.CL.*;
 
 import chunkycl.renderer.RendererInstance;
 import chunkycl.renderer.scene.*;
+import chunkycl.renderer.scene.primitives.ClSun;
 import org.jocl.*;
 
 import se.llbit.chunky.entity.Entity;
 import se.llbit.chunky.main.Chunky;
 import se.llbit.chunky.renderer.*;
 import se.llbit.chunky.renderer.scene.Scene;
+import se.llbit.chunky.renderer.scene.Sun;
 import se.llbit.log.Log;
 import se.llbit.math.Octree;
 import se.llbit.math.PackedOctree;
@@ -80,6 +82,9 @@ public class OpenClTestRenderer implements Renderer {
         ClCamera camera = new ClCamera(scene);
         camera.generate(renderLock);
 
+        ClSun sun = new ClSun(scene.sun(), this.clAtlas);
+        ClBuffer sunBuffer = new ClBuffer(sun.pack());
+
         cl_kernel kernel = clCreateKernel(instance.program, "render", null);
         cl_mem buffer = clCreateBuffer(instance.context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR,
                 (long) Sizeof.cl_float * passBuffer.length, Pointer.to(passBuffer), null);
@@ -126,6 +131,7 @@ public class OpenClTestRenderer implements Renderer {
 
             clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(clSky.skyTexture));
             clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(clSky.sunIntensity));
+            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(sunBuffer.get()));
 
             clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(randomSeed));
             clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(bufferSpp));
@@ -184,6 +190,7 @@ public class OpenClTestRenderer implements Renderer {
         clReleaseMemObject(buffer);
         clReleaseMemObject(randomSeed);
         clReleaseMemObject(bufferSpp);
+        sunBuffer.release();
     }
 
     private boolean isSaveEvent(SnapshotControl control, Scene scene, int spp) {
@@ -216,6 +223,7 @@ public class OpenClTestRenderer implements Renderer {
             ClMaterialPalette.Builder materialBuilder = new ClMaterialPalette.Builder();
             ClTextureAtlas.AtlasBuilder atlasBuilder = new ClTextureAtlas.AtlasBuilder();
 
+            atlasBuilder.addTexture(Sun.texture);
             ClBlockPalette.preLoad(manager.bufferedScene.getPalette(), atlasBuilder);
             ClBvh.preload(bvh, atlasBuilder);
 

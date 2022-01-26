@@ -7,8 +7,8 @@
 #include "constants.h"
 #include "randomness.h"
 #include "bvh.h"
+#include "sky.h"
 
-const sampler_t skySampler = CLK_NORMALIZED_COORDS_TRUE  | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_LINEAR;
 
 bool closestIntersect(IntersectionRecord* record, Octree* octree, BlockPalette* palette, image2d_array_t atlas, int drawDepth, Bvh* bvh) {
     bool hit = false;
@@ -21,15 +21,11 @@ bool closestIntersect(IntersectionRecord* record, Octree* octree, BlockPalette* 
     return hit;
 }
 
-void intersectSky(Ray* ray, image2d_t skyTexture, float skyIntensity) {
-    float theta = atan2(ray->direction.z, ray->direction.x);
-    theta /= M_PI * 2;
-    theta = fmod(fmod(theta, 1) + 1, 1);
-    float phi = (asin(ray->direction.y) + M_PI_2) * M_1_PI_F;
+void intersectSky(IntersectionRecord* record, image2d_array_t atlas, Sun* sun, image2d_t skyTexture, float skyIntensity) {
+    Sky_intersect(record, skyTexture, skyIntensity);
+    Sun_intersect(sun, record, atlas);
 
-    float4 skyColor = read_imagef(skyTexture, skySampler, (float2) (theta, phi));
-
-    ray->pixel->color += (float3) (skyColor.x, skyColor.y, skyColor.z) * skyIntensity * ray->pixel->throughput;
+    record->ray->pixel->color += (float3) (record->color.x, record->color.y, record->color.z) * record->ray->pixel->throughput;
 }
 
 bool nextPath(IntersectionRecord* record, unsigned int *state, int maxDepth, float emitterScale) {
