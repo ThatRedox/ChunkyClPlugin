@@ -20,8 +20,8 @@ float4 Atlas_read_uv(float u, float v, int location, int size, image2d_array_t a
 
     v = (1 - v);
 
-    int x = min((int) (u * width), width-1);
-    int y = min((int) (v * height), height-1);
+    int x = clamp((int) ((u - EPS) * width), 0, width-1);
+    int y = clamp((int) ((v - EPS) * height), 0, height-1);
 
     return Atlas_read_xy(x, y, location, atlas);
 }
