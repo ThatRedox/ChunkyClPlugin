@@ -53,10 +53,19 @@ __kernel void render(__global const float* rayPos,
 
     do {
         if (!closestIntersect(&record, &octree, &blockPalette, textureAtlas, 256, &bvh)) {
+            record.emittance = 1;
             intersectSky(&record, textureAtlas, &sun, skyTexture, *skyIntensity);
             break;
         }
-    } while (nextPath(&record, state, 5, 13.0f));
+        applyRayColor(&record, 13.0f);
+
+        if (Sun_sampleDirection(&sun, &record, state)) {
+            IntersectionRecord sampleRecord = IntersectionRecord_copy(&record);
+            if (!closestIntersect(&sampleRecord, &octree, &blockPalette, textureAtlas, 256, &bvh)) {
+                intersectSky(&sampleRecord, textureAtlas, &sun, skyTexture, * skyIntensity);
+            }
+        }
+    } while (nextPath(&record, state, 5));
 
     int spp = *bufferSpp;
     float3 bufferColor = vload3(gid, res);

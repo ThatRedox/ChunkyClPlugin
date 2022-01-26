@@ -25,10 +25,10 @@ void intersectSky(IntersectionRecord* record, image2d_array_t atlas, Sun* sun, i
     Sky_intersect(record, skyTexture, skyIntensity);
     Sun_intersect(sun, record, atlas);
 
-    record->ray->pixel->color += (float3) (record->color.x, record->color.y, record->color.z) * record->ray->pixel->throughput;
+    record->ray->pixel->color += (float3) (record->color.x, record->color.y, record->color.z) * record->ray->pixel->throughput * record->emittance;
 }
 
-bool nextPath(IntersectionRecord* record, unsigned int *state, int maxDepth, float emitterScale) {
+void applyRayColor(IntersectionRecord* record, float emitterScale) {
     Ray* ray = record->ray;
     ray->origin = record->point;
 
@@ -39,6 +39,11 @@ bool nextPath(IntersectionRecord* record, unsigned int *state, int maxDepth, flo
     float3 emittance = color;
     emittance *= record->emittance * emitterScale;
     ray->pixel->color += emittance * ray->pixel->throughput;
+}
+
+bool nextPath(IntersectionRecord* record, unsigned int *state, int maxDepth) {
+    Ray* ray = record->ray;
+    ray->origin = record->point;
 
     {
         // Diffuse reflection

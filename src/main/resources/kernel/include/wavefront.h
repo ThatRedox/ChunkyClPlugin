@@ -59,4 +59,20 @@ IntersectionRecord IntersectionRecord_new(Ray* ray) {
     return record;
 }
 
+IntersectionRecord IntersectionRecord_copy(IntersectionRecord* other) {
+    IntersectionRecord record;
+    record.pixel = other->pixel;
+    record.ray = other->ray;
+
+    record.distance = other->distance;
+    record.material = other->material;
+
+    record.normal = other->normal;
+    record.point = other->normal;
+
+    record.color = other->color;
+    record.emittance = other->emittance;
+    return record;
+}
+
 #endif

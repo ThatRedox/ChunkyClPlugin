@@ -3,6 +3,7 @@
 
 #include "wavefront.h"
 #include "textureAtlas.h"
+#include "randomness.h"
 
 typedef struct {
     int flags;
@@ -54,13 +55,40 @@ bool Sun_intersect(Sun* self, IntersectionRecord* record, image2d_array_t atlas)
         if (b >= 0 && b < width2) {
             float4 color = Atlas_read_uv(a / width2, b / width2, 
                                          self->texture, self->textureSize, atlas);
-            color *= self->intensity * 10;
+            color *= self->intensity;
             record->color += color;
             return true;
         }
     }
 
     return false;
+}
+
+bool Sun_sampleDirection(Sun* self, IntersectionRecord* record, unsigned int* state) {
+    if (!(self->flags & 1)) {
+        return false;
+    }
+
+    float radius_cos = cos(0.03f);
+
+    float x1 = Random_nextFloat(state);
+    float x2 = Random_nextFloat(state);
+
+    float cos_a = 1 - x1 + x1 * radius_cos;
+    float sin_a = sqrt(1 - cos_a * cos_a);
+    float phi = 2 * M_PI_F * x2;
+
+    float3 u = self->su * (cos(phi) * sin_a);
+    float3 v = self->sv * (sin(phi) * sin_a);
+    float3 w = self->sw * cos_a;
+
+    record->ray->direction = u * v;
+    record->ray->direction += w;
+    record->ray->direction = normalize(record->ray->direction);
+
+    record->emittance = fabs(dot(record->ray->direction, record->normal));
+
+    return true;
 }
 
 const sampler_t skySampler = CLK_NORMALIZED_COORDS_TRUE  | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_LINEAR;
