@@ -41,7 +41,7 @@ public class ClBvh {
 
         for (int i = 0; i < bvh.packed.length; i++) {
             int value = bvh.packed[i];
-            if (value <= 0) {
+            if (i % 7 == 0 && value <= 0) {
                 packedArray[i] = -primitivePointers[-value];
             } else {
                 packedArray[i] = bvh.packed[i];

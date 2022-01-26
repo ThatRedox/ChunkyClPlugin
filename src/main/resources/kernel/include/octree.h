@@ -48,6 +48,20 @@ bool Octree_octreeIntersect(Octree* self, IntersectionRecord* record, BlockPalet
 
     int depth = self->depth;
 
+    // Check if we are in bounds
+    int3 lv = intFloorFloat3(ray->origin) >> depth;
+    if ((lv.x != 0) | (lv.y != 0) | (lv.z != 0)) {
+        // Attempt to intersect with the octree
+        float octreeSize = 1 << depth;
+        AABB box = AABB_new(0, octreeSize, 0, octreeSize, 0, octreeSize);
+        float dist = AABB_quick_intersect(&box, ray->origin, invD);
+        if (isnan(dist) || dist < 0) {
+            return false;
+        } else {
+            distMarch += dist + OFFSET;
+        }
+    }
+
     for (int i = 0; i < drawDepth; i++) {
         if (distMarch > record->distance) {
             // Theres already been a closer intersection!
@@ -58,7 +72,7 @@ bool Octree_octreeIntersect(Octree* self, IntersectionRecord* record, BlockPalet
         int3 bp = intFloorFloat3(pos + offsetD);
 
         // Check inbounds
-        int3 lv = bp >> depth;
+        lv = bp >> depth;
         if ((lv.x != 0) | (lv.y != 0) | (lv.z != 0))
             return false;
 
