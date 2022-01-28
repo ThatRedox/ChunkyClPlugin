@@ -11,6 +11,7 @@ import se.llbit.chunky.ui.ChunkyFx;
 import se.llbit.chunky.ui.render.AdvancedTab;
 import se.llbit.chunky.ui.render.RenderControlsTab;
 import se.llbit.chunky.ui.render.RenderControlsTabTransformer;
+import se.llbit.log.Log;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -21,7 +22,12 @@ import java.util.List;
 public class ChunkyCl implements Plugin {
     @Override public void attach(Chunky chunky) {
         // Initialize the renderer now for easier debugging
-        RendererInstance.get();
+        try {
+            RendererInstance.get();
+        } catch (UnsatisfiedLinkError e) {
+            Log.error("Failed to load ChunkyCL. Could not load OpenCL native library.", e);
+            return;
+        }
 
         Chunky.addRenderer(new OpenClPathTracingRenderer());
         Chunky.addPreviewRenderer(new OpenClPreviewRenderer());
