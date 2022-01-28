@@ -6,6 +6,7 @@ import javafx.scene.layout.VBox;
 import se.llbit.chunky.Plugin;
 import se.llbit.chunky.main.Chunky;
 import se.llbit.chunky.main.ChunkyOptions;
+import se.llbit.chunky.model.BlockModel;
 import se.llbit.chunky.renderer.RenderController;
 import se.llbit.chunky.ui.ChunkyFx;
 import se.llbit.chunky.ui.render.AdvancedTab;
@@ -21,6 +22,14 @@ import java.util.List;
  */
 public class ChunkyCl implements Plugin {
     @Override public void attach(Chunky chunky) {
+        // Check if we have block models
+        try {
+            Class<?> test = BlockModel.class;
+        } catch (NoClassDefFoundError e) {
+            Log.error("ChunkyCL requires Chunky 2.5.0. Could not load block models.", e);
+            return;
+        }
+
         // Initialize the renderer now for easier debugging
         try {
             RendererInstance.get();
