@@ -183,7 +183,7 @@ public class OpenClPreviewRenderer implements Renderer {
         worldOffset.x = -scene.getOrigin().x;
         worldOffset.y = -scene.getOrigin().y;
         worldOffset.z = -scene.getOrigin().z;
-        return (BinaryBVH) BVH.Factory.create("SAH_MA", entities, worldOffset, TaskTracker.Task.NONE);
+        return (BinaryBVH) BVH.Factory.getImplementation("SAH_MA").create(entities, worldOffset, TaskTracker.Task.NONE);
     }
 }
 

@@ -5,10 +5,6 @@ import static org.jocl.CL.*;
 import chunkycl.renderer.RendererInstance;
 import org.jocl.*;
 
-import it.unimi.dsi.fastutil.objects.ObjectArraySet;
-
-import it.unimi.dsi.fastutil.ints.IntArrayList;
-import it.unimi.dsi.fastutil.ints.IntList;
 import se.llbit.chunky.resources.Texture;
 
 import java.util.ArrayList;

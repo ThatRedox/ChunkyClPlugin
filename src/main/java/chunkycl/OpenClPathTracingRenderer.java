@@ -18,9 +18,6 @@ import se.llbit.math.PackedOctree;
 import se.llbit.math.Vector3;
 import se.llbit.math.bvh.BVH;
 import se.llbit.math.bvh.BinaryBVH;
-import se.llbit.math.bvh.SahMaBVH;
-import se.llbit.math.primitive.Primitive;
-import se.llbit.util.Mutable;
 import se.llbit.util.TaskTracker;
 
 import java.util.ArrayList;
@@ -30,7 +27,7 @@ import java.util.concurrent.ForkJoinTask;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BooleanSupplier;
 
-public class OpenClTestRenderer implements Renderer {
+public class OpenClPathTracingRenderer implements Renderer {
 
     private BooleanSupplier postRender = () -> true;
 
@@ -45,17 +42,17 @@ public class OpenClTestRenderer implements Renderer {
 
     @Override
     public String getId() {
-        return "ChunkyClTestRenderer";
+        return "ChunkyClRenderer";
     }
 
     @Override
     public String getName() {
-        return "ChunkyClTestRenderer";
+        return "ChunkyClRenderer";
     }
 
     @Override
     public String getDescription() {
-        return "ChunkyClTestRenderer";
+        return "ChunkyClRenderer";
     }
 
     @Override
@@ -251,6 +248,6 @@ public class OpenClTestRenderer implements Renderer {
         worldOffset.x = -scene.getOrigin().x;
         worldOffset.y = -scene.getOrigin().y;
         worldOffset.z = -scene.getOrigin().z;
-        return (BinaryBVH) BVH.Factory.create("SAH_MA", entities, worldOffset, TaskTracker.Task.NONE);
+        return (BinaryBVH) BVH.Factory.getImplementation("SAH_MA").create(entities, worldOffset, TaskTracker.Task.NONE);
     }
 }
