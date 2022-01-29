@@ -1,9 +1,9 @@
-package chunkycl.renderer.scene;
+package dev.thatredox.chunkynative.opencl.renderer.scene;
 
 import static org.jocl.CL.*;
 import org.jocl.*;
 
-import chunkycl.renderer.RendererInstance;
+import dev.thatredox.chunkynative.opencl.renderer.RendererInstance;
 import se.llbit.math.PackedOctree;
 
 public class ClOctree {

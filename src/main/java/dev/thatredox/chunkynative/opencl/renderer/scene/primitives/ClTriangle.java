@@ -1,14 +1,14 @@
-package chunkycl.renderer.scene.primitives;
+package dev.thatredox.chunkynative.opencl.renderer.scene.primitives;
 
-import chunkycl.renderer.scene.ClMaterial;
-import chunkycl.renderer.scene.ClMaterialPalette;
-import chunkycl.renderer.scene.ClTextureAtlas;
+import dev.thatredox.chunkynative.common.export.AbstractTextureLoader;
+import dev.thatredox.chunkynative.opencl.renderer.scene.ClMaterial;
+import dev.thatredox.chunkynative.opencl.renderer.scene.ClMaterialPalette;
 import se.llbit.math.primitive.TexturedTriangle;
 
 
 public class ClTriangle {
-    public static void preload(TexturedTriangle triangle, ClTextureAtlas.AtlasBuilder builder) {
-        builder.addTexture(triangle.material.texture);
+    public static void preload(TexturedTriangle triangle, AbstractTextureLoader builder) {
+        builder.get(triangle.material.texture);
     }
 
     public float e1x, e1y, e1z;
@@ -21,7 +21,7 @@ public class ClTriangle {
     public int material;
     public int flags = 0;
 
-    public ClTriangle(TexturedTriangle triangle, ClTextureAtlas texMap, ClMaterialPalette.Builder materialBuilder) {
+    public ClTriangle(TexturedTriangle triangle, AbstractTextureLoader texMap, ClMaterialPalette.Builder materialBuilder) {
         this.e1x = (float) triangle.e1.x;
         this.e1y = (float) triangle.e1.y;
         this.e1z = (float) triangle.e1.z;

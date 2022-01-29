@@ -1,9 +1,9 @@
-package chunkycl.renderer.scene;
+package dev.thatredox.chunkynative.opencl.renderer.scene;
 
 
 import static org.jocl.CL.*;
 
-import chunkycl.renderer.RendererInstance;
+import dev.thatredox.chunkynative.opencl.renderer.RendererInstance;
 import org.apache.commons.math3.util.FastMath;
 import org.jocl.*;
 

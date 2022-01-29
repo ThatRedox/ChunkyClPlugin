@@ -1,6 +1,6 @@
-package chunkycl.renderer.scene;
+package dev.thatredox.chunkynative.opencl.renderer.scene;
 
-import chunkycl.renderer.RendererInstance;
+import dev.thatredox.chunkynative.opencl.renderer.RendererInstance;
 import static org.jocl.CL.*;
 
 import it.unimi.dsi.fastutil.ints.IntCollection;

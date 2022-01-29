@@ -1,9 +1,10 @@
-package chunkycl.renderer.scene;
+package dev.thatredox.chunkynative.opencl.renderer.scene;
 
-import chunkycl.renderer.RendererInstance;
+import dev.thatredox.chunkynative.common.export.AbstractTextureLoader;
+import dev.thatredox.chunkynative.opencl.renderer.RendererInstance;
 import static org.jocl.CL.*;
 
-import chunkycl.renderer.scene.primitives.ClTriangle;
+import dev.thatredox.chunkynative.opencl.renderer.scene.primitives.ClTriangle;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.ints.IntList;
 import org.jocl.Pointer;
@@ -20,7 +21,7 @@ public class ClBvh {
     public final cl_mem bvh;
     public final cl_mem trigs;
 
-    public ClBvh(BinaryBVH bvh, ClTextureAtlas texMap, ClMaterialPalette.Builder materialBuilder) {
+    public ClBvh(BinaryBVH bvh, AbstractTextureLoader texMap, ClMaterialPalette.Builder materialBuilder) {
         RendererInstance instance = RendererInstance.get();
 
         int[] packedArray = new int[bvh.packed.length];
@@ -59,12 +60,12 @@ public class ClBvh {
         clReleaseMemObject(trigs);
     }
 
-    public static void preload(BinaryBVH bvh, ClTextureAtlas.AtlasBuilder builder) {
+    public static void preload(BinaryBVH bvh, AbstractTextureLoader builder) {
         boolean warned = false;
         for (Primitive[] primitives : bvh.packedPrimitives) {
             for (Primitive primitive : primitives) {
                 if (primitive instanceof TexturedTriangle) {
-                    builder.addTexture(((TexturedTriangle) primitive).material.texture);
+                    builder.get(((TexturedTriangle) primitive).material.texture);
                 } else if (!warned) {
                     Log.warnf("Cannot load primitive of type: %s", primitive.getClass());
                     warned = true;

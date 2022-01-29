@@ -1,10 +1,10 @@
-package chunkycl.renderer.scene;
+package dev.thatredox.chunkynative.opencl.renderer.scene;
 
-import chunkycl.renderer.scene.primitives.ClAabb;
-import chunkycl.renderer.scene.primitives.ClQuad;
+import dev.thatredox.chunkynative.common.export.AbstractTextureLoader;
+import dev.thatredox.chunkynative.opencl.renderer.scene.primitives.ClAabb;
+import dev.thatredox.chunkynative.opencl.renderer.scene.primitives.ClQuad;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.ints.IntList;
-import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import se.llbit.chunky.PersistentSettings;
 import se.llbit.chunky.block.AbstractModelBlock;
 import se.llbit.chunky.block.Block;
@@ -22,7 +22,7 @@ public class ClBlock {
     public int modelType;
     public int modelPointer;
 
-    public ClBlock(Block block, ClTextureAtlas texMap, ClMaterialPalette.Builder materialBuilder, IntArrayList quadModels, IntArrayList aabbModels) {
+    public ClBlock(Block block, AbstractTextureLoader texMap, ClMaterialPalette.Builder materialBuilder, IntArrayList quadModels, IntArrayList aabbModels) {
         if (block instanceof AbstractModelBlock) {
             AbstractModelBlock b = (AbstractModelBlock) block;
             if (b.getModel() instanceof AABBModel) {
@@ -82,19 +82,19 @@ public class ClBlock {
         return packed;
     }
 
-    public static void preLoad(Block block, ClTextureAtlas.AtlasBuilder builder) {
+    public static void preLoad(Block block, AbstractTextureLoader builder) {
         if (!PersistentSettings.getSingleColorTextures()) {
             if (block instanceof AbstractModelBlock) {
                 AbstractModelBlock b = (AbstractModelBlock) block;
                 if (b.getModel() instanceof AABBModel) {
                     AABBModel model = (AABBModel) b.getModel();
-                    Arrays.stream(model.getTextures()).forEach(t -> Arrays.stream(t).filter(Objects::nonNull).forEach(builder::addTexture));
+                    Arrays.stream(model.getTextures()).forEach(t -> Arrays.stream(t).filter(Objects::nonNull).forEach(builder::get));
                 } else if (b.getModel() instanceof QuadModel) {
                     QuadModel model = (QuadModel) b.getModel();
-                    Arrays.stream(model.getTextures()).forEach(builder::addTexture);
+                    Arrays.stream(model.getTextures()).forEach(builder::get);
                 }
             } else {
-                builder.addTexture(block.texture);
+                builder.get(block.texture);
             }
         }
     }

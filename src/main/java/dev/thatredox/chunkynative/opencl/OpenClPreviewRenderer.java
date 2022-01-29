@@ -1,8 +1,9 @@
-package chunkycl;
+package dev.thatredox.chunkynative.opencl;
 
-import chunkycl.renderer.RendererInstance;
-import chunkycl.renderer.scene.*;
-import chunkycl.renderer.scene.primitives.ClSun;
+import dev.thatredox.chunkynative.opencl.export.ClTextureLoader;
+import dev.thatredox.chunkynative.opencl.renderer.RendererInstance;
+import dev.thatredox.chunkynative.opencl.renderer.scene.*;
+import dev.thatredox.chunkynative.opencl.renderer.scene.primitives.ClSun;
 import org.jocl.*;
 import se.llbit.chunky.entity.Entity;
 import se.llbit.chunky.renderer.DefaultRenderManager;
@@ -30,7 +31,7 @@ public class OpenClPreviewRenderer implements Renderer {
 
     private ClBvh clBvh;
     private ClMaterialPalette clMaterials;
-    private ClTextureAtlas clAtlas;
+    private ClTextureLoader clAtlas;
     private ClBlockPalette clPalette;
     private ClOctree clOctree;
     private ClSky clSky;
@@ -99,7 +100,7 @@ public class OpenClPreviewRenderer implements Renderer {
         clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(clBvh.bvh));
         clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(clBvh.trigs));
 
-        clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(clAtlas.texture));
+        clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(clAtlas.getAtlas()));
         clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(clMaterials.materials));
 
         clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(clSky.skyTexture));
@@ -153,14 +154,13 @@ public class OpenClPreviewRenderer implements Renderer {
             BinaryBVH bvh = buildBvh(manager.bufferedScene);
 
             ClMaterialPalette.Builder materialBuilder = new ClMaterialPalette.Builder();
-            ClTextureAtlas.AtlasBuilder atlasBuilder = new ClTextureAtlas.AtlasBuilder();
+            clAtlas = new ClTextureLoader();
 
-            atlasBuilder.addTexture(Sun.texture);
-            ClBlockPalette.preLoad(manager.bufferedScene.getPalette(), atlasBuilder);
-            ClBvh.preload(bvh, atlasBuilder);
+            clAtlas.get(Sun.texture);
+            ClBlockPalette.preLoad(manager.bufferedScene.getPalette(), clAtlas);
+            ClBvh.preload(bvh, clAtlas);
 
-            clAtlas = atlasBuilder.build();
-            atlasBuilder = null;
+            clAtlas.build();
 
             clPalette = new ClBlockPalette(manager.bufferedScene.getPalette(), clAtlas, materialBuilder);
             clBvh = new ClBvh(bvh, clAtlas, materialBuilder);

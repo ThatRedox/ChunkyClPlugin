@@ -1,6 +1,6 @@
-package chunkycl.renderer.scene;
+package dev.thatredox.chunkynative.opencl.renderer.scene;
 
-import chunkycl.renderer.RendererInstance;
+import dev.thatredox.chunkynative.opencl.renderer.RendererInstance;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.ints.IntList;
 import it.unimi.dsi.fastutil.objects.Object2IntMap;

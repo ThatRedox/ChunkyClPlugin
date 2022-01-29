@@ -1,4 +1,4 @@
-package chunkycl.renderer;
+package dev.thatredox.chunkynative.opencl.renderer;
 
 import static org.jocl.CL.*;
 import org.jocl.*;

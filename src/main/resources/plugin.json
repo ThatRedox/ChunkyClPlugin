@@ -1,7 +1,7 @@
 {
   "name": "ChunkyCl",
   "author": "ThatRedox",
-  "main": "chunkycl.ChunkyCl",
+  "main": "dev.thatredox.chunkyative.opencl.ChunkyCl",
   "version": "0.2",
   "targetVersion": "2.5.0",
   "description": "OpenCL rendering for Chunky."

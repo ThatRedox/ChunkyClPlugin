@@ -1,6 +1,6 @@
-package chunkycl;
+package dev.thatredox.chunkynative.opencl;
 
-import chunkycl.renderer.RendererInstance;
+import dev.thatredox.chunkynative.opencl.renderer.RendererInstance;
 import javafx.scene.control.Button;
 import javafx.scene.layout.VBox;
 import se.llbit.chunky.Plugin;

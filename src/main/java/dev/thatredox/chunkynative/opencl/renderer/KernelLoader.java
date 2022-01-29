@@ -1,4 +1,4 @@
-package chunkycl.renderer;
+package dev.thatredox.chunkynative.opencl.renderer;
 
 import static org.jocl.CL.*;
 import org.jocl.*;
@@ -6,9 +6,7 @@ import org.jocl.*;
 import se.llbit.log.Log;
 
 import java.io.*;
-import java.nio.ByteBuffer;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 public class KernelLoader {
     private KernelLoader() {}

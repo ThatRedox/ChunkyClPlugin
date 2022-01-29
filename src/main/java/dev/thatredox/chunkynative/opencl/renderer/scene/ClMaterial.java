@@ -1,6 +1,6 @@
-package chunkycl.renderer.scene;
+package dev.thatredox.chunkynative.opencl.renderer.scene;
 
-import it.unimi.dsi.fastutil.objects.Object2IntMap;
+import dev.thatredox.chunkynative.common.export.AbstractTextureLoader;
 import se.llbit.chunky.PersistentSettings;
 import se.llbit.chunky.model.Tint;
 import se.llbit.chunky.resources.Texture;
@@ -9,7 +9,6 @@ import se.llbit.log.Log;
 import se.llbit.math.ColorUtil;
 
 import java.util.Objects;
-import java.util.concurrent.atomic.AtomicInteger;
 
 public class ClMaterial {
     public static final int MATERIAL_SIZE = 6;
@@ -20,16 +19,15 @@ public class ClMaterial {
 
     public int blockTint;
 
-    public int textureSize;
-    public int colorTexture;
+    public long colorTexture;
     public int normalEmittanceTexture;
     public int specularMetalnessRoughnessTexture;
 
-    public ClMaterial(Material material, Tint tint, ClTextureAtlas texMap) {
+    public ClMaterial(Material material, Tint tint, AbstractTextureLoader texMap) {
         this(material.texture, tint, material.emittance, material.specular, material.metalness, material.roughness, texMap);
     }
 
-    public ClMaterial(Texture texture, Tint tint, float emittance, float specular, float metalness, float roughness, ClTextureAtlas texMap) {
+    public ClMaterial(Texture texture, Tint tint, float emittance, float specular, float metalness, float roughness, AbstractTextureLoader texMap) {
         this.hasColorTexture = !PersistentSettings.getSingleColorTextures();
         this.hasNormalEmittanceTexture = false;
         this.hasSpecularMetalnessRoughnessTexture = false;
@@ -58,8 +56,7 @@ public class ClMaterial {
             this.blockTint = 0;
         }
 
-        this.textureSize = (texture.getWidth() << 16) | texture.getHeight();
-        this.colorTexture = this.hasColorTexture ? texMap.get(texture).location : texture.getAvgColor();
+        this.colorTexture = this.hasColorTexture ? texMap.get(texture).get() : texture.getAvgColor();
         this.normalEmittanceTexture = (int) (emittance * 255.0);
         this.specularMetalnessRoughnessTexture = (int) (specular * 255.0) |
                 ((int) (metalness * 255.0) << 8) |
@@ -72,9 +69,9 @@ public class ClMaterial {
                 ((this.hasColorTexture ? 1 : 0) << 2) |
                 ((this.hasNormalEmittanceTexture ? 1 : 0) << 1) |
                 (this.hasSpecularMetalnessRoughnessTexture ? 1 : 0);
-        packed[1] = this.textureSize;
+        packed[1] = (int) (this.colorTexture >>> 32);
         packed[2] = this.blockTint;
-        packed[3] = this.colorTexture;
+        packed[3] = (int) this.colorTexture;
         packed[4] = this.normalEmittanceTexture;
         packed[5] = this.specularMetalnessRoughnessTexture;
         return packed;
@@ -85,11 +82,11 @@ public class ClMaterial {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         ClMaterial that = (ClMaterial) o;
-        return hasColorTexture == that.hasColorTexture && hasNormalEmittanceTexture == that.hasNormalEmittanceTexture && hasSpecularMetalnessRoughnessTexture == that.hasSpecularMetalnessRoughnessTexture && blockTint == that.blockTint && textureSize == that.textureSize && colorTexture == that.colorTexture && normalEmittanceTexture == that.normalEmittanceTexture && specularMetalnessRoughnessTexture == that.specularMetalnessRoughnessTexture;
+        return hasColorTexture == that.hasColorTexture && hasNormalEmittanceTexture == that.hasNormalEmittanceTexture && hasSpecularMetalnessRoughnessTexture == that.hasSpecularMetalnessRoughnessTexture && blockTint == that.blockTint && colorTexture == that.colorTexture && normalEmittanceTexture == that.normalEmittanceTexture && specularMetalnessRoughnessTexture == that.specularMetalnessRoughnessTexture;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(hasColorTexture, hasNormalEmittanceTexture, hasSpecularMetalnessRoughnessTexture, blockTint, textureSize, colorTexture, normalEmittanceTexture, specularMetalnessRoughnessTexture);
+        return Objects.hash(hasColorTexture, hasNormalEmittanceTexture, hasSpecularMetalnessRoughnessTexture, blockTint, colorTexture, normalEmittanceTexture, specularMetalnessRoughnessTexture);
     }
 }

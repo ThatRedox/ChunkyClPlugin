@@ -1,15 +1,12 @@
-package chunkycl.renderer.scene.primitives;
+package dev.thatredox.chunkynative.opencl.renderer.scene.primitives;
 
-import chunkycl.renderer.scene.ClMaterial;
-import chunkycl.renderer.scene.ClMaterialPalette;
-import chunkycl.renderer.scene.ClTextureAtlas;
-import it.unimi.dsi.fastutil.objects.Object2IntMap;
+import dev.thatredox.chunkynative.common.export.AbstractTextureLoader;
+import dev.thatredox.chunkynative.opencl.renderer.scene.ClMaterial;
+import dev.thatredox.chunkynative.opencl.renderer.scene.ClMaterialPalette;
 import se.llbit.chunky.model.AABBModel;
 import se.llbit.chunky.model.Tint;
 import se.llbit.chunky.resources.Texture;
 import se.llbit.math.AABB;
-
-import java.util.concurrent.atomic.AtomicInteger;
 
 public class ClAabb {
     public float xmin, ymin, zmin;
@@ -17,7 +14,7 @@ public class ClAabb {
     public int[] materials = new int[6];
     public int flags = 0;
 
-    public ClAabb(AABB box, Texture[] textures, Tint[] tints, AABBModel.UVMapping[] mappings, float emittance, float specular, float metalness, float roughness, ClTextureAtlas texMap, ClMaterialPalette.Builder materialBuilder) {
+    public ClAabb(AABB box, Texture[] textures, Tint[] tints, AABBModel.UVMapping[] mappings, float emittance, float specular, float metalness, float roughness, AbstractTextureLoader texMap, ClMaterialPalette.Builder materialBuilder) {
         this.xmin = (float) box.xmin;
         this.xmax = (float) box.xmax;
         this.ymin = (float) box.ymin;

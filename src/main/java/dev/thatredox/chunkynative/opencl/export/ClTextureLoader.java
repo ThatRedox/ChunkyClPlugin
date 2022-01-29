@@ -1,29 +1,41 @@
-package chunkycl.renderer.scene;
+package dev.thatredox.chunkynative.opencl.export;
 
-import static org.jocl.CL.*;
-
-import chunkycl.renderer.RendererInstance;
+import dev.thatredox.chunkynative.opencl.renderer.RendererInstance;
+import dev.thatredox.chunkynative.opencl.util.ClResource;
 import org.jocl.*;
 
+import dev.thatredox.chunkynative.common.export.AbstractTextureLoader;
+import dev.thatredox.chunkynative.common.export.TextureRecord;
+import it.unimi.dsi.fastutil.objects.Object2ObjectMap;
 import se.llbit.chunky.resources.Texture;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
+import java.util.List;
+import java.util.stream.Collectors;
 
-public class ClTextureAtlas {
-    public final cl_mem texture;
-    public final HashMap<AtlasTexture, AtlasTexture> textureMap = new HashMap<>();
+import static org.jocl.CL.*;
 
-    public ClTextureAtlas(AtlasTexture[] textures) {
-        for (AtlasTexture tex : textures) {
-            textureMap.put(tex, tex);
-        }
+public class ClTextureLoader extends AbstractTextureLoader implements ClResource {
+    private cl_mem texture;
 
-        Arrays.sort(textures);
+    public cl_mem getAtlas() {
+        return this.texture;
+    }
+
+    public void release() {
+        clReleaseMemObject(this.texture);
+    }
+
+    @Override
+    protected void buildTextures(Object2ObjectMap<Texture, TextureRecord> textures) {
+        List<AtlasTexture> texs = textures.entrySet().stream()
+                .map(entry -> new AtlasTexture(entry.getKey(), entry.getValue()))
+                .sorted().collect(Collectors.toList());
+
         ArrayList<boolean[][]> layers = new ArrayList<>();
         layers.add(new boolean[256][256]);
-        for (AtlasTexture tex : textures) {
+        for (AtlasTexture tex : texs) {
             if (!insertTex(layers, tex)) {
                 layers.add(new boolean[256][256]);
                 insertTex(layers, tex);
@@ -43,7 +55,7 @@ public class ClTextureAtlas {
         RendererInstance instance = RendererInstance.get();
         texture = clCreateImage(instance.context, CL_MEM_READ_ONLY, fmt, desc, null, null);
 
-        for (AtlasTexture tex : textures) {
+        for (AtlasTexture tex : texs) {
             clEnqueueWriteImage(instance.commandQueue, texture, CL_TRUE,
                     new long[] {tex.getX()* 16L, tex.getY()* 16L, tex.getD()},
                     new long[] {tex.getWidth(), tex.getHeight(), 1},
@@ -51,15 +63,8 @@ public class ClTextureAtlas {
                     0, null, null
             );
         }
-    }
 
-    public AtlasTexture get(Texture tex) {
-        AtlasTexture texture = new AtlasTexture(tex);
-        return textureMap.getOrDefault(texture, null);
-    }
-
-    public AtlasTexture get(AtlasTexture tex) {
-        return textureMap.getOrDefault(tex, null);
+        texs.forEach(AtlasTexture::commit);
     }
 
     private static boolean insertTex(ArrayList<boolean[][]> layers, AtlasTexture tex) {
@@ -104,35 +109,24 @@ public class ClTextureAtlas {
         return true;
     }
 
-    public static class AtlasBuilder {
-        HashMap<AtlasTexture, AtlasTexture> textureMap = new HashMap<>();
-
-        public AtlasTexture addTexture(Texture tex) {
-            AtlasTexture texture = new AtlasTexture(tex);
-            return textureMap.computeIfAbsent(texture, t -> t);
-        }
-
-        public ClTextureAtlas build() {
-            return new ClTextureAtlas(textureMap.values().toArray(new AtlasTexture[0]));
-        }
-    }
-
-    public static class AtlasTexture implements Comparable<AtlasTexture> {
+    protected static class AtlasTexture implements Comparable<AtlasTexture> {
         public final Texture texture;
+        public final TextureRecord record;
         public final int size;
         public int location = 0xFFFFFFFF;
 
-        protected AtlasTexture(Texture tex) {
+        protected AtlasTexture(Texture tex, TextureRecord record) {
             this.texture = tex;
+            this.record = record;
             this.size = (tex.getWidth() << 16) | tex.getHeight();
         }
 
-        protected void setLocation(int x, int y, int d) {
-            this.location = (x << 22) | (y << 13) | d;
+        public void commit() {
+            this.record.set(((long) size << 32) | location);
         }
 
-        protected void setLocation(int index) {
-            this.location = index;
+        public void setLocation(int x, int y, int d) {
+            this.location = (x << 22) | (y << 13) | d;
         }
 
         public int getWidth() {
@@ -189,13 +183,5 @@ public class ClTextureAtlas {
             return this.size == other.size &&
                     Arrays.equals(this.texture.getData(), other.texture.getData());
         }
-    }
-
-    public static int getSize(Texture texture) {
-        return (texture.getWidth() << 16) | texture.getHeight();
-    }
-
-    public void release() {
-        clReleaseMemObject(texture);
     }
 }

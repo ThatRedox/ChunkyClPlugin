@@ -1,4 +1,4 @@
-package chunkycl.util;
+package dev.thatredox.chunkynative.opencl.util;
 
 import se.llbit.log.Log;
 

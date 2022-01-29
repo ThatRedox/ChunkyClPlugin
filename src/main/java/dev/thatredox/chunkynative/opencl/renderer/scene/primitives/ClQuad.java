@@ -1,8 +1,8 @@
-package chunkycl.renderer.scene.primitives;
+package dev.thatredox.chunkynative.opencl.renderer.scene.primitives;
 
-import chunkycl.renderer.scene.ClMaterial;
-import chunkycl.renderer.scene.ClMaterialPalette;
-import chunkycl.renderer.scene.ClTextureAtlas;
+import dev.thatredox.chunkynative.common.export.AbstractTextureLoader;
+import dev.thatredox.chunkynative.opencl.renderer.scene.ClMaterial;
+import dev.thatredox.chunkynative.opencl.renderer.scene.ClMaterialPalette;
 import se.llbit.chunky.model.Tint;
 import se.llbit.chunky.resources.Texture;
 import se.llbit.math.Quad;
@@ -15,7 +15,7 @@ public class ClQuad {
     public int material;
     public int flags;
 
-    public ClQuad(Quad quad, Texture texture, Tint tint, float emittance, float specular, float metalness, float roughness, ClTextureAtlas texMap, ClMaterialPalette.Builder materialBuilder) {
+    public ClQuad(Quad quad, Texture texture, Tint tint, float emittance, float specular, float metalness, float roughness, AbstractTextureLoader texMap, ClMaterialPalette.Builder materialBuilder) {
         this.ox = (float) quad.o.x;
         this.oy = (float) quad.o.y;
         this.oz = (float) quad.o.z;

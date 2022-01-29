@@ -1,6 +1,7 @@
-package chunkycl.renderer.scene;
+package dev.thatredox.chunkynative.opencl.renderer.scene;
 
-import chunkycl.renderer.RendererInstance;
+import dev.thatredox.chunkynative.common.export.AbstractTextureLoader;
+import dev.thatredox.chunkynative.opencl.renderer.RendererInstance;
 import static org.jocl.CL.*;
 
 import it.unimi.dsi.fastutil.ints.IntArrayList;
@@ -17,7 +18,7 @@ public class ClBlockPalette {
     public final cl_mem quadsModels;
     public final cl_mem aabbModels;
 
-    public ClBlockPalette(BlockPalette palette, ClTextureAtlas texMap, ClMaterialPalette.Builder materialBuilder) {
+    public ClBlockPalette(BlockPalette palette, AbstractTextureLoader texMap, ClMaterialPalette.Builder materialBuilder) {
         RendererInstance instance = RendererInstance.get();
 
         List<Block> blockPalette = palette.getPalette();
@@ -40,7 +41,7 @@ public class ClBlockPalette {
                 (long) Sizeof.cl_uint * aabbs.size(), Pointer.to(aabbs.toIntArray()), null);
     }
 
-    public static void preLoad(BlockPalette palette, ClTextureAtlas.AtlasBuilder builder) {
+    public static void preLoad(BlockPalette palette, AbstractTextureLoader builder) {
         List<Block> blockPalette = palette.getPalette();
 
         for (Block block : blockPalette) {
