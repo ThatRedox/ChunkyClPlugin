@@ -27,6 +27,10 @@ public class PackedMaterial implements Packer {
     public final int normalEmittanceTexture;
     public final int specularMetalnessRoughnessTexture;
 
+    public PackedMaterial(Texture texture, Tint tint, Material material, AbstractTextureLoader texturePalette) {
+        this(texture, tint, material.emittance, material.specular, material.metalness, material.roughness, texturePalette);
+    }
+
     public PackedMaterial(Material material, Tint tint, AbstractTextureLoader texMap) {
         this(material.texture, tint, material.emittance, material.specular, material.metalness, material.roughness, texMap);
     }
