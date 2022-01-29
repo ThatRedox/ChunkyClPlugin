@@ -3,6 +3,7 @@ package dev.thatredox.chunkynative.common.export;
 import it.unimi.dsi.fastutil.Hash;
 import it.unimi.dsi.fastutil.objects.Object2ObjectMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenCustomHashMap;
+import it.unimi.dsi.fastutil.objects.Reference2ObjectOpenHashMap;
 import se.llbit.chunky.resources.Texture;
 
 import java.util.Arrays;
@@ -11,7 +12,7 @@ public abstract class AbstractTextureLoader {
     private final static int MAX_IDENTITIES_PER_RECORD = 3;
 
     protected final Object2ObjectOpenCustomHashMap<Texture, TextureRecord> recordMap;
-    protected final Object2ObjectOpenCustomHashMap<Texture, TextureRecord> identityRecordMap;
+    protected final Reference2ObjectOpenHashMap<Texture, TextureRecord> identityRecordMap;
     protected boolean locked = false;
 
     public AbstractTextureLoader() {
@@ -28,19 +29,7 @@ public abstract class AbstractTextureLoader {
                 return Arrays.equals(a.getData(), b.getData()) && a.getWidth() == b.getWidth() && a.getHeight() == b.getHeight();
             }
         });
-        identityRecordMap = new Object2ObjectOpenCustomHashMap<>(new Hash.Strategy<Texture>() {
-            @Override
-            public int hashCode(Texture o) {
-                return System.identityHashCode(o);
-            }
-
-            @Override
-            public boolean equals(Texture a, Texture b) {
-                if (a == b) return true;
-                if (a == null || b == null) return false;
-                return Arrays.equals(a.getData(), b.getData()) && a.getWidth() == b.getWidth() && a.getHeight() == b.getHeight();
-            }
-        });
+        identityRecordMap = new Reference2ObjectOpenHashMap<>();
     }
 
     /**
