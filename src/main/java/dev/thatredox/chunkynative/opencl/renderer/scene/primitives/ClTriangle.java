@@ -1,6 +1,6 @@
 package dev.thatredox.chunkynative.opencl.renderer.scene.primitives;
 
-import dev.thatredox.chunkynative.common.export.AbstractTextureLoader;
+import dev.thatredox.chunkynative.common.export.texture.AbstractTextureLoader;
 import dev.thatredox.chunkynative.opencl.renderer.scene.ClMaterial;
 import dev.thatredox.chunkynative.opencl.renderer.scene.ClMaterialPalette;
 import se.llbit.math.primitive.TexturedTriangle;

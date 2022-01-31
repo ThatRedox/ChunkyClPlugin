@@ -1,4 +1,4 @@
-package dev.thatredox.chunkynative.common.export;
+package dev.thatredox.chunkynative.common.export.texture;
 
 import it.unimi.dsi.fastutil.Hash;
 import it.unimi.dsi.fastutil.objects.Object2ObjectMap;
@@ -33,7 +33,7 @@ public abstract class AbstractTextureLoader {
     }
 
     /**
-     * Get the texture record for a texture. This will either return a cached record or compute one.
+     * Get the texture record for a texture. This will either return a cached record or computed one.
      */
     public TextureRecord get(Texture texture) {
         if (texture == null) {

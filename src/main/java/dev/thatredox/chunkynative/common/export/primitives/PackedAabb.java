@@ -1,9 +1,9 @@
 package dev.thatredox.chunkynative.common.export.primitives;
 
-import dev.thatredox.chunkynative.common.export.AbstractTextureLoader;
-import dev.thatredox.chunkynative.common.export.MaterialPalette;
+import dev.thatredox.chunkynative.common.export.texture.AbstractTextureLoader;
 import dev.thatredox.chunkynative.common.export.Packer;
 
+import dev.thatredox.chunkynative.common.export.ResourcePalette;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.ints.IntList;
 import se.llbit.chunky.model.AABBModel;
@@ -18,7 +18,8 @@ public class PackedAabb implements Packer {
     public final int flags;
 
     public PackedAabb(AABB box, Texture[] textures, Tint[] tints, AABBModel.UVMapping[] mappings,
-                      Material material, AbstractTextureLoader texturePalette, MaterialPalette materialPalette) {
+                      Material material, AbstractTextureLoader texturePalette,
+                      ResourcePalette<PackedMaterial> materialPalette) {
         this.bounds[0] = (float) box.xmin;
         this.bounds[1] = (float) box.xmax;
         this.bounds[2] = (float) box.ymin;
@@ -36,7 +37,7 @@ public class PackedAabb implements Packer {
 
             if (tex != null) {
                 flags |= mapping2Flags(map) << (i * 4);
-                this.materials[i] = materialPalette.addMaterial(
+                this.materials[i] = materialPalette.put(
                         new PackedMaterial(tex, tint, material, texturePalette));
             } else {
                 flags |= (0b1000) << (i * 4);

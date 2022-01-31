@@ -1,6 +1,6 @@
 package dev.thatredox.chunkynative.common.export.primitives;
 
-import dev.thatredox.chunkynative.common.export.AbstractTextureLoader;
+import dev.thatredox.chunkynative.common.export.texture.AbstractTextureLoader;
 import dev.thatredox.chunkynative.common.export.Packer;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import se.llbit.chunky.renderer.scene.Sun;

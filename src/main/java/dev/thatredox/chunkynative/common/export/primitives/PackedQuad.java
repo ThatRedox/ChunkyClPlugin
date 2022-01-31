@@ -1,8 +1,8 @@
 package dev.thatredox.chunkynative.common.export.primitives;
 
-import dev.thatredox.chunkynative.common.export.AbstractTextureLoader;
-import dev.thatredox.chunkynative.common.export.MaterialPalette;
+import dev.thatredox.chunkynative.common.export.texture.AbstractTextureLoader;
 import dev.thatredox.chunkynative.common.export.Packer;
+import dev.thatredox.chunkynative.common.export.ResourcePalette;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import se.llbit.chunky.model.Tint;
 import se.llbit.chunky.resources.Texture;
@@ -15,7 +15,8 @@ public class PackedQuad implements Packer {
     public final int flags;
 
     public PackedQuad(Quad quad, Texture texture, Tint tint, Material material,
-                      AbstractTextureLoader texturePalette, MaterialPalette materialPalette) {
+                      AbstractTextureLoader texturePalette,
+                      ResourcePalette<PackedMaterial> materialPalette) {
         this.vectors[0] = (float) quad.o.x;
         this.vectors[1] = (float) quad.o.y;
         this.vectors[2] = (float) quad.o.z;
@@ -29,7 +30,7 @@ public class PackedQuad implements Packer {
         this.vectors[10] = (float) quad.uv.y;
         this.vectors[11] = (float) quad.uv.z;
         this.vectors[12] = (float) quad.uv.w;
-        this.material = materialPalette.addMaterial(new PackedMaterial(texture, tint, material, texturePalette));
+        this.material = materialPalette.put(new PackedMaterial(texture, tint, material, texturePalette));
         int flags = 0;
         if (quad.doubleSided) {
             flags |= 1;

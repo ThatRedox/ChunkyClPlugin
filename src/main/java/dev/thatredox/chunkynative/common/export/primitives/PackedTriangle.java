@@ -1,8 +1,8 @@
 package dev.thatredox.chunkynative.common.export.primitives;
 
-import dev.thatredox.chunkynative.common.export.AbstractTextureLoader;
-import dev.thatredox.chunkynative.common.export.MaterialPalette;
+import dev.thatredox.chunkynative.common.export.texture.AbstractTextureLoader;
 import dev.thatredox.chunkynative.common.export.Packer;
+import dev.thatredox.chunkynative.common.export.ResourcePalette;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import se.llbit.chunky.model.Tint;
 import se.llbit.math.primitive.TexturedTriangle;
@@ -12,7 +12,8 @@ public class PackedTriangle implements Packer {
     public final int material;
     public final int flags;
 
-    public PackedTriangle(TexturedTriangle triangle, AbstractTextureLoader texturePalette, MaterialPalette materialPalette) {
+    public PackedTriangle(TexturedTriangle triangle, AbstractTextureLoader texturePalette,
+                          ResourcePalette<PackedMaterial> materialPalette) {
         this.vectors[0] = (float) triangle.e1.x;
         this.vectors[1] = (float) triangle.e1.y;
         this.vectors[2] = (float) triangle.e1.z;
@@ -39,7 +40,7 @@ public class PackedTriangle implements Packer {
         }
         this.flags = flags;
 
-        this.material = materialPalette.addMaterial(new PackedMaterial(triangle.material, Tint.NONE, texturePalette));
+        this.material = materialPalette.put(new PackedMaterial(triangle.material, Tint.NONE, texturePalette));
     }
 
     /**

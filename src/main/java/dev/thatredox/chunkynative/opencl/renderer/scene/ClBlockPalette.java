@@ -1,6 +1,6 @@
 package dev.thatredox.chunkynative.opencl.renderer.scene;
 
-import dev.thatredox.chunkynative.common.export.AbstractTextureLoader;
+import dev.thatredox.chunkynative.common.export.texture.AbstractTextureLoader;
 import dev.thatredox.chunkynative.opencl.renderer.RendererInstance;
 import static org.jocl.CL.*;
 

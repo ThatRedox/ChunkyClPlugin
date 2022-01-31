@@ -1,6 +1,6 @@
 package dev.thatredox.chunkynative.opencl.renderer.scene;
 
-import dev.thatredox.chunkynative.common.export.AbstractTextureLoader;
+import dev.thatredox.chunkynative.common.export.texture.AbstractTextureLoader;
 import se.llbit.chunky.PersistentSettings;
 import se.llbit.chunky.model.Tint;
 import se.llbit.chunky.resources.Texture;

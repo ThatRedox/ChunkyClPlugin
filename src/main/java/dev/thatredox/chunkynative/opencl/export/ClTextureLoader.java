@@ -4,8 +4,8 @@ import dev.thatredox.chunkynative.opencl.renderer.RendererInstance;
 import dev.thatredox.chunkynative.opencl.util.ClResource;
 import org.jocl.*;
 
-import dev.thatredox.chunkynative.common.export.AbstractTextureLoader;
-import dev.thatredox.chunkynative.common.export.TextureRecord;
+import dev.thatredox.chunkynative.common.export.texture.AbstractTextureLoader;
+import dev.thatredox.chunkynative.common.export.texture.TextureRecord;
 import it.unimi.dsi.fastutil.objects.Object2ObjectMap;
 import se.llbit.chunky.resources.Texture;
 

@@ -1,4 +1,4 @@
-package dev.thatredox.chunkynative.common.export;
+package dev.thatredox.chunkynative.common.export.texture;
 
 public class TextureRecord {
     // Housekeeping variable used in AbstractTextureLoader
