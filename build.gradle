@@ -25,10 +25,6 @@ dependencies {
 }
 
 jar {
-    manifest {
-        attributes "Main-Class": "chunkycl.ChunkyCl"
-    }
-
     from {
         configurations.bundled.collect { it.isDirectory() ? it : zipTree(it) }
     }
