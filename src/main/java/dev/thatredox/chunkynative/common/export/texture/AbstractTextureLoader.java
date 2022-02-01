@@ -77,4 +77,10 @@ public abstract class AbstractTextureLoader {
      * Build the textures of this texture loader and make all the texture records valid and resolvable.
      */
     protected abstract void buildTextures(Object2ObjectMap<Texture, TextureRecord> textures);
+
+    /**
+     * Release this texture loader. The default implementation does nothing but texture loaders with native
+     * resources can use this to free them.
+     */
+    public void release() { }
 }

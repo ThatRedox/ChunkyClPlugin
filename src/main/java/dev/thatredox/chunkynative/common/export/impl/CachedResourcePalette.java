@@ -5,7 +5,7 @@ import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
 
 import java.util.OptionalInt;
 
-public abstract class CachedResourcePalette<T> implements ResourcePalette<T> {
+abstract class CachedResourcePalette<T> implements ResourcePalette<T> {
     protected final Object2IntOpenHashMap<T> resourceMap = new Object2IntOpenHashMap<>();
     protected boolean locked = false;
 

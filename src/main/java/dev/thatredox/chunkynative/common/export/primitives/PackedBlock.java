@@ -11,6 +11,10 @@ import se.llbit.chunky.block.Block;
 import se.llbit.chunky.model.AABBModel;
 import se.llbit.chunky.model.QuadModel;
 import se.llbit.chunky.model.Tint;
+import se.llbit.chunky.resources.Texture;
+
+import java.util.Arrays;
+import java.util.stream.Stream;
 
 public class PackedBlock implements Packer {
     public final int modelType;
@@ -40,6 +44,25 @@ public class PackedBlock implements Packer {
         } else {
             modelType = 1;
             modelPointer = materialPalette.put(new PackedMaterial(block, Tint.NONE, textureLoader));
+        }
+    }
+
+    public static void preloadTextures(Block block, AbstractTextureLoader textureLoader) {
+        if (block instanceof AbstractModelBlock) {
+            AbstractModelBlock b = (AbstractModelBlock) block;
+            Stream<Texture> textures;
+            if (b.getModel() instanceof AABBModel) {
+                textures = Arrays.stream(((AABBModel) b.getModel()).getTextures())
+                        .flatMap(Arrays::stream);
+            } else if (b.getModel() instanceof QuadModel) {
+                textures = Arrays.stream(((QuadModel) b.getModel()).getTextures());
+            } else {
+                throw new RuntimeException(String.format(
+                        "Unknown model type for block %s: %s", block.name, b.getModel()));
+            }
+            textures.forEach(textureLoader::get);
+        } else if (!block.invisible) {
+            textureLoader.get(block.texture);
         }
     }
 
