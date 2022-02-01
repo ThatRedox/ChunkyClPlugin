@@ -10,6 +10,7 @@ import dev.thatredox.chunkynative.common.export.texture.AbstractTextureLoader;
 import dev.thatredox.chunkynative.util.Reflection;
 import se.llbit.chunky.renderer.ResetReason;
 import se.llbit.chunky.renderer.scene.Scene;
+import se.llbit.chunky.renderer.scene.SkyCache;
 import se.llbit.log.Log;
 import se.llbit.math.Octree;
 import se.llbit.math.PackedOctree;
@@ -32,6 +33,7 @@ public abstract class SceneExporter {
     protected ResourcePalette<PackedTriangleModel> trigPalette = null;
     protected int[] worldBvh = null;
     protected int[] actorBvh = null;
+    protected double[][][] skyTexture = null;
 
     /**
      * @return True if successfully loaded. False if loading failed.
@@ -122,6 +124,12 @@ public abstract class SceneExporter {
                 Log.error("Octree implementation must be PACKED");
                 return false;
             }
+        }
+
+        // Extract the sky texture
+        {
+            SkyCache sky = Reflection.getFieldValue(scene.sky(), "skyCache", SkyCache.class);
+            this.skyTexture = Reflection.getFieldValue(sky, "skyTexture", double[][][].class);
         }
 
         if (this.texturePalette != null) this.texturePalette.release();
