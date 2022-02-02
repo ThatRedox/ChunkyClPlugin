@@ -1,12 +1,12 @@
-package dev.thatredox.chunkynative.opencl.renderer.scene;
+package dev.thatredox.chunkynative.opencl.util;
 
 import dev.thatredox.chunkynative.opencl.renderer.RendererInstance;
 import static org.jocl.CL.*;
 
-import it.unimi.dsi.fastutil.ints.IntCollection;
+import it.unimi.dsi.fastutil.ints.IntArrayList;
 import org.jocl.*;
 
-public class ClBuffer {
+public class ClBuffer implements ClResource {
     private final cl_mem buffer;
     private boolean valid;
 
@@ -17,8 +17,11 @@ public class ClBuffer {
         this.valid = true;
     }
 
-    public ClBuffer(IntCollection buffer) {
-        this(buffer.toIntArray());
+    public ClBuffer(IntArrayList buffer) {
+        RendererInstance instance = RendererInstance.get();
+        this.buffer = clCreateBuffer(instance.context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+                (long) Sizeof.cl_uint * buffer.size(), Pointer.to(buffer.elements()), null);
+        this.valid = true;
     }
 
     public static ClBuffer singletonBuffer(int value) {

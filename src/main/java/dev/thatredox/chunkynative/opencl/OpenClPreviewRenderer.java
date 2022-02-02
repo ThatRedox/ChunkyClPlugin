@@ -4,6 +4,7 @@ import dev.thatredox.chunkynative.opencl.export.ClTextureLoader;
 import dev.thatredox.chunkynative.opencl.renderer.RendererInstance;
 import dev.thatredox.chunkynative.opencl.renderer.scene.*;
 import dev.thatredox.chunkynative.opencl.renderer.scene.primitives.ClSun;
+import dev.thatredox.chunkynative.opencl.util.ClBuffer;
 import org.jocl.*;
 import se.llbit.chunky.entity.Entity;
 import se.llbit.chunky.renderer.DefaultRenderManager;

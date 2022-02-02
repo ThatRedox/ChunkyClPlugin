@@ -28,12 +28,23 @@ public abstract class SceneExporter {
 
     protected AbstractTextureLoader texturePalette = null;
     protected ResourcePalette<PackedBlock> blockPalette = null;
+    protected CachedResourcePalette<PackedMaterial> materialPalette = null;
     protected ResourcePalette<PackedAabbModel> aabbPalette = null;
     protected ResourcePalette<PackedQuadModel> quadPalette = null;
     protected ResourcePalette<PackedTriangleModel> trigPalette = null;
     protected int[] worldBvh = null;
     protected int[] actorBvh = null;
     protected double[][][] skyTexture = null;
+    protected double skyIntensity = 0;
+
+    public boolean ensureLoad(Scene scene) {
+        if (this.texturePalette == null || this.blockPalette == null || this.materialPalette == null ||
+                this.aabbPalette == null || this.quadPalette == null || this.trigPalette == null) {
+            this.modCount = -1;
+            return this.load(0, ResetReason.SCENE_LOADED, scene);
+        }
+        return true;
+    }
 
     /**
      * @return True if successfully loaded. False if loading failed.
@@ -51,7 +62,7 @@ public abstract class SceneExporter {
 
         AbstractTextureLoader texturePalette = this.createTextureLoader();
         ResourcePalette<PackedBlock> blockPalette = this.createBlockPalette();
-        ResourcePalette<PackedMaterial> materialPalette = this.createMaterialPalette();
+        CachedResourcePalette<PackedMaterial> materialPalette = new CachedResourcePalette<>(this.createMaterialPalette());
         ResourcePalette<PackedAabbModel> aabbPalette = this.createAabbModelPalette();
         ResourcePalette<PackedQuadModel> quadPalette = this.createQuadModelPalette();
         ResourcePalette<PackedTriangleModel> trigPalette = this.createTriangleModelPalette();
@@ -118,7 +129,7 @@ public abstract class SceneExporter {
             Octree.OctreeImplementation impl = scene.getWorldOctree().getImplementation();
             if (impl instanceof PackedOctree) {
                 assert blockMapping != null;
-                if (!loadOctree(((PackedOctree) impl).treeData, blockMapping, blockPalette))
+                if (!loadOctree(((PackedOctree) impl).treeData, impl.getDepth(), blockMapping, blockPalette))
                     return false;
             } else {
                 Log.error("Octree implementation must be PACKED");
@@ -130,16 +141,19 @@ public abstract class SceneExporter {
         {
             SkyCache sky = Reflection.getFieldValue(scene.sky(), "skyCache", SkyCache.class);
             this.skyTexture = Reflection.getFieldValue(sky, "skyTexture", double[][][].class);
+            this.skyIntensity = scene.sky().getSkyLight();
         }
 
         if (this.texturePalette != null) this.texturePalette.release();
         if (this.blockPalette != null) this.blockPalette.release();
+        if (this.materialPalette != null) this.materialPalette.release();
         if (this.aabbPalette != null) this.aabbPalette.release();
         if (this.quadPalette != null) this.quadPalette.release();
         if (this.trigPalette != null) this.trigPalette.release();
 
         this.texturePalette = texturePalette;
         this.blockPalette = blockPalette;
+        this.materialPalette = materialPalette;
         this.aabbPalette = aabbPalette;
         this.quadPalette = quadPalette;
         this.trigPalette = trigPalette;
@@ -169,7 +183,7 @@ public abstract class SceneExporter {
         return out;
     }
 
-    protected abstract boolean loadOctree(int[] octree, int[] blockMapping, ResourcePalette<PackedBlock> blockPalette);
+    protected abstract boolean loadOctree(int[] octree, int depth, int[] blockMapping, ResourcePalette<PackedBlock> blockPalette);
 
     protected abstract AbstractTextureLoader createTextureLoader();
     protected abstract ResourcePalette<PackedBlock> createBlockPalette();
