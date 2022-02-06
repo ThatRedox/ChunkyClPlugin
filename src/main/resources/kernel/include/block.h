@@ -27,9 +27,13 @@ BlockPalette BlockPalette_new(__global const int* blockPalette, __global const i
 }
 
 float BlockPalette_intersectBlock(BlockPalette* self, int block, int3 blockPosition, IntersectionRecord* record, float3 origin, float3 direction, float3 invRayDir, image2d_array_t atlas) {
-    int offset = block * 2;
-    int modelType = self->blockPalette[offset + 0];
-    int modelPointer = self->blockPalette[offset + 1];
+    // ANY_TYPE. Should not be intersected.
+    if (block == 0x7FFFFFFE) {
+        return NAN;
+    }
+    
+    int modelType = self->blockPalette[block + 0];
+    int modelPointer = self->blockPalette[block + 1];
 
     float3 normOrigin = (origin - direction * OFFSET) - int3toFloat3(blockPosition);
     float3 normal;

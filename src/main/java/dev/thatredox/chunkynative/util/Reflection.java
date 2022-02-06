@@ -13,12 +13,12 @@ public class Reflection {
             Field field = obj.getClass().getDeclaredField(name);
             field.setAccessible(true);
             Object o = field.get(obj);
-            if (o != null && o.getClass() == cls) {
+            if (o != null && cls.isAssignableFrom(o.getClass())) {
                 return (T) o;
             } else {
-                Log.errorf("Field %s was of type %s. Expected type %s. Do you have the wrong version of Chunky?",
-                        name, o == null ? null : o.getClass(), cls);
-                throw new RuntimeException();
+                throw new RuntimeException(String.format(
+                        "Field %s was of type %s. Expected type %s. Do you have the wrong version of Chunky?",
+                        name, o == null ? null : o.getClass(), cls));
             }
         } catch (NoSuchFieldException | IllegalAccessException e) {
             Log.error("Failed to obtain field. Do you have the wrong version of Chunky?", e);

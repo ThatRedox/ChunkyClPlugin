@@ -1,5 +1,6 @@
 package dev.thatredox.chunkynative.opencl;
 
+import dev.thatredox.chunkynative.opencl.renderer.ClSceneLoader;
 import dev.thatredox.chunkynative.opencl.renderer.RendererInstance;
 import javafx.scene.control.Button;
 import javafx.scene.layout.VBox;
@@ -38,8 +39,9 @@ public class ChunkyCl implements Plugin {
             return;
         }
 
-        Chunky.addRenderer(new OpenClPathTracingRenderer());
-        Chunky.addPreviewRenderer(new OpenClPreviewRenderer());
+        ClSceneLoader sceneLoader = new ClSceneLoader();
+        Chunky.addRenderer(new OpenClPathTracingRenderer(sceneLoader));
+        Chunky.addPreviewRenderer(new OpenClPreviewRenderer(sceneLoader));
 
         RenderControlsTabTransformer prev = chunky.getRenderControlsTabTransformer();
         chunky.setRenderControlsTabTransformer(tabs -> {

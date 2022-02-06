@@ -6,25 +6,29 @@ import dev.thatredox.chunkynative.common.export.models.PackedQuadModel;
 import dev.thatredox.chunkynative.common.export.models.PackedTriangleModel;
 import dev.thatredox.chunkynative.common.export.primitives.PackedBlock;
 import dev.thatredox.chunkynative.common.export.primitives.PackedMaterial;
+import dev.thatredox.chunkynative.common.export.primitives.PackedSun;
 import dev.thatredox.chunkynative.common.export.texture.AbstractTextureLoader;
 import dev.thatredox.chunkynative.util.Reflection;
 import se.llbit.chunky.renderer.ResetReason;
 import se.llbit.chunky.renderer.scene.Scene;
 import se.llbit.chunky.renderer.scene.SkyCache;
+import se.llbit.chunky.renderer.scene.Sun;
 import se.llbit.log.Log;
 import se.llbit.math.Octree;
 import se.llbit.math.PackedOctree;
 import se.llbit.math.bvh.BVH;
 import se.llbit.math.bvh.BinaryBVH;
+import se.llbit.math.bvh.SahMaBVH;
+import se.llbit.math.primitive.Primitive;
 import se.llbit.math.primitive.TexturedTriangle;
 
 import java.lang.ref.PhantomReference;
 import java.util.Arrays;
 
-public abstract class SceneExporter {
+public abstract class AbstractSceneLoader {
     protected int modCount = 0;
-    protected PhantomReference<BVH> prevWorldBvh = new PhantomReference<>(BVH.EMPTY, null);
-    protected PhantomReference<BVH> prevActorBvh = new PhantomReference<>(BVH.EMPTY, null);
+    protected PhantomReference<BVH> prevWorldBvh = new PhantomReference<>(null, null);
+    protected PhantomReference<BVH> prevActorBvh = new PhantomReference<>(null, null);
 
     protected AbstractTextureLoader texturePalette = null;
     protected ResourcePalette<PackedBlock> blockPalette = null;
@@ -34,11 +38,15 @@ public abstract class SceneExporter {
     protected ResourcePalette<PackedTriangleModel> trigPalette = null;
     protected int[] worldBvh = null;
     protected int[] actorBvh = null;
-    protected double[][][] skyTexture = null;
-    protected double skyIntensity = 0;
+    protected PackedSun packedSun = null;
 
     public boolean ensureLoad(Scene scene) {
-        if (this.texturePalette == null || this.blockPalette == null || this.materialPalette == null ||
+        return this.ensureLoad(scene, false);
+    }
+
+    protected boolean ensureLoad(Scene scene, boolean force) {
+        if (force ||
+                this.texturePalette == null || this.blockPalette == null || this.materialPalette == null ||
                 this.aabbPalette == null || this.quadPalette == null || this.trigPalette == null) {
             this.modCount = -1;
             return this.load(0, ResetReason.SCENE_LOADED, scene);
@@ -70,30 +78,37 @@ public abstract class SceneExporter {
         BVH worldBvh = Reflection.getFieldValue(scene, "bvh", BVH.class);
         BVH actorBvh = Reflection.getFieldValue(scene, "actorBvh", BVH.class);
 
+        if (worldBvh == BVH.EMPTY) {
+            worldBvh = new SahMaBVH(new Primitive[0], i -> {});
+        }
+        if (actorBvh == BVH.EMPTY) {
+            actorBvh = new SahMaBVH(new Primitive[0], i -> {});
+        }
+
+        boolean needTextureLoad = resetReason == ResetReason.SCENE_LOADED ||
+                resetReason == ResetReason.MATERIALS_CHANGED ||
+                prevWorldBvh.get() != worldBvh ||
+                prevActorBvh.get() != actorBvh;
+
+        if (needTextureLoad) {
+            if (!(worldBvh instanceof BinaryBVH)) {
+                Log.error("BVH implementation must extend BinaryBVH");
+                return false;
+            }
+            if (!(actorBvh instanceof BinaryBVH)) {
+                Log.error("BVH implementation must extend BinaryBVH");
+                return false;
+            }
+            prevWorldBvh = new PhantomReference<>(worldBvh, null);
+            prevActorBvh = new PhantomReference<>(actorBvh, null);
+        }
+
         // Preload textures
-        switch (resetReason) {
-            case SCENE_LOADED:
-            case MATERIALS_CHANGED:
-                scene.getPalette().getPalette().forEach(
-                        b -> PackedBlock.preloadTextures(b, texturePalette));
-
-            case SETTINGS_CHANGED:
-                // Check for bvh change
-                if (prevWorldBvh.get() != worldBvh) {
-                    if (!(worldBvh instanceof BinaryBVH)) {
-                        Log.error("BVH implementation must extend BinaryBVH");
-                        return false;
-                    }
-                    preloadBvh((BinaryBVH) worldBvh, texturePalette);
-                }
-
-                if (prevActorBvh.get() != actorBvh) {
-                    if (!(actorBvh instanceof BinaryBVH)) {
-                        Log.error("BVH implementation must extend BinaryBVH");
-                        return false;
-                    }
-                    preloadBvh((BinaryBVH) actorBvh, texturePalette);
-                }
+        if (needTextureLoad) {
+            scene.getPalette().getPalette().forEach(b -> PackedBlock.preloadTextures(b, texturePalette));
+            preloadBvh((BinaryBVH) worldBvh, texturePalette);
+            preloadBvh((BinaryBVH) actorBvh, texturePalette);
+            texturePalette.get(Sun.texture);
         }
 
         texturePalette.build();
@@ -101,27 +116,30 @@ public abstract class SceneExporter {
         int[] packedWorldBvh = null;
         int[] packedActorBvh = null;
 
-        switch (resetReason) {
-            case SCENE_LOADED:
-            case MATERIALS_CHANGED:
-                // Need to reload materials
-                blockMapping = scene.getPalette().getPalette().stream().mapToInt(block ->
-                        blockPalette.put(new PackedBlock(block, texturePalette, materialPalette, aabbPalette, quadPalette)))
-                        .toArray();
+        if (needTextureLoad) {
+            blockMapping = scene.getPalette().getPalette().stream()
+                    .mapToInt(block ->
+                            blockPalette.put(new PackedBlock(block, texturePalette, materialPalette, aabbPalette, quadPalette)))
+                    .toArray();
+            packedWorldBvh = loadBvh((BinaryBVH) worldBvh, texturePalette, materialPalette, trigPalette);
+            packedActorBvh = loadBvh((BinaryBVH) actorBvh, texturePalette, materialPalette, trigPalette);
+            packedSun = new PackedSun(scene.sun(), texturePalette);
 
-            case SETTINGS_CHANGED:
-                // Check for bvh change
-                if (prevWorldBvh.get() != worldBvh) {
-                    prevWorldBvh = new PhantomReference<>(worldBvh, null);
-                    assert worldBvh instanceof BinaryBVH;
-                    packedWorldBvh = loadBvh((BinaryBVH) worldBvh, texturePalette, materialPalette, trigPalette);
-                }
+            if (this.texturePalette != null) this.texturePalette.release();
+            if (this.blockPalette != null) this.blockPalette.release();
+            if (this.materialPalette != null) this.materialPalette.release();
+            if (this.aabbPalette != null) this.aabbPalette.release();
+            if (this.quadPalette != null) this.quadPalette.release();
+            if (this.trigPalette != null) this.trigPalette.release();
 
-                if (prevActorBvh.get() != actorBvh) {
-                    prevActorBvh = new PhantomReference<>(actorBvh, null);
-                    assert actorBvh instanceof BinaryBVH;
-                    packedActorBvh = loadBvh((BinaryBVH) actorBvh, texturePalette, materialPalette, trigPalette);
-                }
+            this.texturePalette = texturePalette;
+            this.blockPalette = blockPalette;
+            this.materialPalette = materialPalette;
+            this.aabbPalette = aabbPalette;
+            this.quadPalette = quadPalette;
+            this.trigPalette = trigPalette;
+            this.worldBvh = packedWorldBvh;
+            this.actorBvh = packedActorBvh;
         }
 
         // Need to reload octree
@@ -136,29 +154,6 @@ public abstract class SceneExporter {
                 return false;
             }
         }
-
-        // Extract the sky texture
-        {
-            SkyCache sky = Reflection.getFieldValue(scene.sky(), "skyCache", SkyCache.class);
-            this.skyTexture = Reflection.getFieldValue(sky, "skyTexture", double[][][].class);
-            this.skyIntensity = scene.sky().getSkyLight();
-        }
-
-        if (this.texturePalette != null) this.texturePalette.release();
-        if (this.blockPalette != null) this.blockPalette.release();
-        if (this.materialPalette != null) this.materialPalette.release();
-        if (this.aabbPalette != null) this.aabbPalette.release();
-        if (this.quadPalette != null) this.quadPalette.release();
-        if (this.trigPalette != null) this.trigPalette.release();
-
-        this.texturePalette = texturePalette;
-        this.blockPalette = blockPalette;
-        this.materialPalette = materialPalette;
-        this.aabbPalette = aabbPalette;
-        this.quadPalette = quadPalette;
-        this.trigPalette = trigPalette;
-        this.worldBvh = packedWorldBvh;
-        this.actorBvh = packedActorBvh;
 
         return true;
     }

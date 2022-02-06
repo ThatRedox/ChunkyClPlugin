@@ -10,9 +10,11 @@ import org.jocl.cl_mem;
 public class ClPackedResourcePalette<T extends Packer> implements ResourcePalette<T>, ClResource {
     protected ClBuffer buffer = null;
     protected IntArrayList palette = new IntArrayList();
+    protected boolean locked = false;
 
     @Override
     public int put(T resource) {
+        if (locked) throw new IllegalStateException("Attempted to modify a locked palette.");
         int ptr = palette.size();
         palette.addAll(resource.pack());
         return ptr;
@@ -21,7 +23,9 @@ public class ClPackedResourcePalette<T extends Packer> implements ResourcePalett
     public ClBuffer build() {
         if (buffer == null) {
             buffer = new ClBuffer(palette);
+            locked = true;
         }
+        assert locked;
         return buffer;
     }
 
@@ -32,6 +36,7 @@ public class ClPackedResourcePalette<T extends Packer> implements ResourcePalett
     public void release() {
         if (buffer != null) {
             buffer.release();
+            buffer = null;
         }
     }
 }

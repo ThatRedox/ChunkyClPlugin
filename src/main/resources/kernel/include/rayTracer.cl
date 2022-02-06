@@ -17,7 +17,8 @@ __kernel void render(__global const float* rayPos,
                      __global const int* quadModels,
                      __global const int* aabbModels,
 
-                     __global const int* bvhData,
+                     __global const int* worldBvhData,
+                     __global const int* actorBvhData,
                      __global const int* bvhTrigs,
 
                      image2d_array_t textureAtlas,
@@ -38,7 +39,8 @@ __kernel void render(__global const float* rayPos,
     MaterialPalette materialPalette = MaterialPalette_new(matPalette);
 
     Octree octree = Octree_create(octreeData, *octreeDepth);
-    Bvh bvh = Bvh_new(bvhData, bvhTrigs, &materialPalette);
+    Bvh worldBvh = Bvh_new(worldBvhData, bvhTrigs, &materialPalette);
+    Bvh actorBvh = Bvh_new(actorBvhData, bvhTrigs, &materialPalette);
 
     BlockPalette blockPalette = BlockPalette_new(bPalette, quadModels, aabbModels, &materialPalette);
 
@@ -52,7 +54,7 @@ __kernel void render(__global const float* rayPos,
     Camera_preGenerated(&ray, rayPos, rayDir);
 
     do {
-        if (!closestIntersect(&record, &octree, &blockPalette, textureAtlas, 256, &bvh)) {
+        if (!closestIntersect(&record, &octree, &blockPalette, textureAtlas, 256, &worldBvh)) {
             record.emittance = 1;
             intersectSky(&record, textureAtlas, &sun, skyTexture, *skyIntensity);
             break;
@@ -61,7 +63,7 @@ __kernel void render(__global const float* rayPos,
 
         if (Sun_sampleDirection(&sun, &record, state)) {
             IntersectionRecord sampleRecord = IntersectionRecord_copy(&record);
-            if (!closestIntersect(&sampleRecord, &octree, &blockPalette, textureAtlas, 256, &bvh)) {
+            if (!closestIntersect(&sampleRecord, &octree, &blockPalette, textureAtlas, 256, &worldBvh)) {
                 intersectSky(&sampleRecord, textureAtlas, &sun, skyTexture, * skyIntensity);
             }
         }
@@ -83,7 +85,8 @@ __kernel void preview(__global const float* rayPos,
                       __global const int* quadModels,
                       __global const int* aabbModels,
  
-                      __global const int* bvhData,
+                      __global const int* worldBvhData,
+                      __global const int* actorBvhData,
                       __global const int* bvhTrigs,
  
                       image2d_array_t textureAtlas,
@@ -92,8 +95,7 @@ __kernel void preview(__global const float* rayPos,
                       image2d_t skyTexture,
                       __global const float* skyIntensity,
                       __global const int* sunData,
- 
-                      __global const int* randomSeed,
+
                       __global const int* width,
                       __global const int* height,
                       __global int* res) {
@@ -114,20 +116,21 @@ __kernel void preview(__global const float* rayPos,
     MaterialPalette materialPalette = MaterialPalette_new(matPalette);
 
     Octree octree = Octree_create(octreeData, *octreeDepth);
-    Bvh bvh = Bvh_new(bvhData, bvhTrigs, &materialPalette);
+    Bvh worldBvh = Bvh_new(worldBvhData, bvhTrigs, &materialPalette);
+    Bvh actorBvh = Bvh_new(actorBvhData, bvhTrigs, &materialPalette);
 
     BlockPalette blockPalette = BlockPalette_new(bPalette, quadModels, aabbModels, &materialPalette);
 
     Sun sun = Sun_new(sunData);
 
-    unsigned int randomState = *randomSeed + gid;
+    unsigned int randomState = 0;
     unsigned int* state = &randomState;
     Random_nextState(state);
 
     // Set camera
     Camera_preGenerated(&ray, rayPos, rayDir);
 
-    if (closestIntersect(&record, &octree, &blockPalette, textureAtlas, 256, &bvh)) {
+    if (closestIntersect(&record, &octree, &blockPalette, textureAtlas, 256, &worldBvh)) {
         float shading = dot(record.normal, (float3) (0.25, 0.866, 0.433));
         shading = fmax(0.3f, shading);
         record.color *= shading;

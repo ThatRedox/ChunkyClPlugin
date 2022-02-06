@@ -7,7 +7,6 @@ import dev.thatredox.chunkynative.opencl.renderer.RendererInstance;
 import org.apache.commons.math3.util.FastMath;
 import org.jocl.*;
 
-import se.llbit.chunky.main.Chunky;
 import se.llbit.chunky.renderer.scene.Scene;
 import se.llbit.chunky.renderer.scene.Sky;
 import se.llbit.chunky.renderer.scene.SkyCache;
@@ -15,20 +14,17 @@ import se.llbit.log.Log;
 import se.llbit.math.Ray;
 
 import java.lang.reflect.Field;
-import java.util.stream.IntStream;
 
 public class ClSky {
     public final cl_mem skyTexture;
-    public final cl_mem sunIntensity;
-
-    private final int textureResolution;
+    public final cl_mem skyIntensity;
 
     public ClSky(Scene scene) {
-        this.textureResolution = getTextureResolution(scene);
+        int textureResolution = getTextureResolution(scene);
 
         RendererInstance instance = RendererInstance.get();
 
-        sunIntensity = clCreateBuffer(instance.context,
+        this.skyIntensity = clCreateBuffer(instance.context,
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, Sizeof.cl_float,
                 Pointer.to(new float[] {(float) scene.sun().getIntensity()}), null);
 
@@ -41,35 +37,32 @@ public class ClSky {
         desc.image_width = textureResolution + 1;
         desc.image_height = textureResolution + 1;
 
-        skyTexture = clCreateImage(instance.context, CL_MEM_READ_ONLY,
-                fmt, desc, null, null);
+        byte[] texture = new byte[(textureResolution + 1) * (textureResolution + 1) * 4];
+        Ray ray = new Ray();
+        for (int i = 0; i < textureResolution+1; i++) {
+            for (int j = 0; j < textureResolution+1; j++) {
+                int offset = 4 * (j * (textureResolution+1) + i);
 
-        Chunky.getCommonThreads().submit(() -> IntStream.range(0, textureResolution + 1).parallel().forEach(i -> {
-            byte[] row = new byte[(textureResolution + 1) * 4];
-            Ray ray = new Ray();
-            for (int j = 0; j < textureResolution + 1; j++) {
                 double theta = ((double) i / textureResolution) * 2 * FastMath.PI;
                 double phi = ((double) j / textureResolution) * FastMath.PI - FastMath.PI / 2;
                 double r = FastMath.cos(phi);
                 ray.d.set(FastMath.cos(theta) * r, FastMath.sin(phi), FastMath.sin(theta) * r);
 
                 scene.sky().getSkyColor(ray);
-                row[j*4 + 0] = (byte) (ray.color.x * 255);
-                row[j*4 + 1] = (byte) (ray.color.y * 255);
-                row[j*4 + 2] = (byte) (ray.color.z * 255);
-                row[j*4 + 3] = (byte) 255;
+                texture[offset + 0] = (byte) (ray.color.x * 255);
+                texture[offset + 1] = (byte) (ray.color.y * 255);
+                texture[offset + 2] = (byte) (ray.color.z * 255);
+                texture[offset + 3] = (byte) 255;
             }
+        }
 
-            clEnqueueWriteImage(instance.commandQueue, skyTexture, CL_TRUE,
-                    new long[] {i, 0, 0}, new long[] {1, textureResolution+1, 1},
-                    0, 0, Pointer.to(row),
-                    0, null, null);
-        })).join();
+        this.skyTexture = clCreateImage(instance.context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+                fmt, desc, Pointer.to(texture), null);
     }
 
     public void release() {
         clReleaseMemObject(skyTexture);
-        clReleaseMemObject(sunIntensity);
+        clReleaseMemObject(skyIntensity);
     }
 
     private static int getTextureResolution(Scene scene) {

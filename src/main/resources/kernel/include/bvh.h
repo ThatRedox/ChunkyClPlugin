@@ -19,6 +19,8 @@ Bvh Bvh_new(__global const int* bvh, __global const int* trigs, MaterialPalette*
 }
 
 bool Bvh_intersect(Bvh* self, IntersectionRecord* record, image2d_array_t atlas) {
+    // TODO: Fix entities
+    return false;
     bool hit = false;
     
     int toVisit = 0;

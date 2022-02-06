@@ -92,15 +92,16 @@ public class ClCamera {
             Ray ray = new Ray();
             for (int j = 0; j < height; j++) {
                 int offset = (j * width + i) * 3;
-                cam.calcViewRay(ray, -halfWidth + i * invHeight, -0.5 + j*invHeight);
+
+                cam.calcViewRay(ray, -halfWidth + i * invHeight, -0.5 + j * invHeight);
 
                 rayDirs[offset + 0] = (float) ray.d.x;
                 rayDirs[offset + 1] = (float) ray.d.y;
                 rayDirs[offset + 2] = (float) ray.d.z;
 
-                rayPos[offset + 0] = (float) ray.o.x;
-                rayPos[offset + 1] = (float) ray.o.x;
-                rayPos[offset + 2] = (float) ray.o.x;
+                rayPos[offset + 0] = (float) (ray.o.x - scene.getOrigin().x);
+                rayPos[offset + 1] = (float) (ray.o.y - scene.getOrigin().y);
+                rayPos[offset + 2] = (float) (ray.o.z - scene.getOrigin().z);
             }
         })).join();
 
