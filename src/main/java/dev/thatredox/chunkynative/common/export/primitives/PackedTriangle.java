@@ -34,7 +34,7 @@ public class PackedTriangle implements Packer {
         this.vectors[17] = (float) triangle.t3v;
 
         int flags = 0;
-        flags |= 0b00000001; // Lower 8 bits signifies it is a triangle
+        flags |= 0x01; // Lower 8 bits signifies it is a triangle
         if (triangle.doubleSided) {
             flags |= 1 << 8; // Next 1 bit signifies if it is double sided
         }

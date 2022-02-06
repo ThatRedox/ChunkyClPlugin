@@ -92,6 +92,7 @@ bool nextPath(IntersectionRecord* record, unsigned int *state, int maxDepth) {
 
     ray->origin += ray->direction * OFFSET;
     ray->rayDepth += 1;
+    record->distance = HUGE_VALF;
     return ray->rayDepth < maxDepth;
 }
 
