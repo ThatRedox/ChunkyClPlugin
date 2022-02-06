@@ -369,7 +369,7 @@ float Triangle_intersect(Triangle* self, float distance, float3 origin, float3 d
 
     pvec = cross(dir, self->e2);
     float det = dot(self->e1, pvec);
-    if (self->flags & 1) {
+    if ((self->flags >> 8) & 1) {
         if (det > -EPS && det < EPS)
             return NAN;
     } else if (det > -EPS) {
