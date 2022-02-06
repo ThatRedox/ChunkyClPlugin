@@ -1,4 +1,4 @@
-package dev.thatredox.chunkynative.opencl.export;
+package dev.thatredox.chunkynative.opencl.renderer.export;
 
 import dev.thatredox.chunkynative.opencl.renderer.RendererInstance;
 import dev.thatredox.chunkynative.opencl.util.ClResource;
