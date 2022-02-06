@@ -12,7 +12,7 @@ import dev.thatredox.chunkynative.common.export.texture.AbstractTextureLoader;
 import dev.thatredox.chunkynative.opencl.renderer.export.ClPackedResourcePalette;
 import dev.thatredox.chunkynative.opencl.renderer.export.ClTextureLoader;
 import dev.thatredox.chunkynative.opencl.renderer.scene.ClSky;
-import dev.thatredox.chunkynative.opencl.util.ClBuffer;
+import dev.thatredox.chunkynative.opencl.util.ClIntBuffer;
 import dev.thatredox.chunkynative.util.FunctionCache;
 import se.llbit.chunky.renderer.ResetReason;
 import se.llbit.chunky.renderer.scene.Scene;
@@ -20,13 +20,13 @@ import se.llbit.chunky.renderer.scene.Scene;
 import java.util.Arrays;
 
 public class ClSceneLoader extends AbstractSceneLoader {
-    protected FunctionCache<int[], ClBuffer> clWorldBvh = new FunctionCache<>(ClBuffer::new, ClBuffer::release, null);
-    protected FunctionCache<int[], ClBuffer> clActorBvh = new FunctionCache<>(ClBuffer::new, ClBuffer::release, null);
-    protected FunctionCache<PackedSun, ClBuffer> clPackedSun = new FunctionCache<>(ClBuffer::new, ClBuffer::release, null);
+    protected FunctionCache<int[], ClIntBuffer> clWorldBvh = new FunctionCache<>(ClIntBuffer::new, ClIntBuffer::close, null);
+    protected FunctionCache<int[], ClIntBuffer> clActorBvh = new FunctionCache<>(ClIntBuffer::new, ClIntBuffer::close, null);
+    protected FunctionCache<PackedSun, ClIntBuffer> clPackedSun = new FunctionCache<>(ClIntBuffer::new, ClIntBuffer::close, null);
     protected ClSky clSky = null;
 
-    protected ClBuffer octreeData = null;
-    protected ClBuffer octreeDepth = null;
+    protected ClIntBuffer octreeData = null;
+    protected ClIntBuffer octreeDepth = null;
 
     @Override
     public boolean ensureLoad(Scene scene) {
@@ -36,7 +36,7 @@ public class ClSceneLoader extends AbstractSceneLoader {
     @Override
     public boolean load(int modCount, ResetReason resetReason, Scene scene) {
         if (this.modCount != modCount) {
-            if (clSky != null) clSky.release();
+            if (clSky != null) clSky.close();
             clSky = new ClSky(scene);
         }
         return super.load(modCount, resetReason, scene);
@@ -44,14 +44,14 @@ public class ClSceneLoader extends AbstractSceneLoader {
 
     @Override
     protected boolean loadOctree(int[] octree, int depth, int[] blockMapping, ResourcePalette<PackedBlock> blockPalette) {
-        if (octreeData != null) octreeData.release();
-        if (octreeDepth != null) octreeDepth.release();
+        if (octreeData != null) octreeData.close();
+        if (octreeDepth != null) octreeDepth.close();
 
         int[] mappedOctree = Arrays.stream(octree)
                 .map(i -> i > 0 || -i >= blockMapping.length ? i : -blockMapping[-i])
                 .toArray();
-        octreeData = new ClBuffer(mappedOctree);
-        octreeDepth = ClBuffer.singletonBuffer(depth);
+        octreeData = new ClIntBuffer(mappedOctree);
+        octreeDepth = new ClIntBuffer(depth);
 
         return true;
     }
@@ -86,12 +86,12 @@ public class ClSceneLoader extends AbstractSceneLoader {
         return new ClPackedResourcePalette<>();
     }
 
-    public ClBuffer getOctreeData() {
+    public ClIntBuffer getOctreeData() {
         assert octreeData != null;
         return octreeData;
     }
 
-    public ClBuffer getOctreeDepth() {
+    public ClIntBuffer getOctreeDepth() {
         assert octreeDepth != null;
         return octreeDepth;
     }
@@ -126,11 +126,11 @@ public class ClSceneLoader extends AbstractSceneLoader {
         return (ClPackedResourcePalette<PackedTriangleModel>) trigPalette;
     }
 
-    public ClBuffer getWorldBvh() {
+    public ClIntBuffer getWorldBvh() {
         return clWorldBvh.apply(this.worldBvh);
     }
 
-    public ClBuffer getActorBvh() {
+    public ClIntBuffer getActorBvh() {
         return clActorBvh.apply(this.actorBvh);
     }
 
@@ -139,7 +139,7 @@ public class ClSceneLoader extends AbstractSceneLoader {
         return clSky;
     }
 
-    public ClBuffer getSun() {
+    public ClIntBuffer getSun() {
         return clPackedSun.apply(packedSun);
     }
 }

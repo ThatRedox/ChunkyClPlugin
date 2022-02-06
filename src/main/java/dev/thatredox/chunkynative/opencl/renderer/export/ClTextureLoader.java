@@ -1,7 +1,7 @@
 package dev.thatredox.chunkynative.opencl.renderer.export;
 
 import dev.thatredox.chunkynative.opencl.renderer.RendererInstance;
-import dev.thatredox.chunkynative.opencl.util.ClResource;
+import dev.thatredox.chunkynative.opencl.util.ClMemory;
 import org.jocl.*;
 
 import dev.thatredox.chunkynative.common.export.texture.AbstractTextureLoader;
@@ -16,15 +16,16 @@ import java.util.stream.Collectors;
 
 import static org.jocl.CL.*;
 
-public class ClTextureLoader extends AbstractTextureLoader implements ClResource {
-    private cl_mem texture;
+public class ClTextureLoader extends AbstractTextureLoader implements AutoCloseable {
+    private ClMemory texture;
 
     public cl_mem getAtlas() {
-        return this.texture;
+        return texture.get();
     }
 
-    public void release() {
-        clReleaseMemObject(this.texture);
+    @Override
+    public void close() {
+        texture.close();
     }
 
     @Override
@@ -53,10 +54,11 @@ public class ClTextureLoader extends AbstractTextureLoader implements ClResource
         desc.image_type = CL_MEM_OBJECT_IMAGE2D_ARRAY;
 
         RendererInstance instance = RendererInstance.get();
-        texture = clCreateImage(instance.context, CL_MEM_READ_ONLY, fmt, desc, null, null);
+        texture = new ClMemory(
+                clCreateImage(instance.context, CL_MEM_READ_ONLY, fmt, desc, null, null));
 
         for (AtlasTexture tex : texs) {
-            clEnqueueWriteImage(instance.commandQueue, texture, CL_TRUE,
+            clEnqueueWriteImage(instance.commandQueue, texture.get(), CL_TRUE,
                     new long[] {tex.getX()* 16L, tex.getY()* 16L, tex.getD()},
                     new long[] {tex.getWidth(), tex.getHeight(), 1},
                     0, 0, Pointer.to(tex.getTexture()),

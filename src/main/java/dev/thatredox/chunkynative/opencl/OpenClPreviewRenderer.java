@@ -3,7 +3,8 @@ package dev.thatredox.chunkynative.opencl;
 import dev.thatredox.chunkynative.opencl.renderer.ClSceneLoader;
 import dev.thatredox.chunkynative.opencl.renderer.RendererInstance;
 import dev.thatredox.chunkynative.opencl.renderer.scene.*;
-import dev.thatredox.chunkynative.opencl.util.ClBuffer;
+import dev.thatredox.chunkynative.opencl.util.ClIntBuffer;
+import dev.thatredox.chunkynative.opencl.util.ClMemory;
 import org.jocl.*;
 import se.llbit.chunky.renderer.DefaultRenderManager;
 import se.llbit.chunky.renderer.Renderer;
@@ -12,7 +13,6 @@ import se.llbit.chunky.renderer.scene.Scene;
 import java.util.function.BooleanSupplier;
 
 import static org.jocl.CL.*;
-import static org.jocl.CL.clReleaseMemObject;
 
 public class OpenClPreviewRenderer implements Renderer {
     private BooleanSupplier postRender = () -> true;
@@ -54,58 +54,62 @@ public class OpenClPreviewRenderer implements Renderer {
         // Ensure the scene is loaded
         sceneLoader.ensureLoad(manager.bufferedScene);
 
-        ClCamera camera = new ClCamera(scene);
-        camera.generateNoJitter();
-
+        // Load the kernel
         cl_kernel kernel = clCreateKernel(instance.program, "preview", null);
-        cl_mem buffer = clCreateBuffer(instance.context, CL_MEM_WRITE_ONLY,
-                (long) Sizeof.cl_int * imageData.length, null, null);
 
-        ClBuffer clWidth = ClBuffer.singletonBuffer(scene.width);
-        ClBuffer clHeight = ClBuffer.singletonBuffer(scene.height);
+        ClCamera camera = new ClCamera(scene);
+        ClMemory buffer = new ClMemory(clCreateBuffer(instance.context, CL_MEM_WRITE_ONLY,
+                (long) Sizeof.cl_int * imageData.length, null, null));
+        ClIntBuffer clWidth = new ClIntBuffer(scene.width);
+        ClIntBuffer clHeight = new ClIntBuffer(scene.height);
 
-        renderEvent[0] = new cl_event();
+        try (ClCamera ignored1 = camera;
+             ClMemory ignored2 = buffer;
+             ClIntBuffer ignored3 = clWidth;
+             ClIntBuffer ignored4 = clHeight) {
 
-        int argIndex = 0;
-        clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(camera.rayPos));
-        clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(camera.rayDir));
+            // Generate the camera rays
+            camera.generate(null, false);
 
-        clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(sceneLoader.getOctreeDepth().get()));
-        clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(sceneLoader.getOctreeData().get()));
+            renderEvent[0] = new cl_event();
 
-        clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(sceneLoader.getBlockPalette().get()));
-        clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(sceneLoader.getQuadPalette().get()));
-        clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(sceneLoader.getAabbPalette().get()));
+            int argIndex = 0;
+            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(camera.rayPos.get()));
+            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(camera.rayDir.get()));
 
-        clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(sceneLoader.getWorldBvh().get()));
-        clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(sceneLoader.getActorBvh().get()));
-        clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(sceneLoader.getTrigPalette().get()));
+            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(sceneLoader.getOctreeDepth().get()));
+            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(sceneLoader.getOctreeData().get()));
 
-        clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(sceneLoader.getTexturePalette().getAtlas()));
-        clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(sceneLoader.getMaterialPalette().get()));
+            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(sceneLoader.getBlockPalette().get()));
+            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(sceneLoader.getQuadPalette().get()));
+            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(sceneLoader.getAabbPalette().get()));
 
-        clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(sceneLoader.getSky().skyTexture));
-        clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(sceneLoader.getSky().skyIntensity));
-        clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(sceneLoader.getSun().get()));
+            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(sceneLoader.getWorldBvh().get()));
+            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(sceneLoader.getActorBvh().get()));
+            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(sceneLoader.getTrigPalette().get()));
 
-        clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(clWidth.get()));
-        clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(clHeight.get()));
-        clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(buffer));
-        clEnqueueNDRangeKernel(instance.commandQueue, kernel, 1, null,
-                new long[] {imageData.length}, null, 0, null,
-                renderEvent[0]);
+            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(sceneLoader.getTexturePalette().getAtlas()));
+            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(sceneLoader.getMaterialPalette().get()));
 
-        clEnqueueReadBuffer(instance.commandQueue, buffer, CL_TRUE, 0,
-                (long) Sizeof.cl_int * imageData.length, Pointer.to(imageData),
-                1, renderEvent, null);
+            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(sceneLoader.getSky().skyTexture.get()));
+            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(sceneLoader.getSky().skyIntensity.get()));
+            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(sceneLoader.getSun().get()));
 
-        manager.redrawScreen();
-        postRender.getAsBoolean();
+            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(clWidth.get()));
+            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(clHeight.get()));
+            clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(buffer.get()));
+            clEnqueueNDRangeKernel(instance.commandQueue, kernel, 1, null,
+                    new long[]{imageData.length}, null, 0, null,
+                    renderEvent[0]);
 
-        camera.release();
-        clReleaseMemObject(buffer);
-        clWidth.release();
-        clHeight.release();
+            clEnqueueReadBuffer(instance.commandQueue, buffer.get(), CL_TRUE, 0,
+                    (long) Sizeof.cl_int * imageData.length, Pointer.to(imageData),
+                    1, renderEvent, null);
+
+            manager.redrawScreen();
+            postRender.getAsBoolean();
+        }
+
         clReleaseKernel(kernel);
         clReleaseEvent(renderEvent[0]);
     }

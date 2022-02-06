@@ -4,6 +4,7 @@ package dev.thatredox.chunkynative.opencl.renderer.scene;
 import static org.jocl.CL.*;
 
 import dev.thatredox.chunkynative.opencl.renderer.RendererInstance;
+import dev.thatredox.chunkynative.opencl.util.ClMemory;
 import org.apache.commons.math3.util.FastMath;
 import org.jocl.*;
 
@@ -15,18 +16,18 @@ import se.llbit.math.Ray;
 
 import java.lang.reflect.Field;
 
-public class ClSky {
-    public final cl_mem skyTexture;
-    public final cl_mem skyIntensity;
+public class ClSky implements AutoCloseable {
+    public final ClMemory skyTexture;
+    public final ClMemory skyIntensity;
 
     public ClSky(Scene scene) {
         int textureResolution = getTextureResolution(scene);
 
         RendererInstance instance = RendererInstance.get();
 
-        this.skyIntensity = clCreateBuffer(instance.context,
+        this.skyIntensity = new ClMemory(clCreateBuffer(instance.context,
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, Sizeof.cl_float,
-                Pointer.to(new float[] {(float) scene.sun().getIntensity()}), null);
+                Pointer.to(new float[] {(float) scene.sun().getIntensity()}), null));
 
         cl_image_format fmt = new cl_image_format();
         fmt.image_channel_data_type = CL_UNORM_INT8;
@@ -56,13 +57,8 @@ public class ClSky {
             }
         }
 
-        this.skyTexture = clCreateImage(instance.context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-                fmt, desc, Pointer.to(texture), null);
-    }
-
-    public void release() {
-        clReleaseMemObject(skyTexture);
-        clReleaseMemObject(skyIntensity);
+        this.skyTexture = new ClMemory(clCreateImage(instance.context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+                fmt, desc, Pointer.to(texture), null));
     }
 
     private static int getTextureResolution(Scene scene) {
@@ -77,5 +73,11 @@ public class ClSky {
             Log.error(e);
             throw new RuntimeException();
         }
+    }
+
+    @Override
+    public void close() {
+        skyTexture.close();
+        skyIntensity.close();
     }
 }
