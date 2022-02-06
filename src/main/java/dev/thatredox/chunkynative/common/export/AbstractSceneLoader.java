@@ -29,6 +29,7 @@ public abstract class AbstractSceneLoader {
     protected int modCount = 0;
     protected PhantomReference<BVH> prevWorldBvh = new PhantomReference<>(null, null);
     protected PhantomReference<BVH> prevActorBvh = new PhantomReference<>(null, null);
+    protected PhantomReference<Octree.OctreeImplementation> prevOctree = new PhantomReference<>(null, null);
 
     protected AbstractTextureLoader texturePalette = null;
     protected ResourcePalette<PackedBlock> blockPalette = null;
@@ -47,7 +48,8 @@ public abstract class AbstractSceneLoader {
     protected boolean ensureLoad(Scene scene, boolean force) {
         if (force ||
                 this.texturePalette == null || this.blockPalette == null || this.materialPalette == null ||
-                this.aabbPalette == null || this.quadPalette == null || this.trigPalette == null) {
+                this.aabbPalette == null || this.quadPalette == null || this.trigPalette == null ||
+                this.prevOctree.get() != scene.getWorldOctree().getImplementation()) {
             this.modCount = -1;
             return this.load(0, ResetReason.SCENE_LOADED, scene);
         }
@@ -143,8 +145,9 @@ public abstract class AbstractSceneLoader {
         }
 
         // Need to reload octree
-        if (resetReason == ResetReason.SCENE_LOADED) {
-            Octree.OctreeImplementation impl = scene.getWorldOctree().getImplementation();
+        Octree.OctreeImplementation impl = scene.getWorldOctree().getImplementation();
+        if (resetReason == ResetReason.SCENE_LOADED || prevOctree.get() != impl) {
+            prevOctree = new PhantomReference<>(impl, null);
             if (impl instanceof PackedOctree) {
                 assert blockMapping != null;
                 if (!loadOctree(((PackedOctree) impl).treeData, impl.getDepth(), blockMapping, blockPalette))

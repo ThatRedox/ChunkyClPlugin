@@ -14,6 +14,7 @@ import se.llbit.chunky.model.Tint;
 import se.llbit.chunky.resources.Texture;
 
 import java.util.Arrays;
+import java.util.Objects;
 import java.util.stream.Stream;
 
 public class PackedBlock implements Packer {
@@ -53,7 +54,8 @@ public class PackedBlock implements Packer {
             Stream<Texture> textures;
             if (b.getModel() instanceof AABBModel) {
                 textures = Arrays.stream(((AABBModel) b.getModel()).getTextures())
-                        .flatMap(Arrays::stream);
+                        .flatMap(Arrays::stream)
+                        .filter(Objects::nonNull);
             } else if (b.getModel() instanceof QuadModel) {
                 textures = Arrays.stream(((QuadModel) b.getModel()).getTextures());
             } else {
