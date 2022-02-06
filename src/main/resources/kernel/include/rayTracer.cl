@@ -54,7 +54,7 @@ __kernel void render(__global const float* rayPos,
     Camera_preGenerated(&ray, rayPos, rayDir);
 
     do {
-        if (!closestIntersect(&record, &octree, &blockPalette, textureAtlas, 256, &worldBvh)) {
+        if (!closestIntersect(&record, &octree, &blockPalette, textureAtlas, 256, &worldBvh, &actorBvh)) {
             record.emittance = 1;
             intersectSky(&record, textureAtlas, &sun, skyTexture, *skyIntensity);
             break;
@@ -63,7 +63,7 @@ __kernel void render(__global const float* rayPos,
 
         if (Sun_sampleDirection(&sun, &record, state)) {
             IntersectionRecord sampleRecord = IntersectionRecord_copy(&record);
-            if (!closestIntersect(&sampleRecord, &octree, &blockPalette, textureAtlas, 256, &worldBvh)) {
+            if (!closestIntersect(&sampleRecord, &octree, &blockPalette, textureAtlas, 256, &worldBvh, &actorBvh)) {
                 intersectSky(&sampleRecord, textureAtlas, &sun, skyTexture, * skyIntensity);
             }
         }
@@ -130,7 +130,7 @@ __kernel void preview(__global const float* rayPos,
     // Set camera
     Camera_preGenerated(&ray, rayPos, rayDir);
 
-    if (closestIntersect(&record, &octree, &blockPalette, textureAtlas, 256, &worldBvh)) {
+    if (closestIntersect(&record, &octree, &blockPalette, textureAtlas, 256, &worldBvh, &actorBvh)) {
         float shading = dot(record.normal, (float3) (0.25, 0.866, 0.433));
         shading = fmax(0.3f, shading);
         record.color *= shading;

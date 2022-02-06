@@ -80,24 +80,17 @@ public abstract class AbstractSceneLoader {
         BVH worldBvh = Reflection.getFieldValue(scene, "bvh", BVH.class);
         BVH actorBvh = Reflection.getFieldValue(scene, "actorBvh", BVH.class);
 
-        if (worldBvh == BVH.EMPTY) {
-            worldBvh = new SahMaBVH(new Primitive[0], i -> {});
-        }
-        if (actorBvh == BVH.EMPTY) {
-            actorBvh = new SahMaBVH(new Primitive[0], i -> {});
-        }
-
         boolean needTextureLoad = resetReason == ResetReason.SCENE_LOADED ||
                 resetReason == ResetReason.MATERIALS_CHANGED ||
                 prevWorldBvh.get() != worldBvh ||
                 prevActorBvh.get() != actorBvh;
 
         if (needTextureLoad) {
-            if (!(worldBvh instanceof BinaryBVH)) {
+            if (!(worldBvh instanceof BinaryBVH || worldBvh == BVH.EMPTY)) {
                 Log.error("BVH implementation must extend BinaryBVH");
                 return false;
             }
-            if (!(actorBvh instanceof BinaryBVH)) {
+            if (!(actorBvh instanceof BinaryBVH || actorBvh == BVH.EMPTY)) {
                 Log.error("BVH implementation must extend BinaryBVH");
                 return false;
             }
@@ -108,23 +101,31 @@ public abstract class AbstractSceneLoader {
         // Preload textures
         if (needTextureLoad) {
             scene.getPalette().getPalette().forEach(b -> PackedBlock.preloadTextures(b, texturePalette));
-            preloadBvh((BinaryBVH) worldBvh, texturePalette);
-            preloadBvh((BinaryBVH) actorBvh, texturePalette);
+            if (worldBvh != BVH.EMPTY) preloadBvh((BinaryBVH) worldBvh, texturePalette);
+            if (actorBvh != BVH.EMPTY) preloadBvh((BinaryBVH) actorBvh, texturePalette);
             texturePalette.get(Sun.texture);
         }
 
         texturePalette.build();
         int[] blockMapping = null;
-        int[] packedWorldBvh = null;
-        int[] packedActorBvh = null;
+        int[] packedWorldBvh;
+        int[] packedActorBvh;
 
         if (needTextureLoad) {
             blockMapping = scene.getPalette().getPalette().stream()
                     .mapToInt(block ->
                             blockPalette.put(new PackedBlock(block, texturePalette, materialPalette, aabbPalette, quadPalette)))
                     .toArray();
-            packedWorldBvh = loadBvh((BinaryBVH) worldBvh, texturePalette, materialPalette, trigPalette);
-            packedActorBvh = loadBvh((BinaryBVH) actorBvh, texturePalette, materialPalette, trigPalette);
+            if (worldBvh != BVH.EMPTY) {
+                packedWorldBvh = loadBvh((BinaryBVH) worldBvh, texturePalette, materialPalette, trigPalette);
+            } else {
+                packedWorldBvh = PackedBvhNode.EMPTY_NODE.node;
+            }
+            if (actorBvh != BVH.EMPTY) {
+                packedActorBvh = loadBvh((BinaryBVH) actorBvh, texturePalette, materialPalette, trigPalette);
+            } else {
+                packedActorBvh = PackedBvhNode.EMPTY_NODE.node;
+            }
             packedSun = new PackedSun(scene.sun(), texturePalette);
 
             if (this.texturePalette != null) this.texturePalette.release();

@@ -10,10 +10,11 @@
 #include "sky.h"
 
 
-bool closestIntersect(IntersectionRecord* record, Octree* octree, BlockPalette* palette, image2d_array_t atlas, int drawDepth, Bvh* bvh) {
+bool closestIntersect(IntersectionRecord* record, Octree* octree, BlockPalette* palette, image2d_array_t atlas, int drawDepth, Bvh* worldBvh, Bvh* actorBvh) {
     bool hit = false;
     hit |= Octree_octreeIntersect(octree, record, palette, atlas, drawDepth);
-    hit |= Bvh_intersect(bvh, record, atlas);
+    hit |= Bvh_intersect(worldBvh, record, atlas);
+    hit |= Bvh_intersect(actorBvh, record, atlas);
 
     if (hit) {
         record->point = record->ray->origin + record->ray->direction * (record->distance - OFFSET);
