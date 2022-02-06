@@ -35,14 +35,14 @@ public class ClSky implements AutoCloseable {
 
         cl_image_desc desc = new cl_image_desc();
         desc.image_type = CL_MEM_OBJECT_IMAGE2D;
-        desc.image_width = textureResolution + 1;
-        desc.image_height = textureResolution + 1;
+        desc.image_width = textureResolution;
+        desc.image_height = textureResolution;
 
-        byte[] texture = new byte[(textureResolution + 1) * (textureResolution + 1) * 4];
+        byte[] texture = new byte[textureResolution * textureResolution * 4];
         Ray ray = new Ray();
-        for (int i = 0; i < textureResolution+1; i++) {
-            for (int j = 0; j < textureResolution+1; j++) {
-                int offset = 4 * (j * (textureResolution+1) + i);
+        for (int i = 0; i < textureResolution; i++) {
+            for (int j = 0; j < textureResolution; j++) {
+                int offset = 4 * (j * textureResolution + i);
 
                 double theta = ((double) i / textureResolution) * 2 * FastMath.PI;
                 double phi = ((double) j / textureResolution) * FastMath.PI - FastMath.PI / 2;
