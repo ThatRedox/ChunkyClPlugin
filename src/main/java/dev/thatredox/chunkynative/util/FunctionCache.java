@@ -1,11 +1,11 @@
 package dev.thatredox.chunkynative.util;
 
-import java.lang.ref.PhantomReference;
+import java.lang.ref.WeakReference;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
 public class FunctionCache<T, R> {
-    protected PhantomReference<T> input;
+    protected WeakReference<T> input;
     protected R output;
 
     protected final Function<T, R> function;
@@ -14,7 +14,7 @@ public class FunctionCache<T, R> {
     public FunctionCache(Function<T, R> function, Consumer<R> oldValueConsumer, T initial) {
         this.function = function;
         this.oldValueConsumer = oldValueConsumer;
-        this.input = new PhantomReference<>(initial, null);
+        this.input = new WeakReference<>(initial, null);
         if (initial != null) {
             this.output = function.apply(initial);
         } else {
@@ -28,7 +28,7 @@ public class FunctionCache<T, R> {
                 this.oldValueConsumer.accept(this.output);
             }
             this.output = function.apply(input);
-            this.input = new PhantomReference<>(input, null);
+            this.input = new WeakReference<>(input, null);
         }
         return this.output;
     }

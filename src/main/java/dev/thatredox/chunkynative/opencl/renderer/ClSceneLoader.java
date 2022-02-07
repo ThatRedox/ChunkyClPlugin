@@ -9,6 +9,7 @@ import dev.thatredox.chunkynative.common.export.primitives.PackedBlock;
 import dev.thatredox.chunkynative.common.export.primitives.PackedMaterial;
 import dev.thatredox.chunkynative.common.export.primitives.PackedSun;
 import dev.thatredox.chunkynative.common.export.texture.AbstractTextureLoader;
+import dev.thatredox.chunkynative.common.state.SkyState;
 import dev.thatredox.chunkynative.opencl.renderer.export.ClPackedResourcePalette;
 import dev.thatredox.chunkynative.opencl.renderer.export.ClTextureLoader;
 import dev.thatredox.chunkynative.opencl.renderer.scene.ClSky;
@@ -24,6 +25,7 @@ public class ClSceneLoader extends AbstractSceneLoader {
     protected FunctionCache<int[], ClIntBuffer> clActorBvh = new FunctionCache<>(ClIntBuffer::new, ClIntBuffer::close, null);
     protected FunctionCache<PackedSun, ClIntBuffer> clPackedSun = new FunctionCache<>(ClIntBuffer::new, ClIntBuffer::close, null);
     protected ClSky clSky = null;
+    protected SkyState skyState = null;
 
     protected ClIntBuffer octreeData = null;
     protected ClIntBuffer octreeDepth = null;
@@ -36,8 +38,12 @@ public class ClSceneLoader extends AbstractSceneLoader {
     @Override
     public boolean load(int modCount, ResetReason resetReason, Scene scene) {
         if (this.modCount != modCount) {
-            if (clSky != null) clSky.close();
-            clSky = new ClSky(scene);
+            SkyState newSky = new SkyState(scene.sky(), scene.sun());
+            if (!newSky.equals(skyState)) {
+                if (clSky != null) clSky.close();
+                clSky = new ClSky(scene);
+                skyState = newSky;
+            }
         }
         return super.load(modCount, resetReason, scene);
     }

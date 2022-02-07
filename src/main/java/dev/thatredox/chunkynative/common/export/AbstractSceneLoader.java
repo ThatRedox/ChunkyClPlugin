@@ -11,25 +11,22 @@ import dev.thatredox.chunkynative.common.export.texture.AbstractTextureLoader;
 import dev.thatredox.chunkynative.util.Reflection;
 import se.llbit.chunky.renderer.ResetReason;
 import se.llbit.chunky.renderer.scene.Scene;
-import se.llbit.chunky.renderer.scene.SkyCache;
 import se.llbit.chunky.renderer.scene.Sun;
 import se.llbit.log.Log;
 import se.llbit.math.Octree;
 import se.llbit.math.PackedOctree;
 import se.llbit.math.bvh.BVH;
 import se.llbit.math.bvh.BinaryBVH;
-import se.llbit.math.bvh.SahMaBVH;
-import se.llbit.math.primitive.Primitive;
 import se.llbit.math.primitive.TexturedTriangle;
 
-import java.lang.ref.PhantomReference;
+import java.lang.ref.WeakReference;
 import java.util.Arrays;
 
 public abstract class AbstractSceneLoader {
     protected int modCount = 0;
-    protected PhantomReference<BVH> prevWorldBvh = new PhantomReference<>(null, null);
-    protected PhantomReference<BVH> prevActorBvh = new PhantomReference<>(null, null);
-    protected PhantomReference<Octree.OctreeImplementation> prevOctree = new PhantomReference<>(null, null);
+    protected WeakReference<BVH> prevWorldBvh = new WeakReference<>(null, null);
+    protected WeakReference<BVH> prevActorBvh = new WeakReference<>(null, null);
+    protected WeakReference<Octree.OctreeImplementation> prevOctree = new WeakReference<>(null, null);
 
     protected AbstractTextureLoader texturePalette = null;
     protected ResourcePalette<PackedBlock> blockPalette = null;
@@ -94,8 +91,8 @@ public abstract class AbstractSceneLoader {
                 Log.error("BVH implementation must extend BinaryBVH");
                 return false;
             }
-            prevWorldBvh = new PhantomReference<>(worldBvh, null);
-            prevActorBvh = new PhantomReference<>(actorBvh, null);
+            prevWorldBvh = new WeakReference<>(worldBvh, null);
+            prevActorBvh = new WeakReference<>(actorBvh, null);
         }
 
         // Preload textures
@@ -104,9 +101,9 @@ public abstract class AbstractSceneLoader {
             if (worldBvh != BVH.EMPTY) preloadBvh((BinaryBVH) worldBvh, texturePalette);
             if (actorBvh != BVH.EMPTY) preloadBvh((BinaryBVH) actorBvh, texturePalette);
             texturePalette.get(Sun.texture);
+            texturePalette.build();
         }
 
-        texturePalette.build();
         int[] blockMapping = null;
         int[] packedWorldBvh;
         int[] packedActorBvh;
@@ -148,7 +145,7 @@ public abstract class AbstractSceneLoader {
         // Need to reload octree
         Octree.OctreeImplementation impl = scene.getWorldOctree().getImplementation();
         if (resetReason == ResetReason.SCENE_LOADED || prevOctree.get() != impl) {
-            prevOctree = new PhantomReference<>(impl, null);
+            prevOctree = new WeakReference<>(impl, null);
             if (impl instanceof PackedOctree) {
                 assert blockMapping != null;
                 if (!loadOctree(((PackedOctree) impl).treeData, impl.getDepth(), blockMapping, blockPalette))
