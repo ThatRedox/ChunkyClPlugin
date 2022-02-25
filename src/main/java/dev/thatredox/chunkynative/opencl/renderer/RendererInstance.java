@@ -47,15 +47,21 @@ public class RendererInstance {
         ArrayList<cl_device_id> devices = new ArrayList<>();
 
         for (cl_platform_id platform : platforms) {
-            // Obtain the number of devices for the platform
-            int[] numDevicesArray = new int[1];
-            clGetDeviceIDs(platform, deviceType, 0, null, numDevicesArray);
-            int numDevices = numDevicesArray[0];
+            try {
+                // Obtain the number of devices for the platform
+                int[] numDevicesArray = new int[1];
+                clGetDeviceIDs(platform, deviceType, 0, null, numDevicesArray);
+                int numDevices = numDevicesArray[0];
 
-            // Obtain a device ID
-            cl_device_id[] platformDevices = new cl_device_id[numDevices];
-            clGetDeviceIDs(platform, deviceType, numDevices, platformDevices, null);
-            devices.addAll(Arrays.asList(platformDevices));
+                // Obtain a device ID
+                cl_device_id[] platformDevices = new cl_device_id[numDevices];
+                clGetDeviceIDs(platform, deviceType, numDevices, platformDevices, null);
+                devices.addAll(Arrays.asList(platformDevices));
+            } catch (CLException e) {
+                if (!e.getMessage().contains("CL_DEVICE_NOT_FOUND")) {
+                    throw e;
+                }
+            }
         }
 
         // Print out all connected devices
