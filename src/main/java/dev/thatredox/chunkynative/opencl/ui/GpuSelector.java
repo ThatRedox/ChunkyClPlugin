@@ -1,4 +1,4 @@
-package dev.thatredox.chunkynative.opencl;
+package dev.thatredox.chunkynative.opencl.ui;
 
 import dev.thatredox.chunkynative.opencl.renderer.RendererInstance;
 import javafx.beans.property.SimpleDoubleProperty;
@@ -21,7 +21,6 @@ import java.util.Arrays;
 
 public class GpuSelector extends Stage {
 
-    @SuppressWarnings("unchecked")
     public GpuSelector() {
         // Build scene
         RendererInstance instance = RendererInstance.get();
@@ -31,17 +30,23 @@ public class GpuSelector extends Stage {
         }
 
         TableView<ClDevice> table = new TableView<>();
-        table.setPrefWidth(433);
+        table.setPrefWidth(500);
         table.setPrefHeight(200);
         table.setItems(FXCollections.observableList(Arrays.asList(devices)));
 
         TableColumn<ClDevice, String> nameCol = new TableColumn<>("Device Name");
         nameCol.setCellValueFactory(dev -> new SimpleStringProperty(dev.getValue().name));
 
+        TableColumn<ClDevice, String> typeCol = new TableColumn<>("Type");
+        typeCol.setCellValueFactory(dev -> new SimpleStringProperty(dev.getValue().getTypeString()));
+
         TableColumn<ClDevice, Double> computeCol = new TableColumn<>("Compute Capacity");
         computeCol.setCellValueFactory(dev -> new SimpleDoubleProperty(dev.getValue().computeCapacity).asObject());
 
-        table.getColumns().setAll(nameCol, computeCol);
+        table.getColumns().clear();
+        table.getColumns().add(nameCol);
+        table.getColumns().add(typeCol);
+        table.getColumns().add(computeCol);
 
         VBox box = new VBox();
         VBox.setVgrow(table, Priority.ALWAYS);
@@ -83,16 +88,39 @@ public class GpuSelector extends Stage {
 
     private static class ClDevice {
         protected final String name;
+        protected final long type;
         protected final double computeCapacity;
         protected final int index;
 
         public ClDevice(cl_device_id device, int index) {
-            long computeSpeed = (long) RendererInstance.getInts(device, CL.CL_DEVICE_MAX_CLOCK_FREQUENCY, 1)[0] *
-                                (long) RendererInstance.getInts(device, CL.CL_DEVICE_MAX_COMPUTE_UNITS, 1)[0] * 32;
+            type = RendererInstance.getLongs(device, CL.CL_DEVICE_TYPE, 1)[0];
 
+            long computeScaler = 1;
+            if ((type & CL.CL_DEVICE_TYPE_GPU) != 0) {
+                computeScaler = 32;
+            }
+
+            long computeSpeed = (long) RendererInstance.getInts(device, CL.CL_DEVICE_MAX_CLOCK_FREQUENCY, 1)[0] *
+                                (long) RendererInstance.getInts(device, CL.CL_DEVICE_MAX_COMPUTE_UNITS, 1)[0] *
+                                computeScaler;
             name = RendererInstance.getString(device, CL.CL_DEVICE_NAME);
-            computeCapacity = computeSpeed/1000.0;  // Approximate GFlops
+            computeCapacity = computeSpeed / 1000.0;  // Approximate GFlops
             this.index = index;
+        }
+
+        public String getTypeString() {
+            switch ((int) type) {
+                case (int) CL.CL_DEVICE_TYPE_CPU:
+                    return "CPU";
+                case (int) CL.CL_DEVICE_TYPE_GPU:
+                    return "GPU";
+                case (int) CL.CL_DEVICE_TYPE_ACCELERATOR:
+                    return "Accelerator";
+                case (int) CL.CL_DEVICE_TYPE_CUSTOM:
+                    return "Custom";
+                default:
+                    return String.format("Unknown (%d)", type);
+            }
         }
     }
 }

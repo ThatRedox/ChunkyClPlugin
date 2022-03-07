@@ -47,8 +47,8 @@ public class RendererInstance {
         ArrayList<cl_device_id> devices = new ArrayList<>();
 
         for (cl_platform_id platform : platforms) {
+            // Obtain the number of devices for the platform
             try {
-                // Obtain the number of devices for the platform
                 int[] numDevicesArray = new int[1];
                 clGetDeviceIDs(platform, deviceType, 0, null, numDevicesArray);
                 int numDevices = numDevicesArray[0];
@@ -58,9 +58,7 @@ public class RendererInstance {
                 clGetDeviceIDs(platform, deviceType, numDevices, platformDevices, null);
                 devices.addAll(Arrays.asList(platformDevices));
             } catch (CLException e) {
-                if (!e.getMessage().contains("CL_DEVICE_NOT_FOUND")) {
-                    throw e;
-                }
+                Log.info("Error obtaining device", e);
             }
         }
 
@@ -142,6 +140,20 @@ public class RendererInstance {
     public static int[] getInts(cl_device_id device, int paramName, int numValues) {
         int[] values = new int[numValues];
         clGetDeviceInfo(device, paramName, (long) Sizeof.cl_int * numValues, Pointer.to(values), null);
+        return values;
+    }
+
+    /** Get a long(array) from OpenCL
+     * Based on code from https://github.com/gpu/JOCLSamples/
+     * List of available parameter names: https://www.khronos.org/registry/OpenCL/sdk/1.2/docs/man/xhtml/clGetDeviceInfo.html
+     *
+     * @param device Device to query
+     * @param paramName Parameter to query
+     * @param numValues Number of values to query
+     */
+    public static long[] getLongs(cl_device_id device, int paramName, int numValues) {
+        long[] values = new long[numValues];
+        clGetDeviceInfo(device, paramName, (long) Sizeof.cl_long * numValues, Pointer.to(values), null);
         return values;
     }
 }
