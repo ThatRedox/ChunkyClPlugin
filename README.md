@@ -9,7 +9,7 @@ It is currently a work in progress and does not support many features such as bi
 so render results may change drastically between versions.
 
 ## Downloads
-* [2.4.X Stable Build](https://nightly.link/ThatRedox/ChunkyClPlugin/workflows/stable/stable/ChunkyClPlugin.zip)
+* [2.4.X Stable Build](https://nightly.link/ThatRedox/ChunkyClPlugin/workflows/stable/master/ChunkyClPlugin.zip)
 * [Latest development build](https://nightly.link/ThatRedox/ChunkyClPlugin/workflows/development/master/ChunkyClPlugin.zip)
 
 <sub><sup>Note: Even if the build is failing, the link will link to the latest successful build. </sup></sub>
