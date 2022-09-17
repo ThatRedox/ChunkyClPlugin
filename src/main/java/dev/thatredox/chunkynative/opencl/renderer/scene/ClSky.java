@@ -49,7 +49,7 @@ public class ClSky implements AutoCloseable {
                 double r = FastMath.cos(phi);
                 ray.d.set(FastMath.cos(theta) * r, FastMath.sin(phi), FastMath.sin(theta) * r);
 
-                scene.sky().getSkyColor(ray);
+                scene.sky().getSkyColor(ray, false);
                 texture[offset + 0] = (byte) (ray.color.x * 255);
                 texture[offset + 1] = (byte) (ray.color.y * 255);
                 texture[offset + 2] = (byte) (ray.color.z * 255);
