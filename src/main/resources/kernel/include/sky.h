@@ -91,15 +91,15 @@ bool Sun_sampleDirection(Sun* self, IntersectionRecord* record, unsigned int* st
     return true;
 }
 
-const sampler_t skySampler = CLK_NORMALIZED_COORDS_TRUE  | CLK_ADDRESS_CLAMP_TO_EDGE | CLK_FILTER_LINEAR;
+const sampler_t skySampler = CLK_NORMALIZED_COORDS_TRUE  | CLK_ADDRESS_MIRRORED_REPEAT | CLK_FILTER_LINEAR;
 
 void Sky_intersect(IntersectionRecord* record, image2d_t skyTexture, float skyIntensity) {
     float3 direction = record->ray->direction;
 
-    float theta = atan2(direction.x, direction.y);
+    float theta = atan2(direction.z, direction.x);
     theta /= M_PI_F * 2;
     theta = fmod(fmod(theta, 1) + 1, 1);
-    float phi = (asin(direction.y) + M_PI_2_F) * M_1_PI_F;
+    float phi = (asin(clamp(direction.y, -1.0f, 1.0f)) + M_PI_2_F) * M_1_PI_F;
 
     record->color = read_imagef(skyTexture, skySampler, (float2) (theta, phi)) * skyIntensity;
 }

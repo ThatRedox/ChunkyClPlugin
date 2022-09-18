@@ -19,6 +19,17 @@ Bvh Bvh_new(__global const int* bvh, __global const int* trigs, MaterialPalette*
 }
 
 bool Bvh_intersect(Bvh* self, IntersectionRecord* record, image2d_array_t atlas) {
+    if (self->bvh[0] == 0) {
+        if (isnan(as_float(self->bvh[1])) &&
+            isnan(as_float(self->bvh[2])) &&
+            isnan(as_float(self->bvh[3])) &&
+            isnan(as_float(self->bvh[4])) &&
+            isnan(as_float(self->bvh[5])) &&
+            isnan(as_float(self->bvh[6]))) {
+            return false;
+        }
+    }
+
     bool hit = false;
     
     int toVisit = 0;

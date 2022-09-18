@@ -20,8 +20,8 @@ MaterialPalette MaterialPalette_new(__global const int* palette) {
 
 typedef struct {
     unsigned int flags;
-    unsigned int textureSize;
     unsigned int tint;
+    unsigned int textureSize;
     unsigned int color;
     unsigned int normal_emittance;
     unsigned int specular_metalness_roughness;
@@ -30,8 +30,8 @@ typedef struct {
 Material Material_get(MaterialPalette* self, int material) {
     Material m;
     m.flags = self->palette[material + 0];
-    m.textureSize = self->palette[material + 1];
-    m.tint = self->palette[material + 2];
+    m.tint = self->palette[material + 1];
+    m.textureSize = self->palette[material + 2];
     m.color = self->palette[material + 3];
     m.normal_emittance = self->palette[material + 4];
     m.specular_metalness_roughness = self->palette[material + 5];

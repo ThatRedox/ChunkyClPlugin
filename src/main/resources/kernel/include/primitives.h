@@ -320,6 +320,7 @@ float Quad_intersect(Quad* self, float distance, float3 origin, float3 dir, floa
 #define TRIANGLE_SIZE 20
 
 typedef struct {
+    int flags;
     float3 e1;
     float3 e2;
     float3 o;
@@ -328,38 +329,38 @@ typedef struct {
     float2 t2;
     float2 t3;
     int material;
-    int flags;
 } Triangle;
 
 Triangle Triangle_new(__global const int* trigModels, int index) {
     Triangle t;
-    t.e1.x = as_float(trigModels[index + 0]);
-    t.e1.y = as_float(trigModels[index + 1]);
-    t.e1.z = as_float(trigModels[index + 2]);
+    t.flags = trigModels[index + 0];
 
-    t.e2.x = as_float(trigModels[index + 3]);
-    t.e2.y = as_float(trigModels[index + 4]);
-    t.e2.z = as_float(trigModels[index + 5]);
+    t.e1.x = as_float(trigModels[index + 1]);
+    t.e1.y = as_float(trigModels[index + 2]);
+    t.e1.z = as_float(trigModels[index + 3]);
 
-    t.o.x = as_float(trigModels[index + 6]);
-    t.o.y = as_float(trigModels[index + 7]);
-    t.o.z = as_float(trigModels[index + 8]);
+    t.e2.x = as_float(trigModels[index + 4]);
+    t.e2.y = as_float(trigModels[index + 5]);
+    t.e2.z = as_float(trigModels[index + 6]);
 
-    t.n.x = as_float(trigModels[index + 9]);
-    t.n.y = as_float(trigModels[index + 10]);
-    t.n.z = as_float(trigModels[index + 11]);
+    t.o.x = as_float(trigModels[index + 7]);
+    t.o.y = as_float(trigModels[index + 8]);
+    t.o.z = as_float(trigModels[index + 9]);
 
-    t.t1.x = as_float(trigModels[index + 12]);
-    t.t1.y = as_float(trigModels[index + 13]);
+    t.n.x = as_float(trigModels[index + 10]);
+    t.n.y = as_float(trigModels[index + 11]);
+    t.n.z = as_float(trigModels[index + 12]);
 
-    t.t2.x = as_float(trigModels[index + 14]);
-    t.t2.y = as_float(trigModels[index + 15]);
+    t.t1.x = as_float(trigModels[index + 13]);
+    t.t1.y = as_float(trigModels[index + 14]);
 
-    t.t3.x = as_float(trigModels[index + 16]);
-    t.t3.y = as_float(trigModels[index + 17]);
+    t.t2.x = as_float(trigModels[index + 15]);
+    t.t2.y = as_float(trigModels[index + 16]);
 
-    t.material = trigModels[index + 18];
-    t.flags = trigModels[index + 19];
+    t.t3.x = as_float(trigModels[index + 17]);
+    t.t3.y = as_float(trigModels[index + 18]);
+
+    t.material = trigModels[index + 19];
     return t;
 }
 
@@ -368,7 +369,7 @@ float Triangle_intersect(Triangle* self, float distance, float3 origin, float3 d
 
     pvec = cross(dir, self->e2);
     float det = dot(self->e1, pvec);
-    if (self->flags & 1) {
+    if ((self->flags >> 8) & 1) {
         if (det > -EPS && det < EPS)
             return NAN;
     } else if (det > -EPS) {
