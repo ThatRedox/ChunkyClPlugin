@@ -1,10 +1,10 @@
 use std::ops::{Deref, DerefMut};
 
-pub struct FfiGuard<'a, T> {
+pub struct FFIGuard<'a, T> {
     obj: &'a mut T,
 }
 
-impl <'a, T> Deref for FfiGuard<'a, T> {
+impl <'a, T> Deref for FFIGuard<'a, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -12,13 +12,13 @@ impl <'a, T> Deref for FfiGuard<'a, T> {
     }
 }
 
-impl <'a, T> DerefMut for FfiGuard<'a, T> {
+impl <'a, T> DerefMut for FFIGuard<'a, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.obj
     }
 }
 
-impl <'a, T> FfiGuard<'a, T> {
+impl <'a, T> FFIGuard<'a, T> {
     pub fn new(address: usize) -> Self {
         let obj = unsafe { Box::leak(Box::from_raw(address as *mut T)) };
         Self { obj }
