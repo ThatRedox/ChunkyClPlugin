@@ -45,7 +45,7 @@ task packageRust() {
             into "./src/main/resources/dev/thatredox/chunkynative/rust/"
         }
         copy {
-            from "./src/main/native/target/debug/native.so"
+            from "./src/main/native/target/debug/libnative.so"
             into "./src/main/resources/dev/thatredox/chunkynative/rust/"
         }
     }

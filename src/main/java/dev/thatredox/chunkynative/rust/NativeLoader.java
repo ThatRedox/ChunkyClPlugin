@@ -11,11 +11,11 @@ public class NativeLoader {
 
     public static void load() throws UnsatisfiedLinkError {
         String systemName = System.getProperty("os.name");
-        String nativeExt;
+        String nativeLib;
         if (systemName.contains("Windows")) {
-            nativeExt = ".dll";
+            nativeLib = "native.dll";
         } else if (systemName.contains("Linux") || systemName.contains("LINUX")) {
-            nativeExt = ".so";
+            nativeLib = "libnative.so";
         } else {
             throw new UnsatisfiedLinkError("Failed to identify operating system type.");
         }
@@ -28,7 +28,7 @@ public class NativeLoader {
             throw new UnsatisfiedLinkError("Failed to create temporary file.");
         }
 
-        try (InputStream is = NativeLoader.class.getResourceAsStream("native" + nativeExt)) {
+        try (InputStream is = NativeLoader.class.getResourceAsStream(nativeLib)) {
             if (is == null) {
                 throw new UnsatisfiedLinkError("Failed to find native library.");
             }
