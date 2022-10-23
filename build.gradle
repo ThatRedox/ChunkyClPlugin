@@ -32,4 +32,25 @@ jar {
     processResources.exclude('**/.idea', '**/cmake-build-debug')
 }
 
+task buildRust(type: Exec) {
+    workingDir "./src/main/native/"
+    commandLine "cargo", "build"
+}
+
+task packageRust() {
+    dependsOn(buildRust)
+    doLast {
+        copy {
+            from "./src/main/native/target/debug/native.dll"
+            into "./src/main/resources/dev/thatredox/chunkynative/rust/"
+        }
+        copy {
+            from "./src/main/native/target/debug/native.so"
+            into "./src/main/resources/dev/thatredox/chunkynative/rust/"
+        }
+    }
+}
+
+compileJava.dependsOn(packageRust)
+
 defaultTasks 'jar'

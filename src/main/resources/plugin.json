@@ -1,8 +1,8 @@
 {
-  "name": "ChunkyCl",
+  "name": "Chunky Native",
   "author": "ThatRedox",
-  "main": "dev.thatredox.chunkyative.opencl.ChunkyCl",
-  "version": "0.2",
+  "main": "dev.thatredox.chunkynative.ChunkyNative",
+  "version": "0.3",
   "targetVersion": "2.5.0",
-  "description": "OpenCL rendering for Chunky."
+  "description": "Native rendering for Chunky."
 }
