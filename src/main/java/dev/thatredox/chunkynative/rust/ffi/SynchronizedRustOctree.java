@@ -1,4 +1,4 @@
-package dev.thatredox.chunkynative.rust.export.ffi;
+package dev.thatredox.chunkynative.rust.ffi;
 
 public class SynchronizedRustOctree extends AbstractSynchronizedRustResource {
     public SynchronizedRustOctree(int[] octree, int depth, int[] blockMapping) {

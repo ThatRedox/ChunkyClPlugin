@@ -1,3 +1,4 @@
+use std::borrow::Borrow;
 use std::mem;
 use jni::JNIEnv;
 use jni::sys::jintArray;
@@ -28,16 +29,24 @@ pub struct Octree {
     pub block_mapping: Vec<u32>,
 }
 
+impl Octree {
+    pub fn as_octree(&self) -> crate::rt::octree::Octree {
+        crate::rt::octree::Octree {
+            tree_data: self.octree.borrow()
+        }
+    }
+}
+
 /// Convert a vector of i32 to u32
 pub fn vec_i_to_u(v: Vec<i32>) -> Vec<u32> {
-    return unsafe {
+    unsafe {
         let mut v = mem::ManuallyDrop::new(v);
         Vec::from_raw_parts(
             v.as_mut_ptr() as *mut u32,
             v.len(),
             v.capacity()
         )
-    };
+    }
 }
 
 pub fn load_int_array(env: JNIEnv, array: jintArray) -> Vec<i32> {

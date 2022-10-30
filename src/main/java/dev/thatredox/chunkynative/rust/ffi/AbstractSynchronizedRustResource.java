@@ -1,4 +1,4 @@
-package dev.thatredox.chunkynative.rust.export.ffi;
+package dev.thatredox.chunkynative.rust.ffi;
 
 import dev.thatredox.chunkynative.util.NativeCleaner;
 

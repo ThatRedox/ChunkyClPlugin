@@ -8,9 +8,9 @@ import dev.thatredox.chunkynative.common.export.models.PackedTriangleModel;
 import dev.thatredox.chunkynative.common.export.primitives.PackedBlock;
 import dev.thatredox.chunkynative.common.export.primitives.PackedMaterial;
 import dev.thatredox.chunkynative.common.export.texture.AbstractTextureLoader;
-import dev.thatredox.chunkynative.rust.export.ffi.AbstractSynchronizedRustResource;
-import dev.thatredox.chunkynative.rust.export.ffi.SynchronizedRustBvh;
-import dev.thatredox.chunkynative.rust.export.ffi.SynchronizedRustOctree;
+import dev.thatredox.chunkynative.rust.ffi.AbstractSynchronizedRustResource;
+import dev.thatredox.chunkynative.rust.ffi.SynchronizedRustBvh;
+import dev.thatredox.chunkynative.rust.ffi.SynchronizedRustOctree;
 import dev.thatredox.chunkynative.util.FunctionCache;
 
 public class RustSceneLoader extends AbstractSceneLoader {
