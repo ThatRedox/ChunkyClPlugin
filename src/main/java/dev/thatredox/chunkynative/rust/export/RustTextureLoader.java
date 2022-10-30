@@ -2,6 +2,8 @@ package dev.thatredox.chunkynative.rust.export;
 
 import dev.thatredox.chunkynative.common.export.texture.AbstractTextureLoader;
 import dev.thatredox.chunkynative.common.export.texture.TextureRecord;
+import dev.thatredox.chunkynative.rust.export.ffi.AbstractSynchronizedRustResource;
+import dev.thatredox.chunkynative.rust.export.ffi.SynchronizedRustResourcePalette;
 import it.unimi.dsi.fastutil.objects.Object2ObjectMap;
 import se.llbit.chunky.resources.Texture;
 
@@ -12,6 +14,10 @@ public class RustTextureLoader extends AbstractTextureLoader implements AutoClos
 
     public RustTextureLoader() {
         mem = new SynchronizedRustResourcePalette();
+    }
+
+    public AbstractSynchronizedRustResource.AddressGuard getAddress() {
+        return mem.getAddress();
     }
 
     @Override
