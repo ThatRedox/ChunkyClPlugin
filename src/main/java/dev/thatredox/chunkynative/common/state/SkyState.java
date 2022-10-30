@@ -5,6 +5,7 @@ import se.llbit.chunky.renderer.scene.SimulatedSky;
 import se.llbit.chunky.renderer.scene.Sky;
 import se.llbit.chunky.renderer.scene.Sun;
 import se.llbit.chunky.resources.Texture;
+import se.llbit.math.Matrix3;
 import se.llbit.math.Vector3;
 import se.llbit.math.Vector4;
 
@@ -17,7 +18,7 @@ public class SkyState {
     private final Texture[] skybox;
     private final String skymapFileName;
     private final String[] skyboxFileName;
-    private final double rotation;
+    private final Matrix3 rotation;
     private final boolean mirrored;
     private final double skylightModifier;
     private final List<Vector4> gradient;
@@ -36,7 +37,6 @@ public class SkyState {
         skybox = Reflection.getFieldValue(sky, "skybox", Texture[].class).clone();
         skymapFileName = Reflection.getFieldValue(sky, "skymapFileName", String.class);
         skyboxFileName = Reflection.getFieldValue(sky, "skyboxFileName", String[].class).clone();
-        rotation = Reflection.getFieldValue(sky, "rotation", Double.class);
         mirrored = Reflection.getFieldValue(sky, "mirrored", Boolean.class);
         skylightModifier = Reflection.getFieldValue(sky, "skyLightModifier", Double.class);
         List<?> gradientList = Reflection.getFieldValue(sky, "gradient", List.class);
@@ -50,6 +50,10 @@ public class SkyState {
         sunAltitude = sun.getAltitude();
         drawSun = sun.drawTexture();
         sunColor = new Vector3(sun.getColor());
+
+        rotation = new Matrix3();
+        Matrix3 rot = Reflection.getFieldValue(sky, "rotation", Matrix3.class);
+        Reflection.copyPublic(rot, rotation);
     }
 
     @Override
@@ -59,7 +63,7 @@ public class SkyState {
 
         SkyState skyState = (SkyState) o;
 
-        if (Double.compare(skyState.rotation, rotation) != 0) return false;
+        if (!Reflection.equalsPublic(skyState.rotation, rotation)) return false;
         if (mirrored != skyState.mirrored) return false;
         if (Double.compare(skyState.skylightModifier, skylightModifier) != 0) return false;
         if (Double.compare(skyState.horizonOffset, horizonOffset) != 0) return false;
