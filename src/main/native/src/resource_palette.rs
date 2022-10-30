@@ -7,10 +7,9 @@ impl ResourcePalette {
         ResourcePalette { resources: vec![] }
     }
 
-    pub fn put(&mut self, resource: Vec<u32>) -> Result<i32, String> {
+    pub fn put(&mut self, resource: Vec<u32>) -> usize {
         let index = self.resources.len();
         self.resources.push(resource);
-
-        index.try_into().map_err(|_| "Too many resources.".to_string())
+        index
     }
 }

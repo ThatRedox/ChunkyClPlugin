@@ -10,8 +10,8 @@ import se.llbit.chunky.ui.ChunkyFx;
 public class ChunkyNative implements Plugin {
     @Override
     public void attach(Chunky chunky) {
-        new ChunkyCl().attach(chunky);
         new RustPlugin().attach(chunky);
+        new ChunkyCl().attach(chunky);
     }
 
     public static void main(String[] args) throws Exception {

@@ -1,7 +1,7 @@
 use std::mem;
 use jni::JNIEnv;
-use jni::objects::{JClass, JObject};
-use jni::sys::{jint, jintArray, jlong};
+use jni::objects::{JClass};
+use jni::sys::{jintArray, jlong};
 use crate::ffi_guard::FFIGuard;
 use crate::resource_palette::ResourcePalette;
 
@@ -12,14 +12,14 @@ mod ffi_guard;
 const _: () = assert!(usize::BITS <= u64::BITS, "The world is on fire!!!");
 
 #[no_mangle]
-pub extern "system" fn Java_dev_thatredox_chunkynative_rust_export_RustResourcePalette_create(_env: JNIEnv, _class: JClass) -> jlong {
+pub extern "system" fn Java_dev_thatredox_chunkynative_rust_export_SynchronizedRustResource_create(_env: JNIEnv, _class: JClass) -> jlong {
     let palette = ResourcePalette::new();
     let palette = FFIGuard::create(Box::new(palette));
     palette.to_address() as jlong
 }
 
 #[no_mangle]
-pub extern "system" fn Java_dev_thatredox_chunkynative_rust_export_RustResourcePalette_drop(_env: JNIEnv, _obj: JObject, address: jlong) {
+pub extern "system" fn Java_dev_thatredox_chunkynative_rust_export_SynchronizedRustResource_drop(_env: JNIEnv, _class: JClass, address: jlong) {
     let palette: FFIGuard<ResourcePalette> = FFIGuard::new(address as usize);
     // Safety: This is synchronized and checked on the Java side.
     unsafe {
@@ -28,7 +28,7 @@ pub extern "system" fn Java_dev_thatredox_chunkynative_rust_export_RustResourceP
 }
 
 #[no_mangle]
-pub extern "system" fn Java_dev_thatredox_chunkynative_rust_export_RustResourcePalette_put_1resource(env: JNIEnv, _obj: JObject, address: jlong, resource: jintArray) -> jint {
+pub extern "system" fn Java_dev_thatredox_chunkynative_rust_export_SynchronizedRustResource_put(env: JNIEnv, _class: JClass, address: jlong, resource: jintArray) -> jlong {
     let mut palette: FFIGuard<ResourcePalette> = FFIGuard::new(address as usize);
 
     let resource_len = env.get_array_length(resource).unwrap();
@@ -45,20 +45,5 @@ pub extern "system" fn Java_dev_thatredox_chunkynative_rust_export_RustResourceP
         )
     };
 
-    match palette.put(v) {
-        Ok(index) => index,
-        Err(err) => {
-            let _ = env.throw_new("java/lang/RuntimeException", err);
-            -1
-        }
-    }
-}
-
-#[no_mangle]
-pub extern "system" fn Java_dev_thatredox_chunkynative_rust_export_RustResourcePalette_test_1impl(_env: JNIEnv, _obj: JObject, address: jlong) {
-    let palette: FFIGuard<ResourcePalette> = FFIGuard::new(address as usize);
-
-    for resource in &palette.resources {
-        println!("{:?}", resource);
-    }
+    palette.put(v) as jlong
 }
