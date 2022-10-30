@@ -1,5 +1,5 @@
 use std::borrow::Borrow;
-use std::mem;
+use std::{mem, slice};
 use jni::JNIEnv;
 use jni::sys::jintArray;
 
@@ -31,8 +31,14 @@ pub struct Octree {
 
 impl Octree {
     pub fn as_octree(&self) -> crate::rt::octree::Octree {
+        let data: &[u32] = self.octree.borrow();
+        let data = unsafe {
+            slice::from_raw_parts(data.as_ptr() as *const i32, data.len())
+        };
+
         crate::rt::octree::Octree {
-            tree_data: self.octree.borrow()
+            tree_data: data,
+            depth: self.depth,
         }
     }
 }

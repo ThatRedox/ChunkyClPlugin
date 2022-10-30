@@ -113,6 +113,6 @@ pub extern "system" fn Java_dev_thatredox_chunkynative_rust_ffi_RustPathTracer_t
     };
     let color = pt.trace(origin, direction, seed as u64);
 
-    let color = [color.x as f64, color.y as f64, color.z as f64];
+    let color = [color.x as jdouble, color.y as jdouble, color.z as jdouble];
     env.set_double_array_region(rgb, 0, &color).unwrap();
 }

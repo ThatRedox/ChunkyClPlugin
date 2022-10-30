@@ -55,12 +55,9 @@ public class RustPathTracingRenderer extends TileBasedRenderer {
 
                 submitTiles(manager, (state, pixel) -> {
                     double[] rgb = new double[3];
+                    double[] srgb = new double[3];
                     int x = pixel.firstInt();
                     int y = pixel.secondInt();
-
-                    double sr = 0;
-                    double sg = 0;
-                    double sb = 0;
 
                     for (int k = 0; k < sppPerPass; k++) {
                         double ox = state.random.nextDouble();
@@ -69,17 +66,18 @@ public class RustPathTracingRenderer extends TileBasedRenderer {
                         cam.calcViewRay(state.ray, state.random,
                                 -halfWidth + (x + ox) * invHeight,
                                 -0.5 + (y + oy) * invHeight);
+                        state.ray.o.sub(scene.getOrigin());
                         pt.trace(state.ray, state.random.nextLong(), rgb);
 
-                        sr += state.ray.color.x;
-                        sg += state.ray.color.y;
-                        sb += state.ray.color.z;
+                        for (int i = 0; i < 3; i++) {
+                            srgb[i] += rgb[i];
+                        }
                     }
 
                     int offset = 3 * (y * width + x);
-                    sampleBuffer[offset + 0] = (sampleBuffer[offset + 0] * spp + sr) * sinv;
-                    sampleBuffer[offset + 1] = (sampleBuffer[offset + 1] * spp + sg) * sinv;
-                    sampleBuffer[offset + 2] = (sampleBuffer[offset + 2] * spp + sb) * sinv;
+                    for (int i = 0; i < 3; i++) {
+                        sampleBuffer[offset + i] = (sampleBuffer[offset + i] * spp + srgb[i]) * sinv;
+                    }
                 });
 
                 manager.pool.awaitEmpty();
