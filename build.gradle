@@ -34,6 +34,7 @@ jar {
 
 task buildRust(type: Exec) {
     workingDir "./src/main/native/"
+    environment("RUSTFLAGS", "-C target-cpu=native")
     commandLine "cargo", "build", "--release"
 }
 
