@@ -1,8 +1,8 @@
 {
   "name": "ChunkyCl",
-  "author": "alexhliu",
+  "author": "ThatRedox",
   "main": "chunkycl.ChunkyCl",
-  "version": "0.1",
+  "version": "0.1.0",
   "targetVersion": "2.4.0",
   "description": "OpenCL rendering for Chunky."
 }
