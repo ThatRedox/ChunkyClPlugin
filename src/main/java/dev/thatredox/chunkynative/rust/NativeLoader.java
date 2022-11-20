@@ -39,5 +39,8 @@ public class NativeLoader {
 
         System.out.println("Native library at: " + tempFile.getAbsolutePath());
         System.load(tempFile.getAbsolutePath());
+        NativeLoader.init();
     }
+
+    private static native void init();
 }

@@ -55,7 +55,7 @@ pub fn vec_i_to_u(v: Vec<i32>) -> Vec<u32> {
     }
 }
 
-pub fn load_int_array(env: JNIEnv, array: jintArray) -> Vec<i32> {
+pub fn load_int_array(env: &JNIEnv, array: jintArray) -> Vec<i32> {
     let len = env.get_array_length(array).unwrap();
     let mut v = vec![0i32; len as usize];
     env.get_int_array_region(array, 0, v.as_mut()).unwrap();
