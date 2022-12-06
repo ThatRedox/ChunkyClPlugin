@@ -45,7 +45,7 @@ public class KernelLoader {
         cl_program[] includePrograms = new cl_program[includeNames.length];
         Arrays.setAll(includePrograms, i -> headerFiles.get(includeNames[i]));
 
-        int code = clCompileProgram(renderKernel, devices.length, devices, "",
+        int code = clCompileProgram(renderKernel, devices.length, devices, "-cl-std=CL1.2 -Werror",
                 includePrograms.length, includePrograms, includeNames, null, null);
         if (code != CL_SUCCESS) {
             throw new RuntimeException("Program build failed with error code: " + code);
