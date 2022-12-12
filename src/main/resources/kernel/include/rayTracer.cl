@@ -7,30 +7,35 @@
 #include "bvh.h"
 #include "sky.h"
 
-__kernel void render(__global const float* rayPos,
-                     __global const float* rayDir,
+__kernel void render(
+    __global const int* projectorType,
+    __global const float* cameraSettings,
 
-                     __global const int* octreeDepth,
-                     __global const int* octreeData,
+    __global const int* octreeDepth,
+    __global const int* octreeData,
 
-                     __global const int* bPalette,
-                     __global const int* quadModels,
-                     __global const int* aabbModels,
+    __global const int* bPalette,
+    __global const int* quadModels,
+    __global const int* aabbModels,
 
-                     __global const int* worldBvhData,
-                     __global const int* actorBvhData,
-                     __global const int* bvhTrigs,
+    __global const int* worldBvhData,
+    __global const int* actorBvhData,
+    __global const int* bvhTrigs,
 
-                     image2d_array_t textureAtlas,
-                     __global const int* matPalette,
+    image2d_array_t textureAtlas,
+    __global const int* matPalette,
 
-                     image2d_t skyTexture,
-                     __global const float* skyIntensity,
-                     __global const int* sunData,
+    image2d_t skyTexture,
+    __global const float* skyIntensity,
+    __global const int* sunData,
 
-                     __global const int* randomSeed,
-                     __global const int* bufferSpp,
-                     __global float* res) {
+    __global const int* randomSeed,
+    __global const int* bufferSpp,
+    __global const int* width,
+    __global const int* height,
+    __global float* res
+
+) {
     int gid = get_global_id(0);
 
     Pixel pixel = Pixel_new(gid);
@@ -51,7 +56,38 @@ __kernel void render(__global const float* rayPos,
     Random_nextState(state);
 
     // Set camera
-    Camera_preGenerated(&ray, rayPos, rayDir);
+    if (*projectorType != -1) {
+        float3 cameraPos = vload3(0, cameraSettings);
+        float3 m1s = vload3(1, cameraSettings);
+        float3 m2s = vload3(2, cameraSettings);
+        float3 m3s = vload3(3, cameraSettings);
+
+        float halfWidth = (*width) / (2.0 * (*height));
+        float invHeight = 1.0 / (*height);
+        float x = -halfWidth + ((pixel.index % (*width)) + Random_nextFloat(state)) * invHeight;
+        float y = -0.5 + ((pixel.index / (*width)) + Random_nextFloat(state)) * invHeight;
+
+        switch (*projectorType) {
+            case 0:
+                Camera_pinHole(x, y, state, &ray.origin, &ray.direction, cameraSettings+12);
+                break;
+        }
+
+        ray.direction = (float3) (
+            dot(m1s, ray.direction),
+            dot(m2s, ray.direction),
+            dot(m3s, ray.direction)
+        );
+        ray.origin = (float3) (
+            dot(m1s, ray.origin),
+            dot(m2s, ray.origin),
+            dot(m3s, ray.origin)
+        );
+
+        ray.origin += cameraPos;
+    } else {
+        Camera_preGenerated(&ray, cameraSettings);
+    }
 
     do {
         if (!closestIntersect(&record, &octree, &blockPalette, textureAtlas, 256, &worldBvh, &actorBvh)) {
@@ -75,30 +111,32 @@ __kernel void render(__global const float* rayPos,
     vstore3(bufferColor, gid, res);
 }
 
-__kernel void preview(__global const float* rayPos,
-                      __global const float* rayDir,
- 
-                      __global const int* octreeDepth,
-                      __global const int* octreeData,
- 
-                      __global const int* bPalette,
-                      __global const int* quadModels,
-                      __global const int* aabbModels,
- 
-                      __global const int* worldBvhData,
-                      __global const int* actorBvhData,
-                      __global const int* bvhTrigs,
- 
-                      image2d_array_t textureAtlas,
-                      __global const int* matPalette,
- 
-                      image2d_t skyTexture,
-                      __global const float* skyIntensity,
-                      __global const int* sunData,
+__kernel void preview(
+    __global const int* projectorType,
+    __global const float* cameraSettings,
 
-                      __global const int* width,
-                      __global const int* height,
-                      __global int* res) {
+    __global const int* octreeDepth,
+    __global const int* octreeData,
+
+    __global const int* bPalette,
+    __global const int* quadModels,
+    __global const int* aabbModels,
+
+    __global const int* worldBvhData,
+    __global const int* actorBvhData,
+    __global const int* bvhTrigs,
+
+    image2d_array_t textureAtlas,
+    __global const int* matPalette,
+
+    image2d_t skyTexture,
+    __global const float* skyIntensity,
+    __global const int* sunData,
+
+    __global const int* width,
+    __global const int* height,
+    __global int* res
+) {
     int gid = get_global_id(0);
     int px = gid % *width;
     int py = gid / *width;
@@ -128,7 +166,39 @@ __kernel void preview(__global const float* rayPos,
     Random_nextState(state);
 
     // Set camera
-    Camera_preGenerated(&ray, rayPos, rayDir);
+    if (*projectorType != -1) {
+        float3 cameraPos = vload3(0, cameraSettings);
+        float3 m1s = vload3(1, cameraSettings);
+        float3 m2s = vload3(2, cameraSettings);
+        float3 m3s = vload3(3, cameraSettings);
+
+        float halfWidth = (*width) / (2.0 * (*height));
+        float invHeight = 1.0 / (*height);
+        float x = -halfWidth + ((pixel.index % (*width)) + Random_nextFloat(state)) * invHeight;
+        float y = -0.5 + ((pixel.index / (*width)) + Random_nextFloat(state)) * invHeight;
+
+        switch (*projectorType) {
+            case 0:
+                Camera_pinHole(x, y, state, &ray.origin, &ray.direction, cameraSettings+12);
+                break;
+        }
+        ray.direction = normalize(ray.direction);
+
+        ray.direction = (float3) (
+            dot(m1s, ray.direction),
+            dot(m2s, ray.direction),
+            dot(m3s, ray.direction)
+        );
+        ray.origin = (float3) (
+            dot(m1s, ray.origin),
+            dot(m2s, ray.origin),
+            dot(m3s, ray.origin)
+        );
+
+        ray.origin += cameraPos;
+    } else {
+        Camera_preGenerated(&ray, cameraSettings);
+    }
 
     if (closestIntersect(&record, &octree, &blockPalette, textureAtlas, 256, &worldBvh, &actorBvh)) {
         float shading = dot(record.normal, (float3) (0.25, 0.866, 0.433));

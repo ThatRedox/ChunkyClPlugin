@@ -5,6 +5,7 @@ import static org.jocl.CL.*;
 import dev.thatredox.chunkynative.opencl.renderer.ClSceneLoader;
 import dev.thatredox.chunkynative.opencl.renderer.RendererInstance;
 import dev.thatredox.chunkynative.opencl.renderer.scene.*;
+import dev.thatredox.chunkynative.opencl.util.ClIntBuffer;
 import dev.thatredox.chunkynative.opencl.util.ClMemory;
 import org.jocl.*;
 
@@ -73,11 +74,15 @@ public class OpenClPathTracingRenderer implements Renderer {
                 clCreateBuffer(instance.context, CL_MEM_READ_ONLY, Sizeof.cl_int, null, null));
         ClMemory bufferSpp = new ClMemory(
                 clCreateBuffer(instance.context, CL_MEM_READ_ONLY, Sizeof.cl_int, null, null));
+        ClIntBuffer clWidth = new ClIntBuffer(scene.width);
+        ClIntBuffer clHeight = new ClIntBuffer(scene.height);
 
         try (ClCamera ignored1 = camera;
              ClMemory ignored2 = buffer;
              ClMemory ignored3 = randomSeed;
-             ClMemory ignored4 = buffer) {
+             ClMemory ignored4 = bufferSpp;
+             ClIntBuffer ignored5 = clWidth;
+             ClIntBuffer ignored6 = clHeight) {
 
             // Generate initial camera rays
             camera.generate(renderLock, true);
@@ -104,8 +109,8 @@ public class OpenClPathTracingRenderer implements Renderer {
                         Pointer.to(new int[]{bufferSppReal}), 0, null, null);
 
                 int argIndex = 0;
-                clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(camera.rayPos.get()));
-                clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(camera.rayDir.get()));
+                clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(camera.projectorType.get()));
+                clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(camera.cameraSettings.get()));
 
                 clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(sceneLoader.getOctreeDepth().get()));
                 clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(sceneLoader.getOctreeData().get()));
@@ -127,6 +132,8 @@ public class OpenClPathTracingRenderer implements Renderer {
 
                 clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(randomSeed.get()));
                 clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(bufferSpp.get()));
+                clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(clWidth.get()));
+                clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(clHeight.get()));
                 clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(buffer.get()));
                 clEnqueueNDRangeKernel(instance.commandQueue, kernel, 1, null,
                         new long[]{passBuffer.length / 3}, null, 0, null,
@@ -136,7 +143,7 @@ public class OpenClPathTracingRenderer implements Renderer {
                 bufferSppReal += 1;
                 scene.spp += 1;
 
-                if (cameraGenTask.isDone()) {
+                if (camera.needGenerate && cameraGenTask.isDone()) {
                     cameraGenTask = Chunky.getCommonThreads().submit(() -> camera.generate(renderLock, true));
                 }
 

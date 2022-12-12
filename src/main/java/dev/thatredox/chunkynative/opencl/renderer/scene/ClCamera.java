@@ -1,88 +1,112 @@
 package dev.thatredox.chunkynative.opencl.renderer.scene;
 
-import static org.jocl.CL.*;
-
 import dev.thatredox.chunkynative.opencl.renderer.RendererInstance;
 import dev.thatredox.chunkynative.opencl.util.ClMemory;
-import org.jocl.*;
-
+import dev.thatredox.chunkynative.util.Reflection;
+import dev.thatredox.chunkynative.util.Util;
+import it.unimi.dsi.fastutil.floats.FloatArrayList;
+import it.unimi.dsi.fastutil.floats.FloatList;
+import org.jocl.Pointer;
+import org.jocl.Sizeof;
 import se.llbit.chunky.main.Chunky;
 import se.llbit.chunky.renderer.scene.Camera;
 import se.llbit.chunky.renderer.scene.Scene;
+import se.llbit.math.Matrix3;
 import se.llbit.math.Ray;
+import se.llbit.math.Vector3;
 
 import java.util.Random;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.locks.Lock;
 import java.util.stream.IntStream;
 
-public class ClCamera implements AutoCloseable {
-    public ClMemory rayPos;
-    public ClMemory rayDir;
+import static org.jocl.CL.*;
 
-    public final int width;
-    public final int height;
+public class ClCamera implements AutoCloseable {
+    public ClMemory projectorType;
+    public ClMemory cameraSettings;
+    public final boolean needGenerate;
+
     private final Scene scene;
 
+
     public ClCamera(Scene scene) {
-        this.scene = scene;
-
         RendererInstance instance = RendererInstance.get();
-        long bufferSize = (long) Sizeof.cl_float * scene.width * scene.height * 3;
+        this.scene = scene;
+        Camera camera = scene.camera();
 
-        width = scene.width;
-        height = scene.height;
+        int projType = -1;
+        Vector3 pos = new Vector3(camera.getPosition());
+        pos.sub(scene.getOrigin());
 
-        rayPos = new ClMemory(clCreateBuffer(instance.context, CL_MEM_READ_ONLY,
-                bufferSize, null, null));
-        rayDir = new ClMemory(clCreateBuffer(instance.context, CL_MEM_READ_ONLY,
-                bufferSize, null, null));
+        FloatArrayList settings = new FloatArrayList();
+        settings.addAll(FloatList.of(Util.vector3ToFloat(pos)));
+        settings.addAll(FloatList.of(Util.matrix3ToFloat(Reflection.getFieldValue(camera, "transform", Matrix3.class))));
+
+        switch (camera.getProjectionMode()) {
+            case PINHOLE:
+                projType = 0;
+                settings.add(camera.infiniteDoF() ? 0 : (float) (camera.getSubjectDistance() / camera.getDof()));
+                settings.add((float) camera.getSubjectDistance());
+                settings.add((float) Camera.clampedFovTan(camera.getFov()));
+                break;
+            default:
+                // We need to pre-generate rays
+                break;
+        }
+
+        needGenerate = projType == -1;
+
+        projectorType = new ClMemory(clCreateBuffer(instance.context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+                Sizeof.cl_int, Pointer.to(new int[] {projType}), null));
+
+        if (needGenerate) {
+            cameraSettings = new ClMemory(clCreateBuffer(instance.context, CL_MEM_READ_ONLY,
+                    (long) Sizeof.cl_float * scene.width * scene.height * 3 * 2, null, null));
+        } else {
+            cameraSettings = new ClMemory(clCreateBuffer(instance.context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+                    (long) Sizeof.cl_float * settings.size(), Pointer.to(settings.toFloatArray()), null));
+        }
     }
 
     public void generate(Lock renderLock, boolean jitter) {
-        float[] rayDirs = new float[width * height * 3];
-        float[] rayPos = new float[width * height * 3];
+        if (!needGenerate) return;
 
-        double halfWidth = width / (2.0 * height);
-        double invHeight = 1.0 / height;
+        float[] rays = new float[scene.width * scene.height * 3 * 2];
+
+        double halfWidth = scene.width / (2.0 * scene.height);
+        double invHeight = 1.0 / scene.height;
 
         Camera cam = scene.camera();
 
-        Chunky.getCommonThreads().submit(() -> IntStream.range(0, width).parallel().forEach(i -> {
+        Chunky.getCommonThreads().submit(() -> IntStream.range(0, scene.width).parallel().forEach(i -> {
             Ray ray = new Ray();
             Random random = jitter ? ThreadLocalRandom.current() : null;
-            for (int j = 0; j < height; j++) {
-                int offset = (j * width + i) * 3;
+            for (int j = 0; j < scene.height; j++) {
+                int offset = (j * scene.width + i) * 3 * 2;
 
                 float ox = jitter ? random.nextFloat(): 0.5f;
                 float oy = jitter ? random.nextFloat(): 0.5f;
 
                 cam.calcViewRay(ray, -halfWidth + (i + ox) * invHeight, -0.5 + (j + oy) * invHeight);
+                ray.o.sub(scene.getOrigin());
 
-                rayDirs[offset + 0] = (float) ray.d.x;
-                rayDirs[offset + 1] = (float) ray.d.y;
-                rayDirs[offset + 2] = (float) ray.d.z;
-
-                rayPos[offset + 0] = (float) (ray.o.x - scene.getOrigin().x);
-                rayPos[offset + 1] = (float) (ray.o.y - scene.getOrigin().y);
-                rayPos[offset + 2] = (float) (ray.o.z - scene.getOrigin().z);
+                System.arraycopy(Util.vector3ToFloat(ray.o), 0, rays, offset, 3);
+                System.arraycopy(Util.vector3ToFloat(ray.d), 0, rays, offset+3, 3);
             }
         })).join();
 
         if (renderLock != null) renderLock.lock();
         RendererInstance instance = RendererInstance.get();
-        clEnqueueWriteBuffer(instance.commandQueue, this.rayPos.get(), CL_TRUE, 0,
-                (long) Sizeof.cl_float * rayPos.length, Pointer.to(rayPos), 0,
-                null, null);
-        clEnqueueWriteBuffer(instance.commandQueue, this.rayDir.get(), CL_TRUE, 0,
-                (long) Sizeof.cl_float * rayDirs.length, Pointer.to(rayDirs), 0,
+        clEnqueueWriteBuffer(instance.commandQueue, this.cameraSettings.get(), CL_TRUE, 0,
+                (long) Sizeof.cl_float * rays.length, Pointer.to(rays), 0,
                 null, null);
         if (renderLock != null) renderLock.unlock();
     }
 
     @Override
     public void close() {
-        this.rayDir.close();
-        this.rayPos.close();
+        this.projectorType.close();
+        this.cameraSettings.close();
     }
 }
