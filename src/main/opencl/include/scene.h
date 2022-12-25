@@ -1,6 +1,7 @@
 #ifndef CHUNKYCLPLUGIN_SCENE_H
 #define CHUNKYCLPLUGIN_SCENE_H
 
+#include "../opencl.h"
 #include "block.h"
 
 typedef struct {

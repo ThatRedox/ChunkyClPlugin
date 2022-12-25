@@ -3,6 +3,7 @@
 #ifndef CHUNKYCLPLUGIN_BLOCK_H
 #define CHUNKYCLPLUGIN_BLOCK_H
 
+#include "../opencl.h"
 #include "wavefront.h"
 #include "utils.h"
 #include "constants.h"

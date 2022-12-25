@@ -1,6 +1,7 @@
 #ifndef CHUNKYCLPLUGIN_SKY_H
 #define CHUNKYCLPLUGIN_SKY_H
 
+#include "../opencl.h"
 #include "wavefront.h"
 #include "textureAtlas.h"
 #include "randomness.h"

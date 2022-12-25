@@ -24,12 +24,14 @@ dependencies {
     bundled 'org.jocl:jocl:2.0.2'
 }
 
+processResources {
+    from "src/main/opencl/include", { into "kernel" }
+}
+
 jar {
     from {
         configurations.bundled.collect { it.isDirectory() ? it : zipTree(it) }
     }
-
-    processResources.exclude('**/.idea', '**/cmake-build-debug')
 }
 
 defaultTasks 'jar'

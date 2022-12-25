@@ -1,6 +1,8 @@
 #ifndef CHUNKYCL_PLUGIN_UTILS_H
 #define CHUNKYCL_PLUGIN_UTILS_H
 
+#include "../opencl.h"
+
 float4 colorFromArgb(unsigned int argb) {
     float4 color;
     color.w = (argb >> 24) & 0xFF;

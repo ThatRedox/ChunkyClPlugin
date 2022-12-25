@@ -1,6 +1,7 @@
 #ifndef CHUNKYCLPLUGIN_CAMERA_H
 #define CHUNKYCLPLUGIN_CAMERA_H
 
+#include "../opencl.h"
 #include "wavefront.h"
 #include "randomness.h"
 

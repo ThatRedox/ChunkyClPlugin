@@ -1,3 +1,4 @@
+#include "../opencl.h"
 #include "octree.h"
 #include "wavefront.h"
 #include "block.h"

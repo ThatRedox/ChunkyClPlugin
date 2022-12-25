@@ -3,6 +3,7 @@
 #ifndef CHUNKYCLPLUGIN_MATERIAL_H
 #define CHUNKYCLPLUGIN_MATERIAL_H
 
+#include "../opencl.h"
 #include "wavefront.h"
 #include "textureAtlas.h"
 #include "utils.h"

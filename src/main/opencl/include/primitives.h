@@ -1,6 +1,7 @@
 #ifndef CHUNKYCLPLUGIN_PRIMITIVES_H
 #define CHUNKYCLPLUGIN_PRIMITIVES_H
 
+#include "../opencl.h"
 #include "wavefront.h"
 #include "constants.h"
 

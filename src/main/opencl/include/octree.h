@@ -1,6 +1,7 @@
 #ifndef CHUNKYCLPLUGIN_OCTREE_H
 #define CHUNKYCLPLUGIN_OCTREE_H
 
+#include "../opencl.h"
 #include "wavefront.h"
 #include "constants.h"
 #include "primitives.h"

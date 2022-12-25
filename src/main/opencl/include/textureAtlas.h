@@ -1,6 +1,7 @@
 #ifndef CHUNKYCL_TEXTURE_ATLAS_H
 #define CHUNKYCL_TEXTURE_ATLAS_H
 
+#include "../opencl.h"
 #include "constants.h"
 
 // Image sampler for texture atlases.

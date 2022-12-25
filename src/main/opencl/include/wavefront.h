@@ -1,6 +1,8 @@
 #ifndef CHUNKYCLPLUGIN_WAVEFRONT_H
 #define CHUNKYCLPLUGIN_WAVEFRONT_H
 
+#include "../opencl.h"
+
 typedef struct {
     int index;
 

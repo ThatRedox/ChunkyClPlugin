@@ -1,6 +1,7 @@
 #ifndef CHUNKYCL_PLUGIN_BVH
 #define CHUNKYCL_PLUGIN_BVH
 
+#include "../opencl.h"
 #include "material.h"
 #include "primitives.h"
 

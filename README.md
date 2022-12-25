@@ -39,3 +39,18 @@ Some settings have been added to improve render performance.
 ## Compatibility
 
 * Not compatible with the Denoising Plugin.
+
+---
+
+## Development
+This project is setup to work with IntelliJ and CLion. The base directory is intended to be opened in IntelliJ and the `src/main/opencl` directory in CLion.
+
+## Copyright & License
+ChunkyCL is Copyright (c) 2021 - 2022, [ThatRedox](https://github.com/ThatRedox) and [Contributors](https://github.com/ThatRedox/ChunkyClPlugin/graphs/contributors).
+
+Permission to modify and redistribute is granted under the terms of the GPLv3 license. See the file `LICENSE` for the full license.
+
+ChunkyCL uses the following 3rd party libraries:
+* [Chunky](https://github.com/chunky-dev/chunky/)
+* [JOCL](http://www.jocl.org/)
+* [Opencl Header from the LLVM Project](https://llvm.org)

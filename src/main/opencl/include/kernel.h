@@ -1,6 +1,7 @@
 #ifndef CHUNKYCL_KERNEL_H
 #define CHUNKYCL_KERNEL_H
 
+#include "../opencl.h"
 #include "wavefront.h"
 #include "octree.h"
 #include "block.h"
