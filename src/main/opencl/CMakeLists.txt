@@ -17,7 +17,6 @@ add_executable(kernel
         include/primitives.h
         include/randomness.h
         include/rayTracer.cl
-        include/scene.h
         include/sky.h
         include/textureAtlas.h
         include/utils.h
