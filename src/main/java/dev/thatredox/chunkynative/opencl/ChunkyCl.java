@@ -2,12 +2,14 @@ package dev.thatredox.chunkynative.opencl;
 
 import dev.thatredox.chunkynative.opencl.renderer.ClSceneLoader;
 import dev.thatredox.chunkynative.opencl.renderer.RendererInstance;
+import dev.thatredox.chunkynative.opencl.tonemap.GpuGammaCorrectionFilter;
 import dev.thatredox.chunkynative.opencl.ui.ChunkyClTab;
 import se.llbit.chunky.Plugin;
 import se.llbit.chunky.main.Chunky;
 import se.llbit.chunky.main.ChunkyOptions;
 import se.llbit.chunky.model.BlockModel;
 import se.llbit.chunky.renderer.RenderController;
+import se.llbit.chunky.renderer.postprocessing.PostProcessingFilters;
 import se.llbit.chunky.ui.ChunkyFx;
 import se.llbit.chunky.ui.render.RenderControlsTab;
 import se.llbit.chunky.ui.render.RenderControlsTabTransformer;
@@ -54,6 +56,8 @@ public class ChunkyCl implements Plugin {
 
             return transformed;
         });
+
+        PostProcessingFilters.addPostProcessingFilter(new GpuGammaCorrectionFilter(RendererInstance.get()));
     }
 
     public static void main(String[] args) throws Exception {

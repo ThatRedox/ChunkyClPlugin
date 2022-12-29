@@ -32,7 +32,8 @@ javafx {
 }
 
 processResources {
-    from "src/main/opencl/include", { into "kernel" }
+    from "src/main/opencl/kernel/include", { into "kernel" }
+    from "src/main/opencl/tonemap/include", { into "tonemap" }
 }
 
 jar {

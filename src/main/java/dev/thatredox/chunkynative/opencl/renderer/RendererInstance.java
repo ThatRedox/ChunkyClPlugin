@@ -12,6 +12,7 @@ import java.util.Arrays;
 public class RendererInstance {
     public final cl_device_id[] devices;
     public final int[] version;
+    public final cl_device_id device;
 
     public final cl_program program;
     public final cl_context context;
@@ -70,7 +71,7 @@ public class RendererInstance {
         }
 
         // Print out selected device
-        cl_device_id device = devices.get(deviceIndex);
+        device = devices.get(deviceIndex);
         System.out.println("\nUsing: " + getString(device, CL_DEVICE_NAME));
 
         // Initialize the context properties
@@ -105,7 +106,7 @@ public class RendererInstance {
         }
 
         // Build the program
-        program = KernelLoader.loadProgram(context, new cl_device_id[] { device });
+        program = KernelLoader.loadProgram("kernel", "rayTracer.cl", context, new cl_device_id[] { device });
     }
 
     /** Get a string from OpenCL

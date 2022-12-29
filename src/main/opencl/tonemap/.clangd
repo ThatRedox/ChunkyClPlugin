@@ -1,0 +1,2 @@
+CompileFlags:
+    Add: [-cl-std=CL1.2, -cl-ext=all]

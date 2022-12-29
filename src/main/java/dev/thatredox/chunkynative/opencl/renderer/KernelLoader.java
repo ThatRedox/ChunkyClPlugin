@@ -14,9 +14,9 @@ public class KernelLoader {
     /**
      * Load the program in the jar resources.
      */
-    public static cl_program loadProgram(cl_context context, cl_device_id[] devices) {
+    public static cl_program loadProgram(String base, String kernel_name, cl_context context, cl_device_id[] devices) {
         // Load kernel
-        String kernel = readResourceFile("kernel/rayTracer.cl");
+        String kernel = readResourceFile(base + "/" + kernel_name);
         cl_program renderKernel = clCreateProgramWithSource(context, 1, new String[] { kernel }, null, null);
 
         // Search for include headers
@@ -34,7 +34,7 @@ public class KernelLoader {
             HashMap<String, cl_program> newHeaderFiles = new HashMap<>();
             for (Map.Entry<String, cl_program> header : headerFiles.entrySet()) {
                 if (header.getValue() == null && header.getKey().endsWith(".h")) {
-                    String headerFile = readResourceFile("kernel/" + header.getKey());
+                    String headerFile = readResourceFile(base + "/" + header.getKey());
                     header.setValue(clCreateProgramWithSource(context, 1, new String[] {headerFile}, null, null));
                     readHeaders(headerFile, newHeaderFiles);
                 }
