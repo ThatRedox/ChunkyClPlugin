@@ -24,7 +24,7 @@ float idouble_to_float(imposter_double value) {
 
     if (exponent == 0) {
         // Subnormal
-        return sign * as_float((uint) (mantissa >> 30));
+        return sign * 0.0f;
     } else if (exponent == 0x7FF) {
         // NAN or INFINITY
         if (mantissa == 0) {
