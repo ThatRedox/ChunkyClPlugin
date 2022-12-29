@@ -2,7 +2,7 @@ package dev.thatredox.chunkynative.opencl;
 
 import dev.thatredox.chunkynative.opencl.renderer.ClSceneLoader;
 import dev.thatredox.chunkynative.opencl.renderer.RendererInstance;
-import dev.thatredox.chunkynative.opencl.tonemap.GpuGammaCorrectionFilter;
+import dev.thatredox.chunkynative.opencl.tonemap.ImposterCombinationGpuPostProcessingFilter;
 import dev.thatredox.chunkynative.opencl.ui.ChunkyClTab;
 import se.llbit.chunky.Plugin;
 import se.llbit.chunky.main.Chunky;
@@ -57,7 +57,17 @@ public class ChunkyCl implements Plugin {
             return transformed;
         });
 
-        PostProcessingFilters.addPostProcessingFilter(new GpuGammaCorrectionFilter(RendererInstance.get()));
+        addImposterFilter("GAMMA", ImposterCombinationGpuPostProcessingFilter.Filter.GAMMA);
+        addImposterFilter("TONEMAP1", ImposterCombinationGpuPostProcessingFilter.Filter.TONEMAP1);
+        addImposterFilter("TONEMAP2", ImposterCombinationGpuPostProcessingFilter.Filter.ACES);
+        addImposterFilter("TONEMAP3", ImposterCombinationGpuPostProcessingFilter.Filter.HABLE);
+    }
+
+    private static void addImposterFilter(String id, ImposterCombinationGpuPostProcessingFilter.Filter f) {
+        PostProcessingFilters.getPostProcessingFilterFromId(id).ifPresent(filter ->
+                PostProcessingFilters.addPostProcessingFilter(new ImposterCombinationGpuPostProcessingFilter(
+                        filter, "post_processing_filter.cl", "filter", f, RendererInstance.get()
+                )));
     }
 
     public static void main(String[] args) throws Exception {

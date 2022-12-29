@@ -8,6 +8,6 @@ include_directories(include)
 add_executable(tonemap
         opencl.h
         include/double.h
-        include/gamma_correction_filter.cl
+        include/post_processing_filter.cl
         include/rgba.h)
 set_target_properties(tonemap PROPERTIES LINKER_LANGUAGE C)
