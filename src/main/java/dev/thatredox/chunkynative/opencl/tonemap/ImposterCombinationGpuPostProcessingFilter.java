@@ -3,10 +3,8 @@ package dev.thatredox.chunkynative.opencl.tonemap;
 import dev.thatredox.chunkynative.opencl.renderer.RendererInstance;
 import org.jocl.Pointer;
 import org.jocl.Sizeof;
-import org.jocl.cl_kernel;
 import se.llbit.chunky.renderer.postprocessing.PostProcessingFilter;
 
-import java.util.function.Consumer;
 import static org.jocl.CL.*;
 
 public class ImposterCombinationGpuPostProcessingFilter extends ImposterGpuPostProcessingFilter {

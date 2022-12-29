@@ -32,7 +32,7 @@ __kernel void filter(
             break;
         case 2:
             // ACES
-            color = (color * (2.51f * color + 0.3f)) / (color * (2.43f * color + 0.59f) + 0.14f);
+            color = (color * (2.51f * color + 0.03f)) / (color * (2.43f * color + 0.59f) + 0.14f);
             color = clamp(color, (float3)(0), (float3)(1));
             color = pow(color, 1.0 / 2.2);
             break;
