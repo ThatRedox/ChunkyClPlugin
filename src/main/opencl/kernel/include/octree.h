@@ -2,7 +2,7 @@
 #define CHUNKYCLPLUGIN_OCTREE_H
 
 #include "../opencl.h"
-#include "wavefront.h"
+#include "rt.h"
 #include "constants.h"
 #include "primitives.h"
 #include "block.h"
@@ -10,6 +10,7 @@
 
 typedef struct {
     __global const int* treeData;
+    AABB bounds;
     int depth;
 } Octree;
 
@@ -17,6 +18,7 @@ Octree Octree_create(__global const int* treeData, int depth) {
     Octree octree;
     octree.treeData = treeData;
     octree.depth = depth;
+    octree.bounds = AABB_new(0, 1<<depth, 0, 1<<depth, 0, 1<<depth);
     return octree;
 }
 
@@ -38,24 +40,18 @@ int Octree_get(Octree* self, int x, int y, int z) {
     return -data;
 }
 
-bool Octree_octreeIntersect(Octree* self, IntersectionRecord* record, BlockPalette* palette, image2d_array_t atlas, int drawDepth) {
-    Ray* ray = record->ray;
-
-    float3 normalMarch = (float3) (0, 1, 0);
+bool Octree_octreeIntersect(Octree self, BlockPalette palette, int drawDepth, Ray ray, IntersectionRecord* record) {
     float distMarch = 0;
 
-    float3 invD = 1 / ray->direction;
-    float3 offsetD = ray->direction * OFFSET;
+    float3 invD = 1 / ray.direction;
+    float3 offsetD = ray.direction * OFFSET;
 
-    int depth = self->depth;
+    int depth = self.depth;
 
     // Check if we are in bounds
-    int3 lv = intFloorFloat3(ray->origin) >> depth;
-    if ((lv.x != 0) | (lv.y != 0) | (lv.z != 0)) {
+    if (!AABB_inside(self.bounds, ray.origin)) {
         // Attempt to intersect with the octree
-        float octreeSize = 1 << depth;
-        AABB box = AABB_new(0, octreeSize, 0, octreeSize, 0, octreeSize);
-        float dist = AABB_quick_intersect(&box, ray->origin, invD);
+        float dist = AABB_quick_intersect(self.bounds, ray.origin, invD);
         if (isnan(dist) || dist < 0) {
             return false;
         } else {
@@ -65,36 +61,33 @@ bool Octree_octreeIntersect(Octree* self, IntersectionRecord* record, BlockPalet
 
     for (int i = 0; i < drawDepth; i++) {
         if (distMarch > record->distance) {
-            // Theres already been a closer intersection!
+            // There's already been a closer intersection!
             return false;
         }
 
-        float3 pos = ray->origin + (ray->direction * distMarch);
+        float3 pos = ray.origin + ray.direction * distMarch;
         int3 bp = intFloorFloat3(pos + offsetD);
 
         // Check inbounds
-        lv = bp >> depth;
-        if ((lv.x != 0) | (lv.y != 0) | (lv.z != 0))
+        if (!AABB_inside(self.bounds, pos)) {
             return false;
+        }
 
         // Read the octree with depth
         int level = depth;
-        int data = self->treeData[0];
+        int data = self.treeData[0];
+        int3 lv;
         while (data > 0) {
             level--;
             lv = 1 & (bp >> level);
-            data = self->treeData[data + ((lv.x << 2) | (lv.y << 1) | lv.z)];
+            data = self.treeData[data + ((lv.x << 2) | (lv.y << 1) | lv.z)];
         }
         data = -data;
         lv = bp >> level;
 
         // Get block data if there is an intersection
-        if (data != ray->material) {
-            float dist = BlockPalette_intersectBlock(palette, data, bp, record, pos, ray->direction, invD, atlas);
-
-            if (!isnan(dist)) {
-                record->distance = distMarch + dist;
-                record->material = data;
+        if (data != ray.material) {
+            if (BlockPalette_intersectNormalizedBlock(palette, data, bp, ray, record)) {
                 return true;
             }
         }
@@ -103,7 +96,7 @@ bool Octree_octreeIntersect(Octree* self, IntersectionRecord* record, BlockPalet
         AABB box = AABB_new(lv.x << level, (lv.x + 1) << level,
                             lv.y << level, (lv.y + 1) << level,
                             lv.z << level, (lv.z + 1) << level);
-        distMarch += AABB_exit(&box, pos + offsetD, invD) + OFFSET;
+        distMarch += AABB_exit(box, pos + offsetD, invD) + OFFSET;
     }
     return false;
 }

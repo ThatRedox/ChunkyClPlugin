@@ -2,7 +2,7 @@
 #define CHUNKYCLPLUGIN_SKY_H
 
 #include "../opencl.h"
-#include "wavefront.h"
+#include "rt.h"
 #include "textureAtlas.h"
 #include "randomness.h"
 
@@ -39,10 +39,10 @@ Sun Sun_new(__global const int* data) {
     return sun;
 }
 
-bool Sun_intersect(Sun* self, IntersectionRecord* record, image2d_array_t atlas) {
-    float3 direction = record->ray->direction;
+bool Sun_intersect(Sun self, image2d_array_t atlas, Ray ray, MaterialSample* sample) {
+    float3 direction = ray.direction;
 
-    if (!(self->flags & 1) || dot(direction, self->sw) < 0.5f) {
+    if (!(self.flags & 1) || dot(direction, self.sw) < 0.5f) {
         return false;
     }
 
@@ -50,14 +50,14 @@ bool Sun_intersect(Sun* self, IntersectionRecord* record, image2d_array_t atlas)
 
     float width = radius * 4;
     float width2 = width * 2;
-    float a = M_PI_2_F - acos(dot(direction, self->su)) + width;
+    float a = M_PI_2_F - acos(dot(direction, self.su)) + width;
     if (a >= 0 && a < width2) {
-        float b = M_PI_2_F - acos(dot(direction, self->sv)) + width;
+        float b = M_PI_2_F - acos(dot(direction, self.sv)) + width;
         if (b >= 0 && b < width2) {
             float4 color = Atlas_read_uv(a / width2, b / width2, 
-                                         self->texture, self->textureSize, atlas);
-            color *= self->intensity;
-            record->color += color;
+                                         self.texture, self.textureSize, atlas);
+            color *= self.intensity;
+            sample->color += color;
             return true;
         }
     }
@@ -65,8 +65,8 @@ bool Sun_intersect(Sun* self, IntersectionRecord* record, image2d_array_t atlas)
     return false;
 }
 
-bool Sun_sampleDirection(Sun* self, IntersectionRecord* record, unsigned int* state) {
-    if (!(self->flags & 1)) {
+bool Sun_sampleDirection(Sun self, Ray* ray, unsigned int* state) {
+    if (!(self.flags & 1)) {
         return false;
     }
 
@@ -79,30 +79,28 @@ bool Sun_sampleDirection(Sun* self, IntersectionRecord* record, unsigned int* st
     float sin_a = sqrt(1 - cos_a * cos_a);
     float phi = 2 * M_PI_F * x2;
 
-    float3 u = self->su * (cos(phi) * sin_a);
-    float3 v = self->sv * (sin(phi) * sin_a);
-    float3 w = self->sw * cos_a;
+    float3 u = self.su * (cos(phi) * sin_a);
+    float3 v = self.sv * (sin(phi) * sin_a);
+    float3 w = self.sw * cos_a;
 
-    record->ray->direction = u * v;
-    record->ray->direction += w;
-    record->ray->direction = normalize(record->ray->direction);
-
-    record->emittance = fabs(dot(record->ray->direction, record->normal));
+    ray->direction = u * v;
+    ray->direction += w;
+    ray->direction = normalize(ray->direction);
 
     return true;
 }
 
 const sampler_t skySampler = CLK_NORMALIZED_COORDS_TRUE  | CLK_ADDRESS_MIRRORED_REPEAT | CLK_FILTER_LINEAR;
 
-void Sky_intersect(IntersectionRecord* record, image2d_t skyTexture, float skyIntensity) {
-    float3 direction = record->ray->direction;
+void Sky_intersect(image2d_t skyTexture, float skyIntensity, Ray ray, MaterialSample* sample) {
+    float3 direction = ray.direction;
 
     float theta = atan2(direction.z, direction.x);
     theta /= M_PI_F * 2;
     theta = fmod(fmod(theta, 1) + 1, 1);
     float phi = (asin(clamp(direction.y, -1.0f, 1.0f)) + M_PI_2_F) * M_1_PI_F;
 
-    record->color = read_imagef(skyTexture, skySampler, (float2) (theta, phi)) * skyIntensity;
+    sample->color = read_imagef(skyTexture, skySampler, (float2) (theta, phi)) * skyIntensity;
 }
 
 #endif

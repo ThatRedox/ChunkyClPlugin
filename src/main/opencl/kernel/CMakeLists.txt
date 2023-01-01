@@ -20,6 +20,6 @@ add_executable(kernel
         include/sky.h
         include/textureAtlas.h
         include/utils.h
-        include/wavefront.h
+        include/rt.h
 )
 set_target_properties(kernel PROPERTIES LINKER_LANGUAGE C)
