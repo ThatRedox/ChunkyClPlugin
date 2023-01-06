@@ -59,12 +59,10 @@ bool closestIntersect(Scene self, image2d_array_t atlas, Ray ray, IntersectionRe
     return false;
 }
 
-//void intersectSky(IntersectionRecord* record, image2d_array_t atlas, Sun* sun, image2d_t skyTexture, float skyIntensity) {
-//    Sky_intersect(record, skyTexture, skyIntensity);
-//    Sun_intersect(sun, record, atlas);
-//
-//    record->ray->pixel->color += (float3) (record->color.x, record->color.y, record->color.z) * record->ray->pixel->throughput * record->emittance;
-//}
+void intersectSky(image2d_t skyTexture, float skyIntensity, Sun sun, image2d_array_t atlas, Ray ray, MaterialSample* sample) {
+    Sky_intersect(skyTexture, skyIntensity, ray, sample);
+    Sun_intersect(sun, atlas, ray, sample);
+}
 
 Ray diffuseReflection(Ray ray, IntersectionRecord record, unsigned int *state) {
     Ray out = ray;

@@ -101,6 +101,7 @@ void Sky_intersect(image2d_t skyTexture, float skyIntensity, Ray ray, MaterialSa
     float phi = (asin(clamp(direction.y, -1.0f, 1.0f)) + M_PI_2_F) * M_1_PI_F;
 
     sample->color = read_imagef(skyTexture, skySampler, (float2) (theta, phi)) * skyIntensity;
+    sample->emittance = 1.0;
 }
 
 #endif

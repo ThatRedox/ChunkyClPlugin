@@ -69,14 +69,14 @@ bool Octree_octreeIntersect(Octree self, BlockPalette palette, int drawDepth, Ra
         int3 bp = intFloorFloat3(pos + offsetD);
 
         // Check inbounds
-        if (!AABB_inside(self.bounds, pos)) {
+        int3 lv = bp >> depth;
+        if (lv.x != 0 || lv.y != 0 || lv.z != 0) {
             return false;
         }
 
         // Read the octree with depth
         int level = depth;
         int data = self.treeData[0];
-        int3 lv;
         while (data > 0) {
             level--;
             lv = 1 & (bp >> level);

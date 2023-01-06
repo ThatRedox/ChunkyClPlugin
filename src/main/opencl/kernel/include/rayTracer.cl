@@ -102,9 +102,10 @@ __kernel void render(
             throughput *= sample.color.xyz;
             color += sample.emittance * 13.0f * throughput;
             ray = diffuseReflection(ray, record, state);
-//            printf("Ro: %f, %f, %f\t Rd: %f, %f, %f\t N: %f, %f, %f\n", ray.origin.x, ray.origin.y, ray.origin.z, ray.direction.x, ray.direction.y, ray.direction.z, record.normal.x, record.normal.y, record.normal.z);
         } else {
-            // TODO: Intersect with sky
+            intersectSky(skyTexture, *skyIntensity, sun, textureAtlas, ray, &sample);
+            throughput *= sample.color.xyz;
+            color += sample.emittance * throughput;
             break;
         }
     }
@@ -185,11 +186,11 @@ __kernel void preview(
                 break;
         }
 
-        ray.direction = (float3) (
+        ray.direction = normalize((float3) (
             dot(m1s, ray.direction),
             dot(m2s, ray.direction),
             dot(m3s, ray.direction)
-        );
+        ));
         ray.origin = (float3) (
             dot(m1s, ray.origin),
             dot(m2s, ray.origin),
@@ -211,9 +212,10 @@ __kernel void preview(
         float shading = dot(record.normal, (float3) (0.25, 0.866, 0.433));
         shading = fmax(0.3f, shading);
         color = sample.color.xyz * shading;
+    } else {
+        intersectSky(skyTexture, *skyIntensity, sun, textureAtlas, ray, &sample);
+        color = sample.color.xyz;
     }
-    // TODO: Intersect with sky
-    //  intersectSky(&record, textureAtlas, &sun, skyTexture, *skyIntensity);
 
     color = sqrt(color);
     int3 rgb = intFloorFloat3(clamp(color * 255.0f, 0.0f, 255.0f));
