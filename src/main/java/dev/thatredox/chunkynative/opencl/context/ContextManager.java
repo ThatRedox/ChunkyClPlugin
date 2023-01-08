@@ -1,6 +1,8 @@
 package dev.thatredox.chunkynative.opencl.context;
 
+import org.jocl.CLException;
 import org.jocl.cl_program;
+import se.llbit.log.Log;
 
 public class ContextManager {
     public final Device device;
@@ -20,11 +22,15 @@ public class ContextManager {
     }
 
     public static synchronized void setDevice(Device device) {
-        instance = new ContextManager(device);
+        try {
+            instance = new ContextManager(device);
+        } catch (CLException e) {
+            Log.error("Failed to set device", e);
+        }
     }
 
     public static synchronized void reload() {
-        instance = new ContextManager(instance.device);
+        setDevice(instance.device);
     }
 
     public static class Tonemap {

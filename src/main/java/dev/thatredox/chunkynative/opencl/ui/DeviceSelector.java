@@ -1,7 +1,7 @@
 package dev.thatredox.chunkynative.opencl.ui;
 
+import dev.thatredox.chunkynative.opencl.context.ContextManager;
 import dev.thatredox.chunkynative.opencl.context.Device;
-import dev.thatredox.chunkynative.opencl.renderer.RendererInstance;
 import javafx.beans.property.SimpleDoubleProperty;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
@@ -13,14 +13,12 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
-import se.llbit.chunky.PersistentSettings;
-import se.llbit.log.Log;
 
 import java.util.Arrays;
 
-public class GpuSelector extends Stage {
+public class DeviceSelector extends Stage {
 
-    public GpuSelector() {
+    public DeviceSelector() {
         // Build scene
         ClDevice[] devices = Arrays.stream(Device.getDevices()).map(ClDevice::new).toArray(ClDevice[]::new);
 
@@ -61,13 +59,12 @@ public class GpuSelector extends Stage {
 
         Button selectButton = new Button("Select Device");
         selectButton.setDefaultButton(true);
-        selectButton.setTooltip(new Tooltip("Restart Chunky for changes to take effect."));
         selectButton.setOnMouseClicked(event -> {
             if (!table.getSelectionModel().isEmpty()) {
-                PersistentSettings.settings.setInt("clDevice", table.getSelectionModel().getSelectedItem().id);
-                PersistentSettings.save();
                 this.close();
-                Log.warn("Restart Chunky to use the selected device.");
+                Device device = table.getSelectionModel().getSelectedItem().device;
+                Device.setPreferredDevice(device);
+                ContextManager.setDevice(device);
             }
         });
         buttons.getChildren().add(selectButton);
@@ -86,12 +83,14 @@ public class GpuSelector extends Stage {
         public final Device.DeviceType type;
         public final double computeCapacity;
         public final int id;
+        public final Device device;
 
         public ClDevice(Device device) {
-            name = device.name();
-            type = device.type();
-            computeCapacity = device.computeCapacity();
-            id = device.id;
+            this.name = device.name();
+            this.type = device.type();
+            this.computeCapacity = device.computeCapacity();
+            this.id = device.id;
+            this.device = device;
         }
     }
 }

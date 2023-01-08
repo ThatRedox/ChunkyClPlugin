@@ -18,7 +18,7 @@ public class ChunkyClTab implements RenderControlsTab {
 
         Button deviceSelectorButton = new Button("Select OpenCL Device");
         deviceSelectorButton.setOnMouseClicked(event -> {
-            GpuSelector selector = new GpuSelector();
+            DeviceSelector selector = new DeviceSelector();
             selector.show();
         });
         box.getChildren().add(deviceSelectorButton);

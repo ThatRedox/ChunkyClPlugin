@@ -139,6 +139,7 @@ public class Device {
      */
     public static void setPreferredDevice(Device device) {
         PersistentSettings.settings.setInt("clDevice", device.id);
+        PersistentSettings.save();
     }
 
     /**
