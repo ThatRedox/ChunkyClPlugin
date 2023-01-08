@@ -1,7 +1,7 @@
-package dev.thatredox.chunkynative.opencl;
+package dev.thatredox.chunkynative.opencl.renderer;
 
+import dev.thatredox.chunkynative.opencl.context.ContextManager;
 import dev.thatredox.chunkynative.opencl.renderer.ClSceneLoader;
-import dev.thatredox.chunkynative.opencl.renderer.RendererInstance;
 import dev.thatredox.chunkynative.opencl.renderer.scene.*;
 import dev.thatredox.chunkynative.opencl.util.ClIntBuffer;
 import dev.thatredox.chunkynative.opencl.util.ClMemory;
@@ -10,18 +10,14 @@ import se.llbit.chunky.renderer.DefaultRenderManager;
 import se.llbit.chunky.renderer.Renderer;
 import se.llbit.chunky.renderer.ResetReason;
 import se.llbit.chunky.renderer.scene.Scene;
+import se.llbit.util.Mutable;
+
 import java.util.function.BooleanSupplier;
 
 import static org.jocl.CL.*;
 
 public class OpenClPreviewRenderer implements Renderer {
     private BooleanSupplier postRender = () -> true;
-
-    private final ClSceneLoader sceneLoader;
-
-    public OpenClPreviewRenderer(ClSceneLoader sceneLoader) {
-        this.sceneLoader = sceneLoader;
-    }
 
     @Override
     public String getId() {
@@ -45,23 +41,24 @@ public class OpenClPreviewRenderer implements Renderer {
 
     @Override
     public void render(DefaultRenderManager manager) throws InterruptedException {
+        ContextManager context = ContextManager.get();
+        ClSceneLoader sceneLoader = context.sceneLoader;
+
         cl_event[] renderEvent = new cl_event[1];
         Scene scene = manager.bufferedScene;
-
-        RendererInstance instance = RendererInstance.get();
         int[] imageData = scene.getBackBuffer().data;
 
         // Ensure the scene is loaded
         sceneLoader.ensureLoad(manager.bufferedScene);
 
         // Load the kernel
-        cl_kernel kernel = clCreateKernel(instance.program, "preview", null);
+        cl_kernel kernel = clCreateKernel(context.renderer.kernel, "preview", null);
 
-        ClCamera camera = new ClCamera(scene);
-        ClMemory buffer = new ClMemory(clCreateBuffer(instance.context, CL_MEM_WRITE_ONLY,
+        ClCamera camera = new ClCamera(scene, context.context);
+        ClMemory buffer = new ClMemory(clCreateBuffer(context.context.context, CL_MEM_WRITE_ONLY,
                 (long) Sizeof.cl_int * imageData.length, null, null));
-        ClIntBuffer clWidth = new ClIntBuffer(scene.width);
-        ClIntBuffer clHeight = new ClIntBuffer(scene.height);
+        ClIntBuffer clWidth = new ClIntBuffer(scene.width, context.context);
+        ClIntBuffer clHeight = new ClIntBuffer(scene.height, context.context);
 
         try (ClCamera ignored1 = camera;
              ClMemory ignored2 = buffer;
@@ -98,11 +95,11 @@ public class OpenClPreviewRenderer implements Renderer {
             clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(clWidth.get()));
             clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(clHeight.get()));
             clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(buffer.get()));
-            clEnqueueNDRangeKernel(instance.commandQueue, kernel, 1, null,
+            clEnqueueNDRangeKernel(context.context.queue, kernel, 1, null,
                     new long[]{imageData.length}, null, 0, null,
                     renderEvent[0]);
 
-            clEnqueueReadBuffer(instance.commandQueue, buffer.get(), CL_TRUE, 0,
+            clEnqueueReadBuffer(context.context.queue, buffer.get(), CL_TRUE, 0,
                     (long) Sizeof.cl_int * imageData.length, Pointer.to(imageData),
                     1, renderEvent, null);
 
@@ -121,7 +118,7 @@ public class OpenClPreviewRenderer implements Renderer {
 
     @Override
     public void sceneReset(DefaultRenderManager manager, ResetReason reason, int resetCount) {
-        sceneLoader.load(resetCount, reason, manager.bufferedScene);
+        ContextManager.get().sceneLoader.load(resetCount, reason, manager.bufferedScene);
     }
 }
 

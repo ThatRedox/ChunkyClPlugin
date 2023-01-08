@@ -1,6 +1,6 @@
 package dev.thatredox.chunkynative.opencl.renderer.scene;
 
-import dev.thatredox.chunkynative.opencl.renderer.RendererInstance;
+import dev.thatredox.chunkynative.opencl.context.ClContext;
 import dev.thatredox.chunkynative.opencl.util.ClMemory;
 import dev.thatredox.chunkynative.util.Reflection;
 import dev.thatredox.chunkynative.util.Util;
@@ -28,11 +28,12 @@ public class ClCamera implements AutoCloseable {
     public final boolean needGenerate;
 
     private final Scene scene;
+    private final ClContext context;
 
 
-    public ClCamera(Scene scene) {
-        RendererInstance instance = RendererInstance.get();
+    public ClCamera(Scene scene, ClContext context) {
         this.scene = scene;
+        this.context = context;
         Camera camera = scene.camera();
 
         int projType = -1;
@@ -57,14 +58,14 @@ public class ClCamera implements AutoCloseable {
 
         needGenerate = projType == -1;
 
-        projectorType = new ClMemory(clCreateBuffer(instance.context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+        projectorType = new ClMemory(clCreateBuffer(context.context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
                 Sizeof.cl_int, Pointer.to(new int[] {projType}), null));
 
         if (needGenerate) {
-            cameraSettings = new ClMemory(clCreateBuffer(instance.context, CL_MEM_READ_ONLY,
+            cameraSettings = new ClMemory(clCreateBuffer(context.context, CL_MEM_READ_ONLY,
                     (long) Sizeof.cl_float * scene.width * scene.height * 3 * 2, null, null));
         } else {
-            cameraSettings = new ClMemory(clCreateBuffer(instance.context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+            cameraSettings = new ClMemory(clCreateBuffer(context.context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
                     (long) Sizeof.cl_float * settings.size(), Pointer.to(settings.toFloatArray()), null));
         }
     }
@@ -97,8 +98,7 @@ public class ClCamera implements AutoCloseable {
         })).join();
 
         if (renderLock != null) renderLock.lock();
-        RendererInstance instance = RendererInstance.get();
-        clEnqueueWriteBuffer(instance.commandQueue, this.cameraSettings.get(), CL_TRUE, 0,
+        clEnqueueWriteBuffer(context.queue, this.cameraSettings.get(), CL_TRUE, 0,
                 (long) Sizeof.cl_float * rays.length, Pointer.to(rays), 0,
                 null, null);
         if (renderLock != null) renderLock.unlock();

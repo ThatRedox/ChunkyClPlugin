@@ -11,8 +11,11 @@ import se.llbit.chunky.ui.render.RenderControlsTab;
 
 public class ChunkyClTab implements RenderControlsTab {
     protected final VBox box;
+    private Scene scene;
 
-    public ChunkyClTab() {
+    public ChunkyClTab(Scene scene) {
+        this.scene = scene;
+
         box = new VBox(10.0);
         box.setPadding(new Insets(10.0));
 
@@ -27,6 +30,7 @@ public class ChunkyClTab implements RenderControlsTab {
             Button reloadButton = new Button("Reload!");
             reloadButton.setOnMouseClicked(event -> {
                 ContextManager.reload();
+                scene.refresh();
             });
             box.getChildren().add(reloadButton);
         }
@@ -34,7 +38,7 @@ public class ChunkyClTab implements RenderControlsTab {
 
     @Override
     public void update(Scene scene) {
-
+        this.scene = scene;
     }
 
     @Override

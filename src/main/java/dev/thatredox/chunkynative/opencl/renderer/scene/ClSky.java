@@ -3,7 +3,7 @@ package dev.thatredox.chunkynative.opencl.renderer.scene;
 
 import static org.jocl.CL.*;
 
-import dev.thatredox.chunkynative.opencl.renderer.RendererInstance;
+import dev.thatredox.chunkynative.opencl.context.ClContext;
 import dev.thatredox.chunkynative.opencl.util.ClMemory;
 import org.apache.commons.math3.util.FastMath;
 import org.jocl.*;
@@ -19,13 +19,13 @@ import java.lang.reflect.Field;
 public class ClSky implements AutoCloseable {
     public final ClMemory skyTexture;
     public final ClMemory skyIntensity;
+    private final ClContext context;
 
-    public ClSky(Scene scene) {
+    public ClSky(Scene scene, ClContext context) {
+        this.context = context;
         int textureResolution = getTextureResolution(scene);
 
-        RendererInstance instance = RendererInstance.get();
-
-        this.skyIntensity = new ClMemory(clCreateBuffer(instance.context,
+        this.skyIntensity = new ClMemory(clCreateBuffer(context.context,
                 CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, Sizeof.cl_float,
                 Pointer.to(new float[] {(float) scene.sun().getIntensity()}), null));
 
@@ -57,7 +57,7 @@ public class ClSky implements AutoCloseable {
             }
         }
 
-        this.skyTexture = new ClMemory(clCreateImage(instance.context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+        this.skyTexture = new ClMemory(clCreateImage(context.context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
                 fmt, desc, Pointer.to(texture), null));
     }
 

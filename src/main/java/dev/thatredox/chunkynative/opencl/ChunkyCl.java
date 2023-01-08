@@ -1,7 +1,9 @@
 package dev.thatredox.chunkynative.opencl;
 
+import dev.thatredox.chunkynative.opencl.context.ContextManager;
 import dev.thatredox.chunkynative.opencl.renderer.ClSceneLoader;
-import dev.thatredox.chunkynative.opencl.renderer.RendererInstance;
+import dev.thatredox.chunkynative.opencl.renderer.OpenClPathTracingRenderer;
+import dev.thatredox.chunkynative.opencl.renderer.OpenClPreviewRenderer;
 import dev.thatredox.chunkynative.opencl.tonemap.ChunkyImposterGpuPostProcessingFilter;
 import dev.thatredox.chunkynative.opencl.ui.ChunkyClTab;
 import se.llbit.chunky.Plugin;
@@ -14,6 +16,7 @@ import se.llbit.chunky.ui.ChunkyFx;
 import se.llbit.chunky.ui.render.RenderControlsTab;
 import se.llbit.chunky.ui.render.RenderControlsTabTransformer;
 import se.llbit.log.Log;
+import se.llbit.util.Mutable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -34,26 +37,22 @@ public class ChunkyCl implements Plugin {
 
         // Initialize the renderer now for easier debugging
         try {
-            RendererInstance.get();
+            ContextManager.get();
         } catch (UnsatisfiedLinkError e) {
             Log.error("Failed to load ChunkyCL. Could not load OpenCL native library.", e);
             return;
         }
 
-        ClSceneLoader sceneLoader = new ClSceneLoader();
-        Chunky.addRenderer(new OpenClPathTracingRenderer(sceneLoader));
-        Chunky.addPreviewRenderer(new OpenClPreviewRenderer(sceneLoader));
+        Chunky.addRenderer(new OpenClPathTracingRenderer());
+        Chunky.addPreviewRenderer(new OpenClPreviewRenderer());
 
         RenderControlsTabTransformer prev = chunky.getRenderControlsTabTransformer();
         chunky.setRenderControlsTabTransformer(tabs -> {
             // First, call the previous transformer (this allows other plugins to work).
             List<RenderControlsTab> transformed = new ArrayList<>(prev.apply(tabs));
 
-            // Get the scene
-            RenderController controller = chunky.getRenderController();
-
             // Add the new tab
-            transformed.add(new ChunkyClTab());
+            transformed.add(new ChunkyClTab(chunky.getSceneManager().getScene()));
 
             return transformed;
         });

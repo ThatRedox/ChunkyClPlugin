@@ -1,7 +1,7 @@
 package dev.thatredox.chunkynative.opencl.util;
 
 import dev.thatredox.chunkynative.common.export.Packer;
-import dev.thatredox.chunkynative.opencl.renderer.RendererInstance;
+import dev.thatredox.chunkynative.opencl.context.ClContext;
 
 import static org.jocl.CL.*;
 
@@ -10,34 +10,35 @@ import org.jocl.*;
 
 public class ClIntBuffer implements AutoCloseable {
     private final ClMemory buffer;
+    private final ClContext context;
 
-    public ClIntBuffer(int[] buffer, int length) {
+    public ClIntBuffer(int[] buffer, int length, ClContext context) {
         if (length == 0) {
             buffer = new int[1];
             length = 1;
         }
         assert buffer.length >= length;
 
-        RendererInstance instance = RendererInstance.get();
+        this.context = context;
         this.buffer = new ClMemory(
-                clCreateBuffer(instance.context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+                clCreateBuffer(context.context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
                 (long) Sizeof.cl_uint * length, Pointer.to(buffer), null));
     }
 
-    public ClIntBuffer(int[] buffer) {
-        this(buffer, buffer.length);
+    public ClIntBuffer(int[] buffer, ClContext context) {
+        this(buffer, buffer.length, context);
     }
 
-    public ClIntBuffer(IntArrayList buffer) {
-        this(buffer.elements(), buffer.size());
+    public ClIntBuffer(IntArrayList buffer, ClContext context) {
+        this(buffer.elements(), buffer.size(), context);
     }
 
-    public ClIntBuffer(Packer packable) {
-        this(packable.pack());
+    public ClIntBuffer(Packer packable, ClContext context) {
+        this(packable.pack(), context);
     }
 
-    public ClIntBuffer(int value) {
-        this(new int[] {value});
+    public ClIntBuffer(int value, ClContext context) {
+        this(new int[] {value}, context);
     }
 
     public cl_mem get() {
@@ -45,8 +46,7 @@ public class ClIntBuffer implements AutoCloseable {
     }
 
     public void set(int[] values, int offset) {
-        RendererInstance instance = RendererInstance.get();
-        clEnqueueWriteBuffer(instance.commandQueue, this.get(), CL_TRUE, (long) Sizeof.cl_uint * offset,
+        clEnqueueWriteBuffer(context.queue, this.get(), CL_TRUE, (long) Sizeof.cl_uint * offset,
                 (long) Sizeof.cl_uint * values.length, Pointer.to(values),
                 0, null, null);
     }
