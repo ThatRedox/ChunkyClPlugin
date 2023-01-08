@@ -1,5 +1,6 @@
 package dev.thatredox.chunkynative.opencl.ui;
 
+import dev.thatredox.chunkynative.opencl.context.Device;
 import dev.thatredox.chunkynative.opencl.renderer.RendererInstance;
 import javafx.beans.property.SimpleDoubleProperty;
 import javafx.beans.property.SimpleStringProperty;
@@ -12,8 +13,6 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
-import org.jocl.CL;
-import org.jocl.cl_device_id;
 import se.llbit.chunky.PersistentSettings;
 import se.llbit.log.Log;
 
@@ -23,11 +22,7 @@ public class GpuSelector extends Stage {
 
     public GpuSelector() {
         // Build scene
-        RendererInstance instance = RendererInstance.get();
-        ClDevice[] devices = new ClDevice[instance.devices.length];
-        for (int i = 0; i < devices.length; i++) {
-            devices[i] = new ClDevice(instance.devices[i], i);
-        }
+        ClDevice[] devices = Arrays.stream(Device.getDevices()).map(ClDevice::new).toArray(ClDevice[]::new);
 
         TableView<ClDevice> table = new TableView<>();
         table.setPrefWidth(500);
@@ -38,7 +33,7 @@ public class GpuSelector extends Stage {
         nameCol.setCellValueFactory(dev -> new SimpleStringProperty(dev.getValue().name));
 
         TableColumn<ClDevice, String> typeCol = new TableColumn<>("Type");
-        typeCol.setCellValueFactory(dev -> new SimpleStringProperty(dev.getValue().getTypeString()));
+        typeCol.setCellValueFactory(dev -> new SimpleStringProperty(dev.getValue().type.toString()));
 
         TableColumn<ClDevice, Double> computeCol = new TableColumn<>("Compute Capacity");
         computeCol.setCellValueFactory(dev -> new SimpleDoubleProperty(dev.getValue().computeCapacity).asObject());
@@ -69,7 +64,7 @@ public class GpuSelector extends Stage {
         selectButton.setTooltip(new Tooltip("Restart Chunky for changes to take effect."));
         selectButton.setOnMouseClicked(event -> {
             if (!table.getSelectionModel().isEmpty()) {
-                PersistentSettings.settings.setInt("clDevice", table.getSelectionModel().getSelectedItem().index);
+                PersistentSettings.settings.setInt("clDevice", table.getSelectionModel().getSelectedItem().id);
                 PersistentSettings.save();
                 this.close();
                 Log.warn("Restart Chunky to use the selected device.");
@@ -87,40 +82,16 @@ public class GpuSelector extends Stage {
     }
 
     private static class ClDevice {
-        protected final String name;
-        protected final long type;
-        protected final double computeCapacity;
-        protected final int index;
+        public final String name;
+        public final Device.DeviceType type;
+        public final double computeCapacity;
+        public final int id;
 
-        public ClDevice(cl_device_id device, int index) {
-            type = RendererInstance.getLongs(device, CL.CL_DEVICE_TYPE, 1)[0];
-
-            long computeScaler = 1;
-            if ((type & CL.CL_DEVICE_TYPE_GPU) != 0) {
-                computeScaler = 32;
-            }
-
-            long computeSpeed = (long) RendererInstance.getInts(device, CL.CL_DEVICE_MAX_CLOCK_FREQUENCY, 1)[0] *
-                                (long) RendererInstance.getInts(device, CL.CL_DEVICE_MAX_COMPUTE_UNITS, 1)[0] *
-                                computeScaler;
-            name = RendererInstance.getString(device, CL.CL_DEVICE_NAME);
-            computeCapacity = computeSpeed / 1000.0;  // Approximate GFlops
-            this.index = index;
-        }
-
-        public String getTypeString() {
-            switch ((int) type) {
-                case (int) CL.CL_DEVICE_TYPE_CPU:
-                    return "CPU";
-                case (int) CL.CL_DEVICE_TYPE_GPU:
-                    return "GPU";
-                case (int) CL.CL_DEVICE_TYPE_ACCELERATOR:
-                    return "Accelerator";
-                case (int) CL.CL_DEVICE_TYPE_CUSTOM:
-                    return "Custom";
-                default:
-                    return String.format("Unknown (%d)", type);
-            }
+        public ClDevice(Device device) {
+            name = device.name();
+            type = device.type();
+            computeCapacity = device.computeCapacity();
+            id = device.id;
         }
     }
 }

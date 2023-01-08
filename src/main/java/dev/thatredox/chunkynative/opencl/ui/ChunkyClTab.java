@@ -1,5 +1,7 @@
 package dev.thatredox.chunkynative.opencl.ui;
 
+import dev.thatredox.chunkynative.opencl.context.ContextManager;
+import dev.thatredox.chunkynative.opencl.context.KernelLoader;
 import javafx.geometry.Insets;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
@@ -20,6 +22,14 @@ public class ChunkyClTab implements RenderControlsTab {
             selector.show();
         });
         box.getChildren().add(deviceSelectorButton);
+
+        if (KernelLoader.canHotReload()) {
+            Button reloadButton = new Button("Reload!");
+            reloadButton.setOnMouseClicked(event -> {
+                ContextManager.reload();
+            });
+            box.getChildren().add(reloadButton);
+        }
     }
 
     @Override

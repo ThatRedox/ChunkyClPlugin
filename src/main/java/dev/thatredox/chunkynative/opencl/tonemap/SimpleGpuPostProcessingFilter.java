@@ -1,7 +1,6 @@
 package dev.thatredox.chunkynative.opencl.tonemap;
 
-import dev.thatredox.chunkynative.opencl.renderer.KernelLoader;
-import dev.thatredox.chunkynative.opencl.renderer.RendererInstance;
+import dev.thatredox.chunkynative.opencl.context.ContextManager;
 import dev.thatredox.chunkynative.opencl.util.ClMemory;
 import org.jocl.*;
 import se.llbit.chunky.renderer.postprocessing.PostProcessingFilter;
@@ -13,36 +12,32 @@ import java.util.function.Consumer;
 import static org.jocl.CL.*;
 import static org.jocl.CL.clReleaseKernel;
 
-public class GpuPostProcessingFilter implements PostProcessingFilter {
-    private final cl_program filter;
-    private final RendererInstance instance;
-    private final String entryPoint;
-    private final Consumer<cl_kernel> argumentConsumer;
-
+public class SimpleGpuPostProcessingFilter implements PostProcessingFilter {
     private final String name;
     private final String description;
     private final String id;
 
-    public GpuPostProcessingFilter(String name, String description, String id, String kernelName, String entryPoint,
-                                   Consumer<cl_kernel> argumentConsumer, RendererInstance instance) {
+    private final String entryPoint;
+    private final Consumer<cl_kernel> argumentConsumer;
+
+    public SimpleGpuPostProcessingFilter(String name, String description, String id,
+                                         String entryPoint, Consumer<cl_kernel> argumentConsumer) {
         this.name = name;
         this.description = description;
         this.id = id;
 
         this.argumentConsumer = argumentConsumer;
-        this.instance = instance;
         this.entryPoint = entryPoint;
-        this.filter = KernelLoader.loadProgram("tonemap", kernelName, instance.context,
-                new cl_device_id[] { instance.device });
     }
 
     @Override
     public void processFrame(int width, int height, double[] input, BitmapImage output, double exposure, TaskTracker.Task task) {
-        cl_kernel kernel = clCreateKernel(filter, entryPoint, null);
+        ContextManager ctx = ContextManager.get();
+        cl_kernel kernel = clCreateKernel(ctx.tonemap.simpleFilter, entryPoint, null);
         try (
-                ClMemory inputMem = new ClMemory(clCreateBuffer(instance.context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+                ClMemory inputMem = new ClMemory(clCreateBuffer(ctx.context.context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
                         (long) Sizeof.cl_ulong * input.length, Pointer.to(input), null));
-                ClMemory outputMem = new ClMemory(clCreateBuffer(instance.context, CL_MEM_WRITE_ONLY,
+                ClMemory outputMem = new ClMemory(clCreateBuffer(ctx.context.context, CL_MEM_WRITE_ONLY,
                         (long) Sizeof.cl_int * output.data.length, null, null));
         ) {
             clSetKernelArg(kernel, 0, Sizeof.cl_int, Pointer.to(new int[] {width}));
@@ -53,10 +48,10 @@ public class GpuPostProcessingFilter implements PostProcessingFilter {
             argumentConsumer.accept(kernel);
 
             cl_event event = new cl_event();
-            clEnqueueNDRangeKernel(instance.commandQueue, kernel, 1, null,
+            clEnqueueNDRangeKernel(ctx.context.queue, kernel, 1, null,
                     new long[] {output.data.length}, null, 0, null,
                     event);
-            clEnqueueReadBuffer(instance.commandQueue, outputMem.get(), CL_TRUE, 0,
+            clEnqueueReadBuffer(ctx.context.queue, outputMem.get(), CL_TRUE, 0,
                     (long) Sizeof.cl_int * output.data.length, Pointer.to(output.data),
                     1, new cl_event[] {event}, null);
         } finally {

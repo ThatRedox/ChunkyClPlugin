@@ -2,7 +2,7 @@ package dev.thatredox.chunkynative.opencl;
 
 import dev.thatredox.chunkynative.opencl.renderer.ClSceneLoader;
 import dev.thatredox.chunkynative.opencl.renderer.RendererInstance;
-import dev.thatredox.chunkynative.opencl.tonemap.ImposterCombinationGpuPostProcessingFilter;
+import dev.thatredox.chunkynative.opencl.tonemap.ChunkyImposterGpuPostProcessingFilter;
 import dev.thatredox.chunkynative.opencl.ui.ChunkyClTab;
 import se.llbit.chunky.Plugin;
 import se.llbit.chunky.main.Chunky;
@@ -22,7 +22,8 @@ import java.util.List;
  * This plugin changes the Chunky path tracing renderer to a gpu based path tracer.
  */
 public class ChunkyCl implements Plugin {
-    @Override public void attach(Chunky chunky) {
+    @Override
+    public void attach(Chunky chunky) {
         // Check if we have block models
         try {
             Class<?> test = BlockModel.class;
@@ -57,17 +58,16 @@ public class ChunkyCl implements Plugin {
             return transformed;
         });
 
-        addImposterFilter("GAMMA", ImposterCombinationGpuPostProcessingFilter.Filter.GAMMA);
-        addImposterFilter("TONEMAP1", ImposterCombinationGpuPostProcessingFilter.Filter.TONEMAP1);
-        addImposterFilter("TONEMAP2", ImposterCombinationGpuPostProcessingFilter.Filter.ACES);
-        addImposterFilter("TONEMAP3", ImposterCombinationGpuPostProcessingFilter.Filter.HABLE);
+        addImposterFilter("GAMMA", ChunkyImposterGpuPostProcessingFilter.Filter.GAMMA);
+        addImposterFilter("TONEMAP1", ChunkyImposterGpuPostProcessingFilter.Filter.TONEMAP1);
+        addImposterFilter("TONEMAP2", ChunkyImposterGpuPostProcessingFilter.Filter.ACES);
+        addImposterFilter("TONEMAP3", ChunkyImposterGpuPostProcessingFilter.Filter.HABLE);
     }
 
-    private static void addImposterFilter(String id, ImposterCombinationGpuPostProcessingFilter.Filter f) {
+    private static void addImposterFilter(String id, ChunkyImposterGpuPostProcessingFilter.Filter f) {
         PostProcessingFilters.getPostProcessingFilterFromId(id).ifPresent(filter ->
-                PostProcessingFilters.addPostProcessingFilter(new ImposterCombinationGpuPostProcessingFilter(
-                        filter, "post_processing_filter.cl", "filter", f, RendererInstance.get()
-                )));
+                PostProcessingFilters.addPostProcessingFilter(new ChunkyImposterGpuPostProcessingFilter(filter, f))
+        );
     }
 
     public static void main(String[] args) throws Exception {
