@@ -45,6 +45,8 @@ Some settings have been added to improve render performance.
 ## Development
 This project is setup to work with IntelliJ and CLion. The base directory is intended to be opened in IntelliJ and the `src/main/opencl` directory in CLion.
 
+For hot reloading, add `-DchunkyClHotReload="<src/main/opencl directory>"` as a JVM option.
+
 ## Copyright & License
 ChunkyCL is Copyright (c) 2021 - 2022, [ThatRedox](https://github.com/ThatRedox) and [Contributors](https://github.com/ThatRedox/ChunkyClPlugin/graphs/contributors).
 
