@@ -144,7 +144,15 @@ float3 _Material_diffuseReflection(IntersectionRecord record, Random random) {
     );
 }
 
-float3 Material_samplePdf(Material self, IntersectionRecord record, MaterialSample sample, Ray ray, Random random) {
+typedef struct {
+    float3 direction;
+    float3 spectrum;
+    bool specular;
+} MaterialPdfSample;
+
+MaterialPdfSample Material_samplePdf(Material self, IntersectionRecord record, MaterialSample sample, Ray ray, Random random) {
+    MaterialPdfSample out;
+
     if (sample.specular > 0 && sample.specular > Random_nextFloat(random)) {
         // Specular reflection
         float3 direction = ray.direction + (record.normal * (-2 * dot(ray.direction, record.normal)));
@@ -160,11 +168,16 @@ float3 Material_samplePdf(Material self, IntersectionRecord record, MaterialSamp
             direction += factor * record.normal;
         }
 
-        direction = normalize(direction);
-        return direction;
+        out.direction = normalize(direction);
+        out.spectrum = 1;
+        out.specular = true;
+        return out;
     } else {
         // Diffuse reflection
-        return _Material_diffuseReflection(record, random);
+        out.direction = _Material_diffuseReflection(record, random);
+        out.spectrum = sample.color.xyz;
+        out.specular = false;
+        return out;
     }
 }
 

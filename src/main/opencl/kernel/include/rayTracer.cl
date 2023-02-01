@@ -100,14 +100,13 @@ __kernel void render(
         Material material;
 
         if (closestIntersect(scene, textureAtlas, ray, &record, &sample, &material)) {
-            throughput *= sample.color.xyz;
-            color += sample.color.xyz * sample.emittance * 13.0f * throughput;
+            MaterialPdfSample pdfSample = Material_samplePdf(material, record, sample, ray, random);
+            throughput *= pdfSample.spectrum;
+            color += pdfSample.spectrum * sample.emittance * 13.0f * throughput;
 
-            Ray next = ray;
-            next.direction = Material_samplePdf(material, record, sample, ray, random);
-            next.origin = ray.origin + ray.direction * (record.distance - OFFSET);
-            next.origin += next.direction * OFFSET;
-            ray = next;
+            ray.origin = ray.origin + ray.direction * (record.distance - OFFSET);
+            ray.direction = pdfSample.direction;
+            ray.origin += ray.direction * OFFSET;
         } else {
             intersectSky(skyTexture, *skyIntensity, sun, textureAtlas, ray, &sample);
             throughput *= sample.color.xyz;
