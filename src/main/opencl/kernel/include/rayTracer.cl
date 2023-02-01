@@ -97,11 +97,17 @@ __kernel void render(
     for (int depth = 0; depth < 5; depth++) {
         IntersectionRecord record = IntersectionRecord_new();
         MaterialSample sample;
+        Material material;
 
-        if (closestIntersect(scene, textureAtlas, ray, &record, &sample)) {
+        if (closestIntersect(scene, textureAtlas, ray, &record, &sample, &material)) {
             throughput *= sample.color.xyz;
-            color += sample.emittance * 13.0f * throughput;
-            ray = diffuseReflection(ray, record, state);
+            color += sample.color.xyz * sample.emittance * 13.0f * throughput;
+
+            Ray next = ray;
+            next.direction = Material_samplePdf(material, record, sample, ray, state);
+            next.origin = ray.origin + ray.direction * (record.distance - OFFSET);
+            next.origin += next.direction * OFFSET;
+            ray = next;
         } else {
             intersectSky(skyTexture, *skyIntensity, sun, textureAtlas, ray, &sample);
             throughput *= sample.color.xyz;
@@ -204,11 +210,12 @@ __kernel void preview(
 
     IntersectionRecord record = IntersectionRecord_new();
     MaterialSample sample;
+    Material material;
     ray.material = 0;
 
     float3 color = (float3) (0.0);
 
-    if (closestIntersect(scene, textureAtlas, ray, &record, &sample)) {
+    if (closestIntersect(scene, textureAtlas, ray, &record, &sample, &material)) {
         float shading = dot(record.normal, (float3) (0.25, 0.866, 0.433));
         shading = fmax(0.3f, shading);
         color = sample.color.xyz * shading;

@@ -8,6 +8,7 @@
 #include "textureAtlas.h"
 #include "utils.h"
 #include "constants.h"
+#include "randomness.h"
 
 typedef struct {
     __global const int* palette;
@@ -79,6 +80,54 @@ bool Material_sample(Material self, image2d_array_t atlas, float2 uv, MaterialSa
         sample->emittance = (self.normal_emittance & 0xFF) / 255.0;
     
     return true;
+}
+
+float3 Material_samplePdf(Material self, IntersectionRecord record, MaterialSample sample, Ray ray, unsigned int *state) {
+    // TODO Other reflection modes
+
+    // Diffuse reflection
+    float x1 = Random_nextFloat(state);
+    float x2 = Random_nextFloat(state);
+    float r = sqrt(x1);
+    float theta = 2 * M_PI_F * x2;
+
+    float tx = r * cos(theta);
+    float ty = r * sin(theta);
+    float tz = sqrt(1 - x1);
+
+    // Transform from tangent space to world space
+    float xx, xy, xz;
+    float ux, uy, uz;
+    float vx, vy, vz;
+
+    if (fabs(record.normal.x) > 0.1) {
+        xx = 0;
+        xy = 1;
+    } else {
+        xx = 1;
+        xy = 0;
+    }
+    xz = 0;
+
+    ux = xy * record.normal.z - xz * record.normal.y;
+    uy = xz * record.normal.x - xx * record.normal.z;
+    uz = xx * record.normal.y - xy * record.normal.x;
+
+    r = 1 / sqrt(ux*ux + uy*uy + uz*uz);
+
+    ux *= r;
+    uy *= r;
+    uz *= r;
+
+    vx = uy * record.normal.z - uz * record.normal.y;
+    vy = uz * record.normal.x - ux * record.normal.z;
+    vz = ux * record.normal.y - uy * record.normal.x;
+
+    return (float3) (
+        ux * tx + vx * ty + record.normal.x * tz,
+        uy * tx + vy * ty + record.normal.y * tz,
+        uz * tx + vz * ty + record.normal.z * tz
+    );
 }
 
 #endif
