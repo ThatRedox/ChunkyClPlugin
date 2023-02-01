@@ -1,9 +1,9 @@
-package dev.thatredox.chunkynative.opencl;
+package dev.thatredox.chunkynative.opencl.renderer;
 
 import static org.jocl.CL.*;
 
+import dev.thatredox.chunkynative.opencl.context.ContextManager;
 import dev.thatredox.chunkynative.opencl.renderer.ClSceneLoader;
-import dev.thatredox.chunkynative.opencl.renderer.RendererInstance;
 import dev.thatredox.chunkynative.opencl.renderer.scene.*;
 import dev.thatredox.chunkynative.opencl.util.ClIntBuffer;
 import dev.thatredox.chunkynative.opencl.util.ClMemory;
@@ -12,6 +12,7 @@ import org.jocl.*;
 import se.llbit.chunky.main.Chunky;
 import se.llbit.chunky.renderer.*;
 import se.llbit.chunky.renderer.scene.Scene;
+import se.llbit.util.Mutable;
 import se.llbit.util.TaskTracker;
 
 import java.util.Arrays;
@@ -23,12 +24,6 @@ import java.util.function.BooleanSupplier;
 public class OpenClPathTracingRenderer implements Renderer {
 
     private BooleanSupplier postRender = () -> true;
-
-    private final ClSceneLoader sceneLoader;
-
-    public OpenClPathTracingRenderer(ClSceneLoader sceneLoader) {
-        this.sceneLoader = sceneLoader;
-    }
 
     @Override
     public String getId() {
@@ -52,7 +47,9 @@ public class OpenClPathTracingRenderer implements Renderer {
 
     @Override
     public void render(DefaultRenderManager manager) throws InterruptedException {
-        RendererInstance instance = RendererInstance.get();
+        ContextManager context = ContextManager.get();
+        ClSceneLoader sceneLoader = context.sceneLoader;
+
         ReentrantLock renderLock = new ReentrantLock();
         cl_event[] renderEvent = new cl_event[1];
         Scene scene = manager.bufferedScene;
@@ -64,18 +61,18 @@ public class OpenClPathTracingRenderer implements Renderer {
         sceneLoader.ensureLoad(manager.bufferedScene);
 
         // Load the kernel
-        cl_kernel kernel = clCreateKernel(instance.program, "render", null);
+        cl_kernel kernel = clCreateKernel(context.renderer.kernel, "render", null);
 
         // Generate the camera
-        ClCamera camera = new ClCamera(scene);
-        ClMemory buffer = new ClMemory(clCreateBuffer(instance.context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR,
+        ClCamera camera = new ClCamera(scene, context.context);
+        ClMemory buffer = new ClMemory(clCreateBuffer(context.context.context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR,
                 (long) Sizeof.cl_float * passBuffer.length, Pointer.to(passBuffer), null));
         ClMemory randomSeed = new ClMemory(
-                clCreateBuffer(instance.context, CL_MEM_READ_ONLY, Sizeof.cl_int, null, null));
+                clCreateBuffer(context.context.context, CL_MEM_READ_ONLY, Sizeof.cl_int, null, null));
         ClMemory bufferSpp = new ClMemory(
-                clCreateBuffer(instance.context, CL_MEM_READ_ONLY, Sizeof.cl_int, null, null));
-        ClIntBuffer clWidth = new ClIntBuffer(scene.width);
-        ClIntBuffer clHeight = new ClIntBuffer(scene.height);
+                clCreateBuffer(context.context.context, CL_MEM_READ_ONLY, Sizeof.cl_int, null, null));
+        ClIntBuffer clWidth = new ClIntBuffer(scene.width, context.context);
+        ClIntBuffer clHeight = new ClIntBuffer(scene.height, context.context);
 
         try (ClCamera ignored1 = camera;
              ClMemory ignored2 = buffer;
@@ -103,9 +100,9 @@ public class OpenClPathTracingRenderer implements Renderer {
                 renderLock.lock();
                 renderEvent[0] = new cl_event();
 
-                clEnqueueWriteBuffer(instance.commandQueue, randomSeed.get(), CL_TRUE, 0, Sizeof.cl_int,
+                clEnqueueWriteBuffer(context.context.queue, randomSeed.get(), CL_TRUE, 0, Sizeof.cl_int,
                         Pointer.to(new int[]{rand.nextInt()}), 0, null, null);
-                clEnqueueWriteBuffer(instance.commandQueue, bufferSpp.get(), CL_TRUE, 0, Sizeof.cl_int,
+                clEnqueueWriteBuffer(context.context.queue, bufferSpp.get(), CL_TRUE, 0, Sizeof.cl_int,
                         Pointer.to(new int[]{bufferSppReal}), 0, null, null);
 
                 int argIndex = 0;
@@ -135,7 +132,7 @@ public class OpenClPathTracingRenderer implements Renderer {
                 clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(clWidth.get()));
                 clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(clHeight.get()));
                 clSetKernelArg(kernel, argIndex++, Sizeof.cl_mem, Pointer.to(buffer.get()));
-                clEnqueueNDRangeKernel(instance.commandQueue, kernel, 1, null,
+                clEnqueueNDRangeKernel(context.context.queue, kernel, 1, null,
                         new long[]{passBuffer.length / 3}, null, 0, null,
                         renderEvent[0]);
                 clWaitForEvents(1, renderEvent);
@@ -161,7 +158,7 @@ public class OpenClPathTracingRenderer implements Renderer {
 
                     bufferMergeTask.join();
                     if (postRender.getAsBoolean()) break;
-                    clEnqueueReadBuffer(instance.commandQueue, buffer.get(), CL_TRUE, 0,
+                    clEnqueueReadBuffer(context.context.queue, buffer.get(), CL_TRUE, 0,
                             (long) Sizeof.cl_float * passBuffer.length, Pointer.to(passBuffer),
                             0, null, null);
                     int sampSpp = sceneSpp[0];
@@ -201,6 +198,6 @@ public class OpenClPathTracingRenderer implements Renderer {
 
     @Override
     public void sceneReset(DefaultRenderManager manager, ResetReason reason, int resetCount) {
-        sceneLoader.load(resetCount, reason, manager.bufferedScene);
+        ContextManager.get().sceneLoader.load(resetCount, reason, manager.bufferedScene);
     }
 }

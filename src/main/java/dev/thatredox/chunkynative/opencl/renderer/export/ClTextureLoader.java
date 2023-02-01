@@ -1,6 +1,6 @@
 package dev.thatredox.chunkynative.opencl.renderer.export;
 
-import dev.thatredox.chunkynative.opencl.renderer.RendererInstance;
+import dev.thatredox.chunkynative.opencl.context.ClContext;
 import dev.thatredox.chunkynative.opencl.util.ClMemory;
 import org.jocl.*;
 
@@ -18,6 +18,11 @@ import static org.jocl.CL.*;
 
 public class ClTextureLoader extends AbstractTextureLoader implements AutoCloseable {
     private ClMemory texture;
+    private final ClContext context;
+
+    public ClTextureLoader(ClContext context) {
+        this.context = context;
+    }
 
     public cl_mem getAtlas() {
         return texture.get();
@@ -53,12 +58,11 @@ public class ClTextureLoader extends AbstractTextureLoader implements AutoClosea
         desc.image_array_size = layers.size();
         desc.image_type = CL_MEM_OBJECT_IMAGE2D_ARRAY;
 
-        RendererInstance instance = RendererInstance.get();
         texture = new ClMemory(
-                clCreateImage(instance.context, CL_MEM_READ_ONLY, fmt, desc, null, null));
+                clCreateImage(context.context, CL_MEM_READ_ONLY, fmt, desc, null, null));
 
         for (AtlasTexture tex : texs) {
-            clEnqueueWriteImage(instance.commandQueue, texture.get(), CL_TRUE,
+            clEnqueueWriteImage(context.queue, texture.get(), CL_TRUE,
                     new long[] {tex.getX()* 16L, tex.getY()* 16L, tex.getD()},
                     new long[] {tex.getWidth(), tex.getHeight(), 1},
                     0, 0, Pointer.to(tex.getTexture()),
