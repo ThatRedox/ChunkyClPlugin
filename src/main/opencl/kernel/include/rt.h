@@ -25,9 +25,4 @@ IntersectionRecord IntersectionRecord_new() {
     return record;
 }
 
-typedef struct {
-    float4 color;
-    float emittance;
-} MaterialSample;
-
 #endif
