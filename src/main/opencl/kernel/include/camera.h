@@ -3,7 +3,7 @@
 
 #include "../opencl.h"
 #include "rt.h"
-#include "randomness.h"
+#include "random.h"
 
 Ray Camera_preGenerated(__global const float* rays, int index) {
     Ray ray;
@@ -12,7 +12,7 @@ Ray Camera_preGenerated(__global const float* rays, int index) {
     return ray;
 }
 
-Ray Camera_pinHole(float x, float y, unsigned int* state, __global const float* projectorSettings) {
+Ray Camera_pinHole(float x, float y, Random random, __global const float* projectorSettings) {
     Ray ray;
     float aperature = projectorSettings[0];
     float subjectDistance = projectorSettings[1];
@@ -24,8 +24,8 @@ Ray Camera_pinHole(float x, float y, unsigned int* state, __global const float* 
     if (aperature > 0) {
         ray.direction *= subjectDistance / ray.direction.z;
 
-        float r = sqrt(Random_nextFloat(state)) * aperature;
-        float theta = Random_nextFloat(state) * M_PI_F * 2.0;
+        float r = sqrt(Random_nextFloat(random)) * aperature;
+        float theta = Random_nextFloat(random) * M_PI_F * 2.0;
         float rx = cos(theta) * r;
         float ry = sin(theta) * r;
 

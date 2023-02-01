@@ -15,7 +15,7 @@ add_executable(kernel
         include/material.h
         include/octree.h
         include/primitives.h
-        include/randomness.h
+        include/random.h
         include/rayTracer.cl
         include/sky.h
         include/textureAtlas.h

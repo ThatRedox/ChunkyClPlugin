@@ -8,7 +8,7 @@
 #include "textureAtlas.h"
 #include "utils.h"
 #include "constants.h"
-#include "randomness.h"
+#include "random.h"
 
 typedef struct {
     __global const int* palette;
@@ -82,12 +82,12 @@ bool Material_sample(Material self, image2d_array_t atlas, float2 uv, MaterialSa
     return true;
 }
 
-float3 Material_samplePdf(Material self, IntersectionRecord record, MaterialSample sample, Ray ray, unsigned int *state) {
+float3 Material_samplePdf(Material self, IntersectionRecord record, MaterialSample sample, Ray ray, Random random) {
     // TODO Other reflection modes
 
     // Diffuse reflection
-    float x1 = Random_nextFloat(state);
-    float x2 = Random_nextFloat(state);
+    float x1 = Random_nextFloat(random);
+    float x2 = Random_nextFloat(random);
     float r = sqrt(x1);
     float theta = 2 * M_PI_F * x2;
 

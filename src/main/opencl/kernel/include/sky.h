@@ -4,7 +4,7 @@
 #include "../opencl.h"
 #include "rt.h"
 #include "textureAtlas.h"
-#include "randomness.h"
+#include "random.h"
 
 typedef struct {
     int flags;
@@ -65,15 +65,15 @@ bool Sun_intersect(Sun self, image2d_array_t atlas, Ray ray, MaterialSample* sam
     return false;
 }
 
-bool Sun_sampleDirection(Sun self, Ray* ray, unsigned int* state) {
+bool Sun_sampleDirection(Sun self, Ray* ray, Random random) {
     if (!(self.flags & 1)) {
         return false;
     }
 
     float radius_cos = cos(0.03f);
 
-    float x1 = Random_nextFloat(state);
-    float x2 = Random_nextFloat(state);
+    float x1 = Random_nextFloat(random);
+    float x2 = Random_nextFloat(random);
 
     float cos_a = 1 - x1 + x1 * radius_cos;
     float sin_a = sqrt(1 - cos_a * cos_a);

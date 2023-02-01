@@ -50,8 +50,8 @@ __kernel void render(
     Sun sun = Sun_new(sunData);
 
     unsigned int randomState = *randomSeed + gid;
-    unsigned int* state = &randomState;
-    Random_nextState(state);
+    Random random = &randomState;
+    Random_nextState(random);
 
     // Set camera
     Ray ray;
@@ -63,12 +63,12 @@ __kernel void render(
 
         float halfWidth = (*width) / (2.0 * (*height));
         float invHeight = 1.0 / (*height);
-        float x = -halfWidth + ((gid % (*width)) + Random_nextFloat(state)) * invHeight;
-        float y = -0.5 + ((gid / (*width)) + Random_nextFloat(state)) * invHeight;
+        float x = -halfWidth + ((gid % (*width)) + Random_nextFloat(random)) * invHeight;
+        float y = -0.5 + ((gid / (*width)) + Random_nextFloat(random)) * invHeight;
 
         switch (*projectorType) {
             case 0:
-                ray = Camera_pinHole(x, y, state, cameraSettings+12);
+                ray = Camera_pinHole(x, y, random, cameraSettings + 12);
                 break;
         }
 
@@ -104,7 +104,7 @@ __kernel void render(
             color += sample.color.xyz * sample.emittance * 13.0f * throughput;
 
             Ray next = ray;
-            next.direction = Material_samplePdf(material, record, sample, ray, state);
+            next.direction = Material_samplePdf(material, record, sample, ray, random);
             next.origin = ray.origin + ray.direction * (record.distance - OFFSET);
             next.origin += next.direction * OFFSET;
             ray = next;
@@ -170,8 +170,8 @@ __kernel void preview(
     Sun sun = Sun_new(sunData);
 
     unsigned int randomState = 0;
-    unsigned int* state = &randomState;
-    Random_nextState(state);
+    Random random = &randomState;
+    Random_nextState(random);
 
     // Set camera
     Ray ray;
@@ -183,12 +183,12 @@ __kernel void preview(
 
         float halfWidth = (*width) / (2.0 * (*height));
         float invHeight = 1.0 / (*height);
-        float x = -halfWidth + ((gid % (*width)) + Random_nextFloat(state)) * invHeight;
-        float y = -0.5 + ((gid / (*width)) + Random_nextFloat(state)) * invHeight;
+        float x = -halfWidth + ((gid % (*width)) + Random_nextFloat(random)) * invHeight;
+        float y = -0.5 + ((gid / (*width)) + Random_nextFloat(random)) * invHeight;
 
         switch (*projectorType) {
             case 0:
-                ray = Camera_pinHole(x, y, state, cameraSettings+12);
+                ray = Camera_pinHole(x, y, random, cameraSettings + 12);
                 break;
         }
 
