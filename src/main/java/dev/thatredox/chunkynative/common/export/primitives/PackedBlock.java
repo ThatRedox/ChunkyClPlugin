@@ -8,6 +8,7 @@ import dev.thatredox.chunkynative.common.export.models.PackedQuadModel;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import se.llbit.chunky.block.AbstractModelBlock;
 import se.llbit.chunky.block.Block;
+import se.llbit.chunky.block.LightBlock;
 import se.llbit.chunky.model.AABBModel;
 import se.llbit.chunky.model.QuadModel;
 import se.llbit.chunky.model.Tint;
@@ -25,7 +26,11 @@ public class PackedBlock implements Packer {
                        ResourcePalette<PackedMaterial> materialPalette,
                        ResourcePalette<PackedAabbModel> aabbModels,
                        ResourcePalette<PackedQuadModel> quadModels) {
-        if (block instanceof AbstractModelBlock) {
+        if (block instanceof LightBlock) {
+            modelType = 4;
+            modelPointer = materialPalette.put(new PackedMaterial(Texture.light, 0xFE000000,
+                    block.emittance, block.specular, block.metalness, block.roughness, textureLoader));
+        } else if (block instanceof AbstractModelBlock) {
             AbstractModelBlock b = (AbstractModelBlock) block;
             if (b.getModel() instanceof AABBModel) {
                 modelType = 2;

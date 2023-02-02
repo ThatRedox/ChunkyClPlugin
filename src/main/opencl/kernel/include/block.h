@@ -43,7 +43,7 @@ bool BlockPalette_intersectNormalizedBlock(BlockPalette self, int block, int3 bl
     switch (modelType) {
         default:
         case 0: {
-            return NAN;
+            return false;
         }
         case 1: {
             AABB box = AABB_new(0, 1, 0, 1, 0, 1);
@@ -66,6 +66,21 @@ bool BlockPalette_intersectNormalizedBlock(BlockPalette self, int block, int3 bl
                 int offset = modelPointer + 1 + i * QUAD_SIZE;
                 Quad q = Quad_new(self.quadModels, offset);
                 hit |= Quad_intersect(q, tempRay, record);
+            }
+            break;
+        }
+        case 4: {
+            // Light block
+            if (ray.flags & RAY_PREVIEW) {
+                AABB box = AABB_new(0, 1, 0, 1, 0, 1);
+                hit = AABB_full_intersect(box, tempRay, record);
+                record->material = modelPointer;
+            } else if (ray.flags & RAY_INDIRECT) {
+                AABB box = AABB_new(0.125, 0.875, 0.125, 0.875, 0.125, 0.875);
+                hit = AABB_full_intersect(box, tempRay, record);
+                record->material = modelPointer;
+            } else {
+                return false;
             }
             break;
         }

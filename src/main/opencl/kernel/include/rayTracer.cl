@@ -89,6 +89,7 @@ __kernel void render(
     }
 
     ray.material = 0;
+    ray.flags = 0;
 
     float3 color = (float3) (0.0);
     float3 throughput = (float3) (1.0);
@@ -107,6 +108,10 @@ __kernel void render(
             ray.origin = ray.origin + ray.direction * (record.distance - OFFSET);
             ray.direction = pdfSample.direction;
             ray.origin += ray.direction * OFFSET;
+
+            if (!pdfSample.specular) {
+                ray.flags |= RAY_INDIRECT;
+            }
         } else {
             intersectSky(skyTexture, *skyIntensity, sun, textureAtlas, ray, &sample);
             throughput *= sample.color.xyz;
@@ -210,10 +215,11 @@ __kernel void preview(
     IntersectionRecord record = IntersectionRecord_new();
     MaterialSample sample;
     Material material;
+
     ray.material = 0;
+    ray.flags = RAY_PREVIEW;
 
-    float3 color = (float3) (0.0);
-
+    float3 color;
     if (closestIntersect(scene, textureAtlas, ray, &record, &sample, &material)) {
         float shading = dot(record.normal, (float3) (0.25, 0.866, 0.433));
         shading = fmax(0.3f, shading);

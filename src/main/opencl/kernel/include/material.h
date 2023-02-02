@@ -55,7 +55,11 @@ bool Material_sample(Material self, image2d_array_t atlas, float2 uv, MaterialSa
     else
         color = colorFromArgb(self.color);
     
-    if (color.w > EPS) {
+    if (self.tint == 0xFE000000) {
+        // Light block
+        sample->color.xyz = 0.5;
+        sample->color.w = 1.0;
+    } else if (color.w > EPS) {
         sample->color = color;
     } else {
         return false;

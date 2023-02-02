@@ -36,34 +36,35 @@ public class PackedMaterial implements Packer {
     }
 
     public PackedMaterial(Texture texture, Tint tint, float emittance, float specular, float metalness, float roughness, AbstractTextureLoader texMap) {
-        this.hasColorTexture = !PersistentSettings.getSingleColorTextures();
-        this.hasNormalEmittanceTexture = false;
-        this.hasSpecularMetalnessRoughnessTexture = false;
+        this(texture, getTint(tint), emittance, specular, metalness, roughness, texMap);
+    }
 
+    private static int getTint(Tint tint) {
         if (tint != null) {
             switch (tint.type) {
                 default:
                     Log.warn("Unsupported tint type " + tint.type);
                 case NONE:
-                    this.blockTint = 0;
-                    break;
+                    return 0;
                 case CONSTANT:
-                    this.blockTint = ColorUtil.getRGB(tint.tint) | 0xFF000000;
-                    break;
+                    return ColorUtil.getRGB(tint.tint) | 0xFF000000;
                 case BIOME_FOLIAGE:
-                    this.blockTint = 1 << 24;
-                    break;
+                    return 1 << 24;
                 case BIOME_GRASS:
-                    this.blockTint = 2 << 24;
-                    break;
+                    return 2 << 24;
                 case BIOME_WATER:
-                    this.blockTint = 3 << 24;
-                    break;
+                    return 3 << 24;
             }
         } else {
-            this.blockTint = 0;
+            return 0;
         }
+    }
 
+    public PackedMaterial(Texture texture, int blockTint, float emittance, float specular, float metalness, float roughness, AbstractTextureLoader texMap) {
+        this.hasColorTexture = !PersistentSettings.getSingleColorTextures();
+        this.hasNormalEmittanceTexture = false;
+        this.hasSpecularMetalnessRoughnessTexture = false;
+        this.blockTint = blockTint;
         this.colorTexture = this.hasColorTexture ? texMap.get(texture).get() : texture.getAvgColor();
         this.normalEmittanceTexture = (int) (emittance * 255.0);
         this.specularMetalnessRoughnessTexture = (int) (specular * 255.0) |

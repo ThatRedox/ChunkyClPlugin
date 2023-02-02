@@ -3,10 +3,14 @@
 
 #include "../opencl.h"
 
+#define RAY_INDIRECT 0b01
+#define RAY_PREVIEW  0b10
+
 typedef struct {
     float3 origin;
     float3 direction;
     int material;
+    int flags;
 } Ray;
 
 typedef struct {
