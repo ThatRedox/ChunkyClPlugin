@@ -44,6 +44,7 @@ typedef struct {
     float4 color;
     float emittance;
     float specular;
+    float metalness;
     float roughness;
 } MaterialSample;
 
@@ -94,9 +95,11 @@ bool Material_sample(Material self, image2d_array_t atlas, float2 uv, MaterialSa
     if (self.flags & 0b001) {
         float3 smr = Atlas_read_uv(uv.x, uv.y, self.specular_metalness_roughness, self.textureSize, atlas).xyz;
         sample->specular = smr.x;
+        sample->metalness = smr.y;
         sample->roughness = smr.z;
     } else {
         sample->specular = (self.specular_metalness_roughness & 0xFF) / 255.0;
+        sample->metalness = ((self.specular_metalness_roughness >> 8) & 0xFF) / 255.0;
         sample->roughness = ((self.specular_metalness_roughness >> 16) & 0xFF) / 255.0;
     }
     
@@ -148,6 +151,23 @@ float3 _Material_diffuseReflection(IntersectionRecord record, Random random) {
     );
 }
 
+float3 _Material_specularReflection(IntersectionRecord record, MaterialSample sample, Ray ray, Random random) {
+    float3 direction = ray.direction + (record.normal * (-2 * dot(ray.direction, record.normal)));
+
+    if (sample.roughness > 0) {
+        float3 diffuseDirection = _Material_diffuseReflection(record, random);
+        diffuseDirection *= sample.roughness;
+        direction = diffuseDirection + direction * (1 - sample.roughness);
+    }
+
+    if (signbit(dot(record.normal, direction)) == signbit(dot(record.normal, ray.direction))) {
+        float factor = copysign(dot(record.normal, ray.direction), -EPS - dot(record.normal, direction));
+        direction += factor * record.normal;
+    }
+
+    return normalize(direction);
+}
+
 typedef struct {
     float3 direction;
     float3 spectrum;
@@ -157,22 +177,15 @@ typedef struct {
 MaterialPdfSample Material_samplePdf(Material self, IntersectionRecord record, MaterialSample sample, Ray ray, Random random) {
     MaterialPdfSample out;
 
-    if (sample.specular > 0 && sample.specular > Random_nextFloat(random)) {
+    if (sample.metalness > 0 && sample.metalness > Random_nextFloat(random)) {
+        // Metal reflection
+        out.direction = _Material_specularReflection(record, sample, ray, random);
+        out.spectrum = sample.color.xyz;
+        out.specular = true;
+        return out;
+    } else if (sample.specular > 0 && sample.specular > Random_nextFloat(random)) {
         // Specular reflection
-        float3 direction = ray.direction + (record.normal * (-2 * dot(ray.direction, record.normal)));
-
-        if (sample.roughness > 0) {
-            float3 diffuseDirection = _Material_diffuseReflection(record, random);
-            diffuseDirection *= sample.roughness;
-            direction = diffuseDirection + direction * (1 - sample.roughness);
-        }
-
-        if (signbit(dot(record.normal, direction)) == signbit(dot(record.normal, ray.direction))) {
-            float factor = copysign(dot(record.normal, ray.direction), -EPS - dot(record.normal, direction));
-            direction += factor * record.normal;
-        }
-
-        out.direction = normalize(direction);
+        out.direction = _Material_specularReflection(record, sample, ray, random);
         out.spectrum = 1;
         out.specular = true;
         return out;
