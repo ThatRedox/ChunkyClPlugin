@@ -11,6 +11,7 @@ import dev.thatredox.chunkynative.common.export.texture.AbstractTextureLoader;
 import dev.thatredox.chunkynative.util.Reflection;
 import se.llbit.chunky.renderer.ResetReason;
 import se.llbit.chunky.renderer.scene.Scene;
+import se.llbit.chunky.renderer.scene.SceneEntities;
 import se.llbit.chunky.renderer.scene.Sun;
 import se.llbit.log.Log;
 import se.llbit.math.Octree;
@@ -74,8 +75,9 @@ public abstract class AbstractSceneLoader {
         ResourcePalette<PackedQuadModel> quadPalette = this.createQuadModelPalette();
         ResourcePalette<PackedTriangleModel> trigPalette = this.createTriangleModelPalette();
 
-        BVH worldBvh = Reflection.getFieldValue(scene, "bvh", BVH.class);
-        BVH actorBvh = Reflection.getFieldValue(scene, "actorBvh", BVH.class);
+        SceneEntities entities = Reflection.getFieldValue(scene, "entities", SceneEntities.class);
+        BVH worldBvh = Reflection.getFieldValue(entities, "bvh", BVH.class);
+        BVH actorBvh = Reflection.getFieldValue(entities, "actorBvh", BVH.class);
 
         boolean needTextureLoad = resetReason == ResetReason.SCENE_LOADED ||
                 resetReason == ResetReason.MATERIALS_CHANGED ||
