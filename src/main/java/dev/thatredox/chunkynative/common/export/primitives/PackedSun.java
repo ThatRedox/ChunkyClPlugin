@@ -3,7 +3,7 @@ package dev.thatredox.chunkynative.common.export.primitives;
 import dev.thatredox.chunkynative.common.export.texture.AbstractTextureLoader;
 import dev.thatredox.chunkynative.common.export.Packer;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
-import se.llbit.chunky.renderer.scene.Sun;
+import se.llbit.chunky.renderer.scene.sky.Sun;
 
 public class PackedSun implements Packer {
     public final int flags;

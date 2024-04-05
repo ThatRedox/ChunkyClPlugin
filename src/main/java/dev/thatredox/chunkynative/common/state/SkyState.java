@@ -1,9 +1,9 @@
 package dev.thatredox.chunkynative.common.state;
 
 import dev.thatredox.chunkynative.util.Reflection;
-import se.llbit.chunky.renderer.scene.SimulatedSky;
-import se.llbit.chunky.renderer.scene.Sky;
-import se.llbit.chunky.renderer.scene.Sun;
+import se.llbit.chunky.renderer.scene.sky.SimulatedSky;
+import se.llbit.chunky.renderer.scene.sky.Sky;
+import se.llbit.chunky.renderer.scene.sky.Sun;
 import se.llbit.chunky.resources.Texture;
 import se.llbit.math.Matrix3;
 import se.llbit.math.Vector3;

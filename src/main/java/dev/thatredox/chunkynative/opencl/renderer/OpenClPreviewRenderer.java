@@ -57,8 +57,8 @@ public class OpenClPreviewRenderer implements Renderer {
         ClCamera camera = new ClCamera(scene, context.context);
         ClMemory buffer = new ClMemory(clCreateBuffer(context.context.context, CL_MEM_WRITE_ONLY,
                 (long) Sizeof.cl_int * imageData.length, null, null));
-        ClIntBuffer clWidth = new ClIntBuffer(scene.width, context.context);
-        ClIntBuffer clHeight = new ClIntBuffer(scene.height, context.context);
+        ClIntBuffer clWidth = new ClIntBuffer(scene.canvasConfig.getWidth(), context.context);
+        ClIntBuffer clHeight = new ClIntBuffer(scene.canvasConfig.getHeight(), context.context);
 
         try (ClCamera ignored1 = camera;
              ClMemory ignored2 = buffer;

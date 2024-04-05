@@ -8,7 +8,7 @@ import dev.thatredox.chunkynative.common.export.models.PackedQuadModel;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import se.llbit.chunky.block.AbstractModelBlock;
 import se.llbit.chunky.block.Block;
-import se.llbit.chunky.block.LightBlock;
+import se.llbit.chunky.block.minecraft.LightBlock;
 import se.llbit.chunky.model.AABBModel;
 import se.llbit.chunky.model.QuadModel;
 import se.llbit.chunky.model.Tint;

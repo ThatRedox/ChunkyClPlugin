@@ -71,8 +71,8 @@ public class OpenClPathTracingRenderer implements Renderer {
                 clCreateBuffer(context.context.context, CL_MEM_READ_ONLY, Sizeof.cl_int, null, null));
         ClMemory bufferSpp = new ClMemory(
                 clCreateBuffer(context.context.context, CL_MEM_READ_ONLY, Sizeof.cl_int, null, null));
-        ClIntBuffer clWidth = new ClIntBuffer(scene.width, context.context);
-        ClIntBuffer clHeight = new ClIntBuffer(scene.height, context.context);
+        ClIntBuffer clWidth = new ClIntBuffer(scene.canvasConfig.getWidth(), context.context);
+        ClIntBuffer clHeight = new ClIntBuffer(scene.canvasConfig.getHeight(), context.context);
 
         try (ClCamera ignored1 = camera;
              ClMemory ignored2 = buffer;

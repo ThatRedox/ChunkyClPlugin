@@ -12,7 +12,7 @@ import dev.thatredox.chunkynative.util.Reflection;
 import se.llbit.chunky.renderer.ResetReason;
 import se.llbit.chunky.renderer.scene.Scene;
 import se.llbit.chunky.renderer.scene.SceneEntities;
-import se.llbit.chunky.renderer.scene.Sun;
+import se.llbit.chunky.renderer.scene.sky.Sun;
 import se.llbit.log.Log;
 import se.llbit.math.Octree;
 import se.llbit.math.PackedOctree;

@@ -9,8 +9,8 @@ import org.apache.commons.math3.util.FastMath;
 import org.jocl.*;
 
 import se.llbit.chunky.renderer.scene.Scene;
-import se.llbit.chunky.renderer.scene.Sky;
-import se.llbit.chunky.renderer.scene.SkyCache;
+import se.llbit.chunky.renderer.scene.sky.Sky;
+import se.llbit.chunky.renderer.scene.sky.SkyCache;
 import se.llbit.log.Log;
 import se.llbit.math.Ray;
 

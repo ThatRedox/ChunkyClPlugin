@@ -63,7 +63,7 @@ public class ClCamera implements AutoCloseable {
 
         if (needGenerate) {
             cameraSettings = new ClMemory(clCreateBuffer(context.context, CL_MEM_READ_ONLY,
-                    (long) Sizeof.cl_float * scene.width * scene.height * 3 * 2, null, null));
+                    (long) Sizeof.cl_float * scene.canvasConfig.getWidth() * scene.canvasConfig.getHeight() * 3 * 2, null, null));
         } else {
             cameraSettings = new ClMemory(clCreateBuffer(context.context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
                     (long) Sizeof.cl_float * settings.size(), Pointer.to(settings.toFloatArray()), null));
@@ -72,19 +72,22 @@ public class ClCamera implements AutoCloseable {
 
     public void generate(Lock renderLock, boolean jitter) {
         if (!needGenerate) return;
+        
+        int width = scene.canvasConfig.getWidth();
+        int height = scene.canvasConfig.getHeight();
 
-        float[] rays = new float[scene.width * scene.height * 3 * 2];
+        float[] rays = new float[width * height * 3 * 2];
 
-        double halfWidth = scene.width / (2.0 * scene.height);
-        double invHeight = 1.0 / scene.height;
+        double halfWidth = width / (2.0 * height);
+        double invHeight = 1.0 / height;
 
         Camera cam = scene.camera();
 
-        Chunky.getCommonThreads().submit(() -> IntStream.range(0, scene.width).parallel().forEach(i -> {
+        Chunky.getCommonThreads().submit(() -> IntStream.range(0, width).parallel().forEach(i -> {
             Ray ray = new Ray();
             Random random = jitter ? ThreadLocalRandom.current() : null;
-            for (int j = 0; j < scene.height; j++) {
-                int offset = (j * scene.width + i) * 3 * 2;
+            for (int j = 0; j < height; j++) {
+                int offset = (j * width + i) * 3 * 2;
 
                 float ox = jitter ? random.nextFloat(): 0.5f;
                 float oy = jitter ? random.nextFloat(): 0.5f;
