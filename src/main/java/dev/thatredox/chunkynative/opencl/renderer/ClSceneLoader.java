@@ -47,15 +47,17 @@ public class ClSceneLoader extends AbstractSceneLoader {
 
     @Override
     public boolean load(int modCount, ResetReason resetReason, Scene scene) {
+        boolean loadSuccess = super.load(modCount, resetReason, scene);
         if (this.modCount != modCount) {
             SkyState newSky = new SkyState(scene.sky(), scene.sun());
             if (!newSky.equals(skyState)) {
                 if (clSky != null) clSky.close();
                 clSky = new ClSky(scene, context);
                 skyState = newSky;
+                packedSun = new PackedSun(scene.sun(), getTexturePalette());
             }
         }
-        return super.load(modCount, resetReason, scene);
+        return loadSuccess;
     }
 
     @Override
