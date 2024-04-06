@@ -72,11 +72,11 @@ __kernel void render(
                 break;
         }
 
-        ray.direction = (float3) (
+        ray.direction = normalize((float3) (
             dot(m1s, ray.direction),
             dot(m2s, ray.direction),
             dot(m3s, ray.direction)
-        );
+        ));
         ray.origin = (float3) (
             dot(m1s, ray.origin),
             dot(m2s, ray.origin),
