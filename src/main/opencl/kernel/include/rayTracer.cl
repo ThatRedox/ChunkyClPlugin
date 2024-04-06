@@ -8,6 +8,50 @@
 #include "bvh.h"
 #include "sky.h"
 
+Ray ray_to_camera(
+        const __global int* projectorType,
+        const __global float* cameraSettings,
+        const __global int* width,
+        const __global int* height,
+        int gid,
+        Random random
+) {
+    Ray ray;
+    if (*projectorType != -1) {
+        float3 cameraPos = vload3(0, cameraSettings);
+        float3 m1s = vload3(1, cameraSettings);
+        float3 m2s = vload3(2, cameraSettings);
+        float3 m3s = vload3(3, cameraSettings);
+
+        float halfWidth = (*width) / (2.0 * (*height));
+        float invHeight = 1.0 / (*height);
+        float x = -halfWidth + ((gid % (*width)) + Random_nextFloat(random)) * invHeight;
+        float y = -0.5 + ((gid / (*width)) + Random_nextFloat(random)) * invHeight;
+
+        switch (*projectorType) {
+            case 0:
+                ray = Camera_pinHole(x, y, random, cameraSettings + 12);
+                break;
+        }
+
+        ray.direction = normalize((float3) (
+                dot(m1s, ray.direction),
+                        dot(m2s, ray.direction),
+                        dot(m3s, ray.direction)
+        ));
+        ray.origin = (float3) (
+                dot(m1s, ray.origin),
+                        dot(m2s, ray.origin),
+                        dot(m3s, ray.origin)
+        );
+
+        ray.origin += cameraPos;
+    } else {
+        ray = Camera_preGenerated(cameraSettings, gid);
+    }
+    return ray;
+}
+
 __kernel void render(
     __global const int* projectorType,
     __global const float* cameraSettings,
@@ -52,41 +96,7 @@ __kernel void render(
     unsigned int randomState = *randomSeed + gid;
     Random random = &randomState;
     Random_nextState(random);
-
-    // Set camera
-    Ray ray;
-    if (*projectorType != -1) {
-        float3 cameraPos = vload3(0, cameraSettings);
-        float3 m1s = vload3(1, cameraSettings);
-        float3 m2s = vload3(2, cameraSettings);
-        float3 m3s = vload3(3, cameraSettings);
-
-        float halfWidth = (*width) / (2.0 * (*height));
-        float invHeight = 1.0 / (*height);
-        float x = -halfWidth + ((gid % (*width)) + Random_nextFloat(random)) * invHeight;
-        float y = -0.5 + ((gid / (*width)) + Random_nextFloat(random)) * invHeight;
-
-        switch (*projectorType) {
-            case 0:
-                ray = Camera_pinHole(x, y, random, cameraSettings + 12);
-                break;
-        }
-
-        ray.direction = normalize((float3) (
-            dot(m1s, ray.direction),
-            dot(m2s, ray.direction),
-            dot(m3s, ray.direction)
-        ));
-        ray.origin = (float3) (
-            dot(m1s, ray.origin),
-            dot(m2s, ray.origin),
-            dot(m3s, ray.origin)
-        );
-
-        ray.origin += cameraPos;
-    } else {
-        ray = Camera_preGenerated(cameraSettings, gid);
-    }
+    Ray ray = ray_to_camera(projectorType, cameraSettings, width, height, gid, random);
 
     ray.material = 0;
     ray.flags = 0;
@@ -177,40 +187,7 @@ __kernel void preview(
     Random random = &randomState;
     Random_nextState(random);
 
-    // Set camera
-    Ray ray;
-    if (*projectorType != -1) {
-        float3 cameraPos = vload3(0, cameraSettings);
-        float3 m1s = vload3(1, cameraSettings);
-        float3 m2s = vload3(2, cameraSettings);
-        float3 m3s = vload3(3, cameraSettings);
-
-        float halfWidth = (*width) / (2.0 * (*height));
-        float invHeight = 1.0 / (*height);
-        float x = -halfWidth + ((gid % (*width)) + Random_nextFloat(random)) * invHeight;
-        float y = -0.5 + ((gid / (*width)) + Random_nextFloat(random)) * invHeight;
-
-        switch (*projectorType) {
-            case 0:
-                ray = Camera_pinHole(x, y, random, cameraSettings + 12);
-                break;
-        }
-
-        ray.direction = normalize((float3) (
-            dot(m1s, ray.direction),
-            dot(m2s, ray.direction),
-            dot(m3s, ray.direction)
-        ));
-        ray.origin = (float3) (
-            dot(m1s, ray.origin),
-            dot(m2s, ray.origin),
-            dot(m3s, ray.origin)
-        );
-
-        ray.origin += cameraPos;
-    } else {
-        ray = Camera_preGenerated(cameraSettings, gid);
-    }
+    Ray ray = ray_to_camera(projectorType, cameraSettings, width, height, gid, random);
 
     IntersectionRecord record = IntersectionRecord_new();
     MaterialSample sample;
