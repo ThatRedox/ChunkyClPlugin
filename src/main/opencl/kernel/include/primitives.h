@@ -234,7 +234,7 @@ bool TexturedAABB_intersect(TexturedAABB self, Ray ray, IntersectionRecord* reco
         tempRecord.material = self.me;
         flags = self.flags >> 4;
     }
-    if (tempRecord.normal.z == -1) {
+    if (tempRecord.normal.z == 1) {
         tempRecord.material = self.ms;
         flags = self.flags >> 8;
     }
