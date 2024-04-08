@@ -43,12 +43,15 @@ public class NativeCleaner extends Thread {
 
     @Override
     public void run() {
-        while (!interrupted()) {
-            Reference<?> cleaner = cleanerQueue.poll();
-            if (cleaner instanceof Cleaner) {
-                ((Cleaner) cleaner).clean();
-                this.cleaners.remove(cleaner);
+        try {
+            while (!interrupted()) {
+                Reference<?> cleaner = cleanerQueue.remove();
+                if (cleaner instanceof Cleaner) {
+                    ((Cleaner) cleaner).clean();
+                    this.cleaners.remove(cleaner);
+                }
             }
+        } catch (InterruptedException ignored) {
         }
     }
 }
