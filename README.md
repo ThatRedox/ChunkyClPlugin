@@ -1,6 +1,4 @@
-[![Stable](https://github.com/alexhliu/ChunkyClPlugin/actions/workflows/stable.yml/badge.svg)](https://github.com/alexhliu/ChunkyClPlugin/actions/workflows/stable.yml)
-[![Development](https://github.com/alexhliu/ChunkyClPlugin/actions/workflows/development.yml/badge.svg)](https://github.com/alexhliu/ChunkyClPlugin/actions/workflows/development.yml)
-
+# ⚠️ Development has been moved to [chunky-opencl](https://github.com/chunky-dev/chunky-opencl)! ⚠️
 
 # ChunkyCL
 
